@@ -1,0 +1,17 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: corporate --default, business, nord, emerald, cupcake, dim;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
