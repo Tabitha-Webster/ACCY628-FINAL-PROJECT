@@ -1,10 +1,26 @@
 "use client";
 
-import Link from "next/link";
-import { ArrowDown, ArrowUp, ArrowUpDown, Download } from "lucide-react";
 import { useMemo, useState } from "react";
+import Link from "next/link";
+import { Download, X } from "lucide-react";
 import { EmptyState, Money, StatusBadge } from "@/components/ui";
+import { AR_AGING_BUCKETS } from "@/lib/calculations";
 import { formatDate } from "@/lib/format";
+import {
+  type CompareOp,
+  type MultiFilter,
+  CompareFilter,
+  DatePeriodFilter,
+  DropdownHeader,
+  MultiSelectFilter,
+  StickyFilterTable,
+  TextFilter,
+  matchesAnySelected,
+  matchesCompare,
+  matchesDatePeriod,
+  matchesText,
+  useHeaderFilter,
+} from "@/components/table-filters";
 
 export type ArAgingRow = {
   id: string;
@@ -17,15 +33,16 @@ export type ArAgingRow = {
   daysPastDue: number;
 };
 
-type SortKey = "dueDate" | "daysPastDue" | "status" | "bucket" | "balance";
-type SortDir = "asc" | "desc";
+const STATUS_OPTIONS = ["issued", "sent", "partially_paid", "overdue", "disputed"];
 
-const AGING_ORDER = ["Current", "1-30 Days", "31-60 Days", "61-90 Days", ">90 Days"];
+type FilterKey = "invoice" | "customer" | "dueDate" | "daysPastDue" | "status" | "aging" | "balance";
 
-function agingBadgeClass(daysPastDue: number): string {
-  if (daysPastDue > 60) return "badge-error";
-  if (daysPastDue > 0) return "badge-warning";
-  return "badge-aging-current";
+function bucketBadgeClass(bucket: string) {
+  if (bucket === "Current") return "aging-current border-0";
+  if (bucket === "1-30 Days") return "aging-30 border-0";
+  if (bucket === "31-60 Days") return "aging-60 border-0";
+  if (bucket === "61-90 Days") return "aging-90 border-0";
+  return "aging-over-90 border-0";
 }
 
 function csvEscape(value: string | number): string {
@@ -39,15 +56,7 @@ function downloadArCsv(rows: ArAgingRow[]) {
   const lines = [
     headers.join(","),
     ...rows.map((row) =>
-      [
-        row.invoiceNumber,
-        row.customerName,
-        row.dueDate,
-        row.daysPastDue,
-        row.status,
-        row.bucket,
-        row.remainingBalance.toFixed(2),
-      ]
+      [row.invoiceNumber, row.customerName, row.dueDate, row.daysPastDue, row.status, row.bucket, row.remainingBalance.toFixed(2)]
         .map(csvEscape)
         .join(",")
     ),
@@ -62,224 +71,140 @@ function downloadArCsv(rows: ArAgingRow[]) {
   URL.revokeObjectURL(url);
 }
 
-function matchesDaysPastDueFilter(days: number, filter: string): boolean {
-  if (filter === "all") return true;
-  if (filter === "current") return days === 0;
-  if (filter === "1-30") return days >= 1 && days <= 30;
-  if (filter === "31-60") return days >= 31 && days <= 60;
-  if (filter === "61-90") return days >= 61 && days <= 90;
-  if (filter === "over-90") return days > 90;
-  return true;
-}
-
-function compareRows(a: ArAgingRow, b: ArAgingRow, key: SortKey): number {
-  switch (key) {
-    case "dueDate":
-      return a.dueDate.localeCompare(b.dueDate);
-    case "daysPastDue":
-      return a.daysPastDue - b.daysPastDue;
-    case "status":
-      return a.status.localeCompare(b.status);
-    case "bucket":
-      return AGING_ORDER.indexOf(a.bucket) - AGING_ORDER.indexOf(b.bucket);
-    case "balance":
-      return a.remainingBalance - b.remainingBalance;
-    default:
-      return 0;
-  }
-}
-
-function SortHeader({
-  label,
-  column,
-  sortKey,
-  sortDir,
-  onSort,
-}: {
-  label: string;
-  column: SortKey;
-  sortKey: SortKey | null;
-  sortDir: SortDir;
-  onSort: (key: SortKey) => void;
-}) {
-  const active = sortKey === column;
-  return (
-    <th>
-      <button
-        type="button"
-        className="inline-flex items-center gap-1 font-semibold"
-        onClick={() => onSort(column)}
-        aria-label={`Sort by ${label}`}
-      >
-        <span>{label}</span>
-        {active ? (
-          sortDir === "asc" ? (
-            <ArrowUp className="h-3.5 w-3.5" />
-          ) : (
-            <ArrowDown className="h-3.5 w-3.5" />
-          )
-        ) : (
-          <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
-        )}
-      </button>
-    </th>
-  );
-}
-
 export function AccountsReceivableClient({ rows }: { rows: ArAgingRow[] }) {
-  const [customer, setCustomer] = useState("all");
-  const [dueDate, setDueDate] = useState("");
-  const [daysPastDueFilter, setDaysPastDueFilter] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [agingBucket, setAgingBucket] = useState("all");
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const { openFilter, setOpenFilter, toggleFilter, tableRef } = useHeaderFilter<FilterKey>();
+  const [invoiceQuery, setInvoiceQuery] = useState("");
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [dueYears, setDueYears] = useState<MultiFilter>(null);
+  const [dueMonths, setDueMonths] = useState<MultiFilter>(null);
+  const [daysOp, setDaysOp] = useState<CompareOp>("gt");
+  const [daysValue, setDaysValue] = useState("");
+  const [statusFilter, setStatusFilter] = useState<MultiFilter>(null);
+  const [agingFilter, setAgingFilter] = useState<MultiFilter>(null);
+  const [balanceOp, setBalanceOp] = useState<CompareOp>("gt");
+  const [balanceValue, setBalanceValue] = useState("");
 
-  const customers = useMemo(
-    () => Array.from(new Set(rows.map((row) => row.customerName))).sort((a, b) => a.localeCompare(b)),
-    [rows]
+  const filtered = useMemo(
+    () =>
+      rows.filter(
+        (row) =>
+          matchesText(row.invoiceNumber, invoiceQuery) &&
+          matchesText(row.customerName, customerQuery) &&
+          matchesDatePeriod(row.dueDate, dueYears, dueMonths) &&
+          matchesCompare(row.daysPastDue, daysOp, daysValue) &&
+          matchesAnySelected(row.status, statusFilter) &&
+          matchesAnySelected(row.bucket, agingFilter) &&
+          matchesCompare(row.remainingBalance, balanceOp, balanceValue)
+      ),
+    [rows, invoiceQuery, customerQuery, dueYears, dueMonths, daysOp, daysValue, statusFilter, agingFilter, balanceOp, balanceValue]
   );
-  const statuses = useMemo(
-    () => Array.from(new Set(rows.map((row) => row.status))).sort((a, b) => a.localeCompare(b)),
-    [rows]
-  );
-  const buckets = useMemo(
-    () => AGING_ORDER.filter((label) => rows.some((row) => row.bucket === label)),
-    [rows]
-  );
 
-  const filtered = useMemo(() => {
-    const next = rows.filter((row) => {
-      if (customer !== "all" && row.customerName !== customer) return false;
-      if (dueDate && row.dueDate !== dueDate) return false;
-      if (!matchesDaysPastDueFilter(row.daysPastDue, daysPastDueFilter)) return false;
-      if (status !== "all" && row.status !== status) return false;
-      if (agingBucket !== "all" && row.bucket !== agingBucket) return false;
-      return true;
-    });
+  const activeCount = [
+    invoiceQuery.trim(),
+    customerQuery.trim(),
+    dueYears == null && dueMonths == null ? "" : "dueDate",
+    daysValue.trim(),
+    statusFilter == null ? "" : "status",
+    agingFilter == null ? "" : "aging",
+    balanceValue.trim(),
+  ].filter(Boolean).length;
 
-    if (!sortKey) return next;
-
-    return [...next].sort((a, b) => {
-      const result = compareRows(a, b, sortKey);
-      return sortDir === "asc" ? result : -result;
-    });
-  }, [rows, customer, dueDate, daysPastDueFilter, status, agingBucket, sortKey, sortDir]);
-
-  function onSort(key: SortKey) {
-    if (sortKey === key) {
-      setSortDir((dir) => (dir === "desc" ? "asc" : "desc"));
-      return;
-    }
-    setSortKey(key);
-    setSortDir("desc");
+  function clearFilters() {
+    setInvoiceQuery("");
+    setCustomerQuery("");
+    setDueYears(null);
+    setDueMonths(null);
+    setDaysOp("gt");
+    setDaysValue("");
+    setStatusFilter(null);
+    setAgingFilter(null);
+    setBalanceOp("gt");
+    setBalanceValue("");
+    setOpenFilter(null);
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 rounded-box border border-base-300 bg-base-100 p-4 sm:grid-cols-2 lg:grid-cols-3">
-        <label className="form-control">
-          <span className="label-text mb-1">Customer</span>
-          <select
-            className="select select-bordered select-sm w-full"
-            value={customer}
-            onChange={(e) => setCustomer(e.target.value)}
-          >
-            <option value="all">All customers</option>
-            {customers.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="form-control">
-          <span className="label-text mb-1">Due Date</span>
-          <input
-            type="date"
-            className="input input-bordered input-sm w-full"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-          />
-        </label>
-
-        <label className="form-control">
-          <span className="label-text mb-1">Days Past Due</span>
-          <select
-            className="select select-bordered select-sm w-full"
-            value={daysPastDueFilter}
-            onChange={(e) => setDaysPastDueFilter(e.target.value)}
-          >
-            <option value="all">All</option>
-            <option value="current">Current (0)</option>
-            <option value="1-30">1–30</option>
-            <option value="31-60">31–60</option>
-            <option value="61-90">61–90</option>
-            <option value="over-90">Over 90</option>
-          </select>
-        </label>
-
-        <label className="form-control">
-          <span className="label-text mb-1">Status</span>
-          <select
-            className="select select-bordered select-sm w-full"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="all">All statuses</option>
-            {statuses.map((value) => (
-              <option key={value} value={value}>
-                {value.replace(/_/g, " ")}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="form-control">
-          <span className="label-text mb-1">Aging</span>
-          <select
-            className="select select-bordered select-sm w-full"
-            value={agingBucket}
-            onChange={(e) => setAgingBucket(e.target.value)}
-          >
-            <option value="all">All aging</option>
-            {buckets.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </label>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold">Open Invoices</h2>
+        <div className="flex items-center gap-2 text-sm">
+          <span className="opacity-60">
+            Showing {filtered.length} of {rows.length}
+          </span>
+          {activeCount > 0 ? (
+            <button type="button" className="btn btn-ghost btn-xs" onClick={clearFilters}>
+              <X className="h-3.5 w-3.5" />
+              Clear filters
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      {filtered.length === 0 ? (
-        <EmptyState
-          title="No invoices match these filters"
-          description="Try clearing one or more filters to widen the results."
-        />
+      {rows.length === 0 ? (
+        <EmptyState title="No open receivables" description="Every issued invoice has been paid in full." />
       ) : (
-        <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
-          <table className="table table-sm">
-            <thead>
-              <tr>
-                <th>Invoice</th>
-                <th>Customer</th>
-                <SortHeader label="Due Date" column="dueDate" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-                <SortHeader
-                  label="Days Past Due"
-                  column="daysPastDue"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={onSort}
+        <StickyFilterTable tableRef={tableRef}>
+          <thead>
+            <tr>
+              <DropdownHeader label="Invoice" active={Boolean(invoiceQuery.trim())} open={openFilter === "invoice"} onToggle={() => toggleFilter("invoice")}>
+                <TextFilter value={invoiceQuery} onChange={setInvoiceQuery} placeholder="Search invoice #" />
+              </DropdownHeader>
+              <DropdownHeader label="Customer" active={Boolean(customerQuery.trim())} open={openFilter === "customer"} onToggle={() => toggleFilter("customer")}>
+                <TextFilter value={customerQuery} onChange={setCustomerQuery} placeholder="Search customer" />
+              </DropdownHeader>
+              <DropdownHeader
+                label="Due Date"
+                active={dueYears != null || dueMonths != null}
+                open={openFilter === "dueDate"}
+                onToggle={() => toggleFilter("dueDate")}
+              >
+                <DatePeriodFilter
+                  dates={rows.map((row) => row.dueDate)}
+                  years={dueYears}
+                  months={dueMonths}
+                  onYearsChange={setDueYears}
+                  onMonthsChange={setDueMonths}
                 />
-                <SortHeader label="Status" column="status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-                <SortHeader label="Aging" column="bucket" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-                <SortHeader label="Balance" column="balance" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              </DropdownHeader>
+              <DropdownHeader
+                label="Days Past Due"
+                active={Boolean(daysValue.trim())}
+                open={openFilter === "daysPastDue"}
+                onToggle={() => toggleFilter("daysPastDue")}
+              >
+                <CompareFilter op={daysOp} value={daysValue} onOpChange={setDaysOp} onValueChange={setDaysValue} />
+              </DropdownHeader>
+              <DropdownHeader label="Status" active={statusFilter != null} open={openFilter === "status"} onToggle={() => toggleFilter("status")}>
+                <MultiSelectFilter
+                  options={STATUS_OPTIONS}
+                  selected={statusFilter}
+                  onChange={setStatusFilter}
+                  formatLabel={(status) => status.replace(/_/g, " ")}
+                />
+              </DropdownHeader>
+              <DropdownHeader label="Aging" active={agingFilter != null} open={openFilter === "aging"} onToggle={() => toggleFilter("aging")}>
+                <MultiSelectFilter options={AR_AGING_BUCKETS} selected={agingFilter} onChange={setAgingFilter} />
+              </DropdownHeader>
+              <DropdownHeader
+                label="Balance"
+                active={Boolean(balanceValue.trim())}
+                open={openFilter === "balance"}
+                align="right"
+                onToggle={() => toggleFilter("balance")}
+              >
+                <CompareFilter op={balanceOp} value={balanceValue} onOpChange={setBalanceOp} onValueChange={setBalanceValue} />
+              </DropdownHeader>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="py-8 text-center opacity-70">
+                  No open invoices match these filters.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => (
+            ) : (
+              filtered.map((row) => (
                 <tr key={row.id}>
                   <td>
                     <Link href={`/invoices/${row.id}`} className="link link-hover font-medium">
@@ -287,37 +212,26 @@ export function AccountsReceivableClient({ rows }: { rows: ArAgingRow[] }) {
                     </Link>
                   </td>
                   <td>{row.customerName}</td>
-                  <td className={`text-xs ${row.daysPastDue > 0 ? "font-medium" : ""}`}>
-                    {formatDate(row.dueDate)}
-                  </td>
-                  <td className={row.daysPastDue > 0 ? "font-medium" : ""}>
-                    {row.daysPastDue > 0 ? row.daysPastDue : "—"}
-                  </td>
+                  <td className={`text-xs ${row.daysPastDue > 0 ? "font-medium text-error" : ""}`}>{formatDate(row.dueDate)}</td>
+                  <td className={row.daysPastDue > 0 ? "font-medium text-error" : ""}>{row.daysPastDue > 0 ? row.daysPastDue : "—"}</td>
                   <td>
                     <StatusBadge status={row.status} />
                   </td>
-                  <td className="whitespace-nowrap">
-                    <span className={`badge whitespace-nowrap ${agingBadgeClass(row.daysPastDue)}`}>
-                      {row.bucket}
-                    </span>
+                  <td>
+                    <span className={`badge whitespace-nowrap ${bucketBadgeClass(row.bucket)}`}>{row.bucket}</span>
                   </td>
                   <td className="font-medium">
                     <Money value={row.remainingBalance} />
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              ))
+            )}
+          </tbody>
+        </StickyFilterTable>
       )}
 
       <div className="flex justify-end">
-        <button
-          type="button"
-          className="btn btn-outline btn-sm"
-          disabled={filtered.length === 0}
-          onClick={() => downloadArCsv(filtered)}
-        >
+        <button type="button" className="btn btn-outline btn-sm" disabled={filtered.length === 0} onClick={() => downloadArCsv(filtered)}>
           <Download className="h-4 w-4" />
           Export
         </button>

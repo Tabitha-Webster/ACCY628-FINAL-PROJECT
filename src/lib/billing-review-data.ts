@@ -21,6 +21,7 @@ export type BillingReviewPeriod = {
   start: string;
   end: string;
   label: string;
+  unbounded?: boolean;
 };
 
 export type BillingReviewData = {
@@ -61,11 +62,14 @@ export async function loadBillingReviewData(
   options?: { includeOpenOneTime?: boolean }
 ): Promise<BillingReviewData> {
   const current = currentBillingPeriod();
-  const billingPeriodStart = period?.start ?? current.start;
-  const billingPeriodEnd = period?.end ?? current.end;
+  const unbounded = period?.unbounded ?? false;
+  const billingPeriodStart = unbounded ? "1900-01-01" : (period?.start ?? current.start);
+  const billingPeriodEnd = unbounded ? "9999-12-31" : (period?.end ?? current.end);
   const periodLabel = period?.label ?? current.label;
   const includeOpenOneTime = options?.includeOpenOneTime ?? true;
-  const monthStarts = monthStartsBetween(billingPeriodStart, billingPeriodEnd);
+  const timeQuery = supabase
+    .from("time_entries")
+    .select("id, contract_id, hours_worked, classification, approval_status, billing_status, work_date, invoice_id, invoice_line_item_id, billed_at");
 
   const [
     { data: activeContracts },
@@ -81,14 +85,10 @@ export async function loadBillingReviewData(
     supabase
       .from("contracts")
       .select(
-        "id, name, customer_id, monthly_recurring_fee, included_hours_per_month, additional_hourly_rate, customers(name)"
+        "id, name, customer_id, start_date, monthly_recurring_fee, included_hours_per_month, additional_hourly_rate, customers(name)"
       )
       .eq("status", "active"),
-    supabase
-      .from("time_entries")
-      .select("id, contract_id, hours_worked, classification, approval_status, billing_status, work_date, invoice_id, invoice_line_item_id, billed_at")
-      .gte("work_date", billingPeriodStart)
-      .lte("work_date", billingPeriodEnd),
+    unbounded ? timeQuery : timeQuery.gte("work_date", billingPeriodStart).lte("work_date", billingPeriodEnd),
     supabase
       .from("direct_costs")
       .select(
@@ -127,6 +127,17 @@ export async function loadBillingReviewData(
       .select("id, title, estimated_amount, support_ticket_id, customers(name)")
       .eq("approval_status", "pending"),
   ]);
+
+  const earliestContractStart = (activeContracts ?? [])
+    .map((contract) => contract.start_date)
+    .filter((value): value is string => Boolean(value))
+    .map((value) => `${value.slice(0, 7)}-01`)
+    .sort()[0];
+  const monthStarts = unbounded
+    ? monthStartsBetween(earliestContractStart ?? current.start, current.end)
+    : monthStartsBetween(period?.start ?? current.start, period?.end ?? current.end);
+  const displayStart = unbounded ? (monthStarts[0] ?? current.start) : (period?.start ?? current.start);
+  const displayEnd = unbounded ? current.end : (period?.end ?? current.end);
 
   const billedRecurring = new Set(
     (recurringLines ?? [])
@@ -310,5 +321,12 @@ export async function loadBillingReviewData(
     })),
   ];
 
-  return { packages, items, exceptions, billingPeriodStart, billingPeriodEnd, periodLabel };
+  return {
+    packages,
+    items,
+    exceptions,
+    billingPeriodStart: displayStart,
+    billingPeriodEnd: displayEnd,
+    periodLabel,
+  };
 }
