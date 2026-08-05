@@ -6,6 +6,8 @@ import { PageHeader, DataTable, EmptyState, StatusBadge, ErrorState, Money, Hour
 import { formatDateTime } from "@/lib/format";
 import { slaStatus } from "@/lib/calculations";
 import { TicketActions } from "@/components/TicketActions";
+import { ContractRequirementsCard } from "@/components/ContractRequirementsCard";
+import { TimeCostForm } from "@/components/TimeCostForm";
 import type { SupportTicket } from "@/lib/types";
 
 export default async function TicketDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -33,26 +35,48 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
     );
   }
   const t = ticket as SupportTicket;
+  const isTechnician = profile.role === "technician";
 
-  const [customerRes, contractRes, technicianRes, timeEntriesRes, additionalWorkRes] = await Promise.all([
-    supabase.from("customers").select("id, name, primary_contact, contact_email").eq("id", t.customer_id).maybeSingle(),
-    t.contract_id
-      ? supabase.from("contracts").select("id, name, contract_number, included_hours_per_month, additional_hourly_rate").eq("id", t.contract_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    t.assigned_technician_id
-      ? supabase.from("profiles").select("id, full_name, email").eq("id", t.assigned_technician_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    supabase
-      .from("time_entries")
-      .select("id, technician_id, work_date, hours_worked, classification, description, labor_cost, billing_rate")
-      .eq("support_ticket_id", t.id)
-      .order("work_date", { ascending: false }),
-    supabase
-      .from("additional_work_requests")
-      .select("id, title, description, estimated_hours, estimated_amount, approval_status, reviewed_at, created_at")
-      .eq("support_ticket_id", t.id)
-      .order("created_at", { ascending: false }),
-  ]);
+  const [customerRes, contractRes, technicianRes, timeEntriesRes, additionalWorkRes, formOptionsRes] =
+    await Promise.all([
+      supabase.from("customers").select("id, name, primary_contact, contact_email").eq("id", t.customer_id).maybeSingle(),
+      t.contract_id
+        ? supabase
+            .from("contracts")
+            .select(
+              "id, name, contract_number, included_hours_per_month, additional_hourly_rate, sla_response_hours, sla_resolution_hours, scope, included_services, excluded_services, customer_id"
+            )
+            .eq("id", t.contract_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      t.assigned_technician_id
+        ? supabase.from("profiles").select("id, full_name, email").eq("id", t.assigned_technician_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase
+        .from("time_entries")
+        .select("id, technician_id, work_date, hours_worked, classification, description, labor_cost, billing_rate")
+        .eq("support_ticket_id", t.id)
+        .order("work_date", { ascending: false }),
+      supabase
+        .from("additional_work_requests")
+        .select("id, title, description, estimated_hours, estimated_amount, approval_status, reviewed_at, created_at")
+        .eq("support_ticket_id", t.id)
+        .order("created_at", { ascending: false }),
+      isTechnician
+        ? Promise.all([
+            supabase.from("customers").select("id, name").eq("status", "active").order("name"),
+            supabase
+              .from("contracts")
+              .select("id, name, contract_number, customer_id, additional_hourly_rate")
+              .eq("status", "active"),
+            supabase
+              .from("support_tickets")
+              .select("id, ticket_number, title, customer_id")
+              .not("status", "in", "(resolved,closed,canceled)"),
+            supabase.from("projects").select("id, name, customer_id").not("status", "in", "(closed,canceled)"),
+          ])
+        : Promise.resolve(null),
+    ]);
 
   const timeEntries = timeEntriesRes.data ?? [];
   const technicianIds = Array.from(new Set(timeEntries.map((e) => e.technician_id)));
@@ -66,15 +90,40 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
   const totalHours = timeEntries.reduce((sum, e) => sum + Number(e.hours_worked), 0);
   const hasTimeLogged = timeEntries.some((e) => e.technician_id === profile.id);
 
+  const formCustomers = formOptionsRes?.[0].data ?? [];
+  const formContracts = (formOptionsRes?.[1].data ?? []).map((c) => ({
+    id: c.id,
+    customerId: c.customer_id,
+    label: `${c.contract_number} · ${c.name}`,
+    additionalHourlyRate: Number(c.additional_hourly_rate),
+  }));
+  const formTickets = (formOptionsRes?.[2].data ?? []).map((ticketRow) => ({
+    id: ticketRow.id,
+    customerId: ticketRow.customer_id,
+    label: `${ticketRow.ticket_number} · ${ticketRow.title}`,
+  }));
+  const formProjects = (formOptionsRes?.[3].data ?? []).map((p) => ({
+    id: p.id,
+    customerId: p.customer_id,
+    label: p.name,
+  }));
+
   return (
     <div>
       <PageHeader
         title={`${t.ticket_number} · ${t.title}`}
         description={customerRes.data?.name ?? undefined}
         actions={
-          <Link href="/tickets" className="btn btn-sm btn-outline">
-            Back to Tickets
-          </Link>
+          <div className="flex gap-2">
+            {isTechnician ? (
+              <Link href="/assignments" className="btn btn-sm btn-outline">
+                Back to Assignments
+              </Link>
+            ) : null}
+            <Link href="/tickets" className="btn btn-sm btn-outline">
+              Back to Tickets
+            </Link>
+          </div>
         }
       />
 
@@ -89,6 +138,8 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
             <p className="text-sm leading-relaxed">{t.description}</p>
             {t.service_category ? <p className="mt-2 text-xs opacity-60">Category: {t.service_category}</p> : null}
           </div>
+
+          <ContractRequirementsCard contract={contractRes.data} />
 
           <div className="rounded-box border border-base-300 bg-base-100 p-4">
             <p className="mb-2 text-sm font-semibold">Technician Notes</p>
@@ -107,8 +158,32 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
             </div>
           ) : null}
 
+          {isTechnician ? (
+            <div>
+              <p className="mb-2 text-sm font-semibold">Log Time and Materials</p>
+              <p className="mb-3 text-xs opacity-60">
+                Capture hours worked and materials or other direct costs used on this ticket.
+              </p>
+              <TimeCostForm
+                technicianId={profile.id}
+                internalCostRate={Number(profile.internal_cost_rate ?? 65)}
+                customers={formCustomers}
+                contracts={formContracts}
+                tickets={formTickets}
+                projects={formProjects}
+                defaults={{
+                  customerId: t.customer_id,
+                  contractId: t.contract_id ?? undefined,
+                  ticketId: t.id,
+                }}
+              />
+            </div>
+          ) : null}
+
           <div>
-            <p className="mb-2 text-sm font-semibold">Time Logged ({<Hours value={totalHours} />})</p>
+            <p className="mb-2 text-sm font-semibold">
+              Time Logged (<Hours value={totalHours} />)
+            </p>
             {timeEntries.length === 0 ? (
               <EmptyState title="No time logged yet" description="Technician time against this ticket will show up here." />
             ) : (
@@ -177,7 +252,15 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
               </div>
               <div className="flex justify-between">
                 <dt className="opacity-60">Contract</dt>
-                <dd>{contractRes.data?.contract_number ?? "—"}</dd>
+                <dd>
+                  {contractRes.data ? (
+                    <Link className="link link-hover" href={`/contracts/${contractRes.data.id}`}>
+                      {contractRes.data.contract_number}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
               </div>
               <div className="flex justify-between">
                 <dt className="opacity-60">Assigned To</dt>

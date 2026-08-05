@@ -75,6 +75,9 @@ export type Contract = {
   end_date: string | null;
   assigned_manager_id: string | null;
   description: string | null;
+  scope?: string | null;
+  included_services?: string | null;
+  excluded_services?: string | null;
   monthly_recurring_fee: number;
   included_hours_per_month: number;
   additional_hourly_rate: number;

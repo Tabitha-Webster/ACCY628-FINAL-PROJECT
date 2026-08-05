@@ -8,6 +8,13 @@ import { formatCurrency } from "@/lib/format";
 
 type Option = { id: string; label: string; customerId: string };
 
+type Defaults = {
+  customerId?: string;
+  contractId?: string;
+  ticketId?: string;
+  projectId?: string;
+};
+
 type Props = {
   technicianId: string;
   internalCostRate: number;
@@ -15,6 +22,7 @@ type Props = {
   contracts: { id: string; label: string; customerId: string; additionalHourlyRate: number }[];
   tickets: Option[];
   projects: Option[];
+  defaults?: Defaults;
 };
 
 const COST_CATEGORIES = ["software", "equipment", "vendor", "travel", "shipping", "other"] as const;
@@ -24,15 +32,23 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function TimeCostForm({ technicianId, internalCostRate, customers, contracts, tickets, projects }: Props) {
+export function TimeCostForm({
+  technicianId,
+  internalCostRate,
+  customers,
+  contracts,
+  tickets,
+  projects,
+  defaults,
+}: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<"time" | "cost">("time");
 
   // Time entry state
-  const [tCustomerId, setTCustomerId] = useState("");
-  const [tContractId, setTContractId] = useState("");
-  const [tTicketId, setTTicketId] = useState("");
-  const [tProjectId, setTProjectId] = useState("");
+  const [tCustomerId, setTCustomerId] = useState(defaults?.customerId ?? "");
+  const [tContractId, setTContractId] = useState(defaults?.contractId ?? "");
+  const [tTicketId, setTTicketId] = useState(defaults?.ticketId ?? "");
+  const [tProjectId, setTProjectId] = useState(defaults?.projectId ?? "");
   const [workDate, setWorkDate] = useState(todayStr());
   const [hours, setHours] = useState("");
   const [workCategory, setWorkCategory] = useState("");
@@ -43,10 +59,10 @@ export function TimeCostForm({ technicianId, internalCostRate, customers, contra
   const [timeMessage, setTimeMessage] = useState<string | null>(null);
 
   // Direct cost state
-  const [cCustomerId, setCCustomerId] = useState("");
-  const [cContractId, setCContractId] = useState("");
-  const [cTicketId, setCTicketId] = useState("");
-  const [cProjectId, setCProjectId] = useState("");
+  const [cCustomerId, setCCustomerId] = useState(defaults?.customerId ?? "");
+  const [cContractId, setCContractId] = useState(defaults?.contractId ?? "");
+  const [cTicketId, setCTicketId] = useState(defaults?.ticketId ?? "");
+  const [cProjectId, setCProjectId] = useState(defaults?.projectId ?? "");
   const [costCategory, setCostCategory] = useState<(typeof COST_CATEGORIES)[number]>("software");
   const [vendor, setVendor] = useState("");
   const [costDate, setCostDate] = useState(todayStr());

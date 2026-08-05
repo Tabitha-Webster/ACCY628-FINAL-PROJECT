@@ -58,7 +58,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/controls", label: "Controls and Exceptions" },
   ],
   technician: [
-    { href: "/dashboard", label: "My Assignments" },
+    { href: "/assignments", label: "My Assignments" },
     { href: "/tickets", label: "Support Tickets" },
     { href: "/projects", label: "Project Tasks" },
     { href: "/time-costs", label: "Submit Time and Costs" },
@@ -82,7 +82,8 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   ],
 };
 
-export function roleHomePath(_role: UserRole) {
+export function roleHomePath(role: UserRole) {
+  if (role === "technician") return "/assignments";
   return "/dashboard";
 }
 
