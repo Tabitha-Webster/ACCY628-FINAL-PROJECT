@@ -9,6 +9,7 @@ import { CustomerSchemaNotice } from "@/components/CustomerSchemaNotice";
 import { HrCustomerAccessNotice } from "@/components/HrCustomerAccessNotice";
 import { PageLayout } from "@/components/PageLayout";
 import { EmptyState, ErrorState } from "@/components/ui";
+import type { UserRole } from "@/lib/constants";
 import {
   canEditCustomers,
   canViewCustomers,
@@ -43,7 +44,7 @@ function CustomerListSkeleton() {
   );
 }
 
-async function CustomerListContent({ role }: { role: string }) {
+async function CustomerListContent({ role }: { role: UserRole }) {
   const supabase = await createClient();
   const { customers, error, schemaIncomplete } = await listCustomersForInternalRoles(supabase);
 
@@ -87,7 +88,7 @@ async function CustomerListContent({ role }: { role: string }) {
   return (
     <div className="space-y-4">
       {schemaIncomplete ? <CustomerSchemaNotice /> : null}
-      <CustomerListSearch customers={customers} />
+      <CustomerListSearch customers={customers} role={role} />
     </div>
   );
 }

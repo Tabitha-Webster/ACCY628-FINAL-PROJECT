@@ -52,31 +52,21 @@ export default function LoginPage() {
   return (
     <div className="login-page-bg relative min-h-screen overflow-x-hidden bg-slate-50">
       <div className="login-page-geo pointer-events-none absolute inset-0" aria-hidden />
-      <div className="relative mx-auto flex w-full max-w-xl flex-col items-center px-4 py-6 sm:py-8 md:py-10">
-        <p className="text-center text-sm uppercase tracking-[0.2em] text-sky-700/80">
-          Managed services
-        </p>
-        <h1 className="mt-3 w-full max-w-[min(100%,40rem)] sm:mt-4">
+      <div className="relative mx-auto flex w-full max-w-xl flex-col items-center px-4 py-4 sm:py-5 md:py-6">
+        <h1 className="w-full max-w-[min(100%,24rem)] overflow-visible bg-transparent leading-none">
           <Image
-            src="/images/servicesync-logo.png"
+            src="/images/servicesync-cloud-logo.png?v=full-y-2"
             alt="ServiceSync MSP"
-            width={971}
-            height={212}
-            className="mx-auto h-auto w-full object-contain"
-            sizes="(max-width: 640px) 94vw, 40rem"
+            width={828}
+            height={433}
+            className="mx-auto block h-auto w-full bg-transparent object-contain object-top"
+            sizes="(max-width: 640px) 90vw, 24rem"
             priority
+            unoptimized
           />
         </h1>
-        <p className="mt-2 text-center text-base text-slate-700 sm:text-lg">
-          From service agreement to support, billing, and collection.
-        </p>
-        <p className="mt-3 max-w-md text-center text-sm leading-relaxed text-slate-600 sm:mt-4">
-          Track customer contracts, support hours, technician work, costs, invoices, and payments
-          in one place — so managers, technicians, billing staff, and customers each see what they
-          need.
-        </p>
 
-        <div className="mt-5 w-full max-w-md sm:mt-6">
+        <div className="mt-3 w-full max-w-md sm:mt-4">
           <div className="card border border-slate-200/80 bg-white shadow-xl shadow-slate-200/70">
             <div className="card-body gap-3 p-5 sm:gap-3.5 sm:p-6">
               <div>
@@ -113,7 +103,10 @@ export default function LoginPage() {
                     required
                   />
                 </label>
-                <button className="btn btn-primary mt-2 w-full" disabled={loading}>
+                <button
+                  className="btn login-signin-btn mt-2 w-full border-none text-white"
+                  disabled={loading}
+                >
                   {loading ? "Signing in…" : "Sign in"}
                 </button>
               </form>
@@ -134,6 +127,15 @@ export default function LoginPage() {
             </div>
           </div>
         </div>
+
+        <p className="mt-5 max-w-md text-center text-base text-slate-700 sm:mt-6 sm:text-lg">
+          From service agreement to support, billing, and collection.
+        </p>
+        <p className="mt-2 max-w-md pb-4 text-center text-sm leading-relaxed text-slate-600">
+          Track customer contracts, support hours, technician work, costs, invoices, and payments
+          in one place — so managers, technicians, billing staff, and customers each see what they
+          need.
+        </p>
       </div>
     </div>
   );
