@@ -59,10 +59,13 @@ export function statusLabel(status: string) {
 export function statusBadgeClass(status: string) {
   const s = status.toLowerCase();
   if (
-    ["active", "paid", "approved", "resolved", "closed", "met", "normal", "renewed", "sent"].includes(s)
+    ["active", "paid", "approved", "resolved", "closed", "met", "normal", "filled", "renewed", "sent"].includes(
+      s
+    )
   )
     return "badge-success";
-  if (["issued", "current"].includes(s)) return "badge-info";
+  if (["disputed", "overdue", "issued"].includes(s)) return "badge-ghost";
+  if (s === "current") return "badge-info";
   if (
     [
       "pending",
@@ -73,6 +76,7 @@ export function statusBadgeClass(status: string) {
       "partially_paid",
       "in_progress",
       "assigned",
+      "open",
       "on_hold",
       "medium",
       "not_yet_due",
@@ -81,14 +85,13 @@ export function statusBadgeClass(status: string) {
     return "badge-warning";
   if (
     [
-      "overdue",
-      "disputed",
       "rejected",
       "canceled",
       "expired",
       "missed",
       "over_limit",
       "unprofitable",
+      "ended",
       "critical",
       "high",
     ].includes(s)

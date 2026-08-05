@@ -1,4 +1,7 @@
 import { formatCurrency, formatDate, formatHours, formatPercent, statusBadgeClass, statusLabel } from "@/lib/format";
+import { ExplainNumber, type MetricExplanation } from "@/components/ExplainNumber";
+
+export type { MetricExplanation };
 
 export function StatCard({
   label,
@@ -6,12 +9,14 @@ export function StatCard({
   hint,
   tone = "default",
   className = "",
+  explanation,
 }: {
   label: string;
   value: string;
   hint?: string;
   tone?: "default" | "success" | "warning" | "error" | "info";
   className?: string;
+  explanation?: MetricExplanation;
 }) {
   const border =
     tone === "success"
@@ -29,6 +34,7 @@ export function StatCard({
       <p className="text-xs font-medium uppercase tracking-wide opacity-60">{label}</p>
       <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
       {hint ? <p className="mt-1 text-xs opacity-60">{hint}</p> : null}
+      {explanation ? <ExplainNumber explanation={explanation} /> : null}
     </div>
   );
 }
@@ -64,12 +70,12 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
+    <div className="mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {description ? <p className="mt-1 text-sm opacity-70">{description}</p> : null}
+        {actions}
       </div>
-      {actions}
+      {description ? <p className="mt-1 text-sm opacity-70">{description}</p> : null}
     </div>
   );
 }

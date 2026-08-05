@@ -415,6 +415,11 @@ export type Invoice = {
   remaining_balance: number;
   dispute_status: boolean;
   notes: string | null;
+  generated_by?: string | null;
+  generated_at?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_notes?: string | null;
   sent_at: string | null;
   sent_by: string | null;
   created_at: string;
@@ -455,5 +460,40 @@ export type RevenueRecord = {
   recognition: RevenueRecognition;
   amount: number;
   description: string | null;
+  created_at: string;
+};
+
+export type HrPositionStatus = "open" | "filled" | "closed";
+export type HrContractorStatus = "active" | "ended";
+
+export type HrDepartment = {
+  id: string;
+  name: string;
+  annual_budget: number;
+  created_at: string;
+};
+
+export type HrPosition = {
+  id: string;
+  department_id: string;
+  title: string;
+  status: HrPositionStatus;
+  budgeted_cost: number;
+  opened_at: string;
+  filled_at: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type HrContractor = {
+  id: string;
+  department_id: string;
+  position_id: string | null;
+  full_name: string;
+  status: HrContractorStatus;
+  annual_cost: number;
+  hired_at: string;
+  ended_at: string | null;
+  notes: string | null;
   created_at: string;
 };

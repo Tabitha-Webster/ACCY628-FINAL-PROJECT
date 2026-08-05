@@ -1,91 +1,34 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronDown, LogOut, Menu, Settings2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, LogOut, Menu, X } from "lucide-react";
 import { ThemeSelector } from "@/components/ThemeSelector";
 import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
-import { ROLE_NAV, type NavItem, type Profile, type UserRole } from "@/lib/constants";
+import { BillingStaffNavTree } from "@/components/BillingStaffNavTree";
+import { ContractsAgreementsNavTree } from "@/components/ContractsAgreementsNavTree";
+import { CustomerBillingNavTree } from "@/components/CustomerBillingNavTree";
+import { ROLE_NAV, type Profile, type UserRole } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
-function isNavActive(pathname: string, href: string) {
-  if (pathname === href) return true;
-  // Avoid treating every /contracts/* page as active for the parent only when matching children separately
-  return pathname.startsWith(href + "/");
+function profileInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
 }
 
-function ContractsNavItem({
-  item,
-  pathname,
-  onNavigate,
-}: {
-  item: NavItem;
-  pathname: string;
-  onNavigate?: () => void;
-}) {
-  const childActive = item.children?.some(
-    (child) => pathname === child.href || pathname.startsWith(child.href + "/")
-  );
-  const [open, setOpen] = useState(Boolean(childActive));
-
-  useEffect(() => {
-    if (childActive) setOpen(true);
-  }, [childActive, pathname]);
-
-  if (!item.children?.length) {
-    const active = isNavActive(pathname, item.href);
-    return (
-      <Link
-        href={item.href}
-        className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-          active ? "bg-primary text-primary-content" : "hover:bg-base-200"
-        }`}
-        onClick={onNavigate}
-      >
-        {item.label}
-      </Link>
-    );
-  }
-
+function ProfileAvatar({ name, size = "md" }: { name: string; size?: "sm" | "md" | "lg" }) {
+  const sizeClass = size === "lg" ? "h-12 w-12 text-base" : size === "sm" ? "h-8 w-8 text-xs" : "h-10 w-10 text-sm";
   return (
-    <div className="space-y-1">
-      <button
-        type="button"
-        className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
-          childActive || open ? "bg-base-200" : "hover:bg-base-200"
-        }`}
-        aria-expanded={open}
-        aria-controls={`nav-submenu-${item.href.replace(/\//g, "-")}`}
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        <span>{item.label}</span>
-        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open ? (
-        <div
-          id={`nav-submenu-${item.href.replace(/\//g, "-")}`}
-          className="ml-3 space-y-1 border-l border-base-300 pl-2"
-        >
-          {item.children.map((child) => {
-            const active = pathname === child.href || pathname.startsWith(child.href + "/");
-            return (
-              <Link
-                key={child.href}
-                href={child.href}
-                className={`block rounded-lg px-3 py-1.5 text-sm transition-colors ${
-                  active ? "bg-primary text-primary-content font-medium" : "hover:bg-base-200 opacity-90"
-                }`}
-                onClick={onNavigate}
-              >
-                {child.label}
-              </Link>
-            );
-          })}
-        </div>
-      ) : null}
-    </div>
+    <span
+      className={`inline-flex shrink-0 items-center justify-center rounded-full bg-primary text-primary-content font-semibold ${sizeClass}`}
+      aria-hidden
+    >
+      {profileInitials(name)}
+    </span>
   );
 }
 
@@ -103,6 +46,10 @@ function SideNav({
   onOpenSettings?: () => void;
 }) {
   const nav = ROLE_NAV[profile.role as UserRole] ?? [];
+  const isCustomer = profile.role === "customer";
+  const isBilling = profile.role === "billing";
+  const isManager = profile.role === "manager";
+  const isTechnician = profile.role === "technician";
 
   return (
     <>
@@ -114,30 +61,52 @@ function SideNav({
         </div>
       </div>
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3" aria-label="Main">
-        {nav.map((item) =>
-          item.children?.length ? (
-            <ContractsNavItem key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />
-          ) : (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                isNavActive(pathname, item.href)
-                  ? "bg-primary text-primary-content"
-                  : "hover:bg-base-200"
-              }`}
-              onClick={onNavigate}
-            >
-              {item.label}
-            </Link>
-          )
-        )}
+        {nav.map((item) => {
+          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          return (
+            <Fragment key={item.href}>
+              <Link
+                href={item.href}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  active ? "bg-primary text-primary-content" : "hover:bg-base-200"
+                }`}
+                onClick={onNavigate}
+              >
+                {item.label}
+              </Link>
+              {isCustomer && item.href === "/my-contracts" ? (
+                <CustomerBillingNavTree onNavigate={onNavigate} />
+              ) : null}
+              {isManager && item.href === "/customers" ? (
+                <ContractsAgreementsNavTree showReports showNewContract onNavigate={onNavigate} />
+              ) : null}
+              {isTechnician && item.href === "/dashboard" ? (
+                <ContractsAgreementsNavTree showReports={false} onNavigate={onNavigate} />
+              ) : null}
+              {isBilling && item.href === "/dashboard" ? (
+                <>
+                  <ContractsAgreementsNavTree showReports onNavigate={onNavigate} />
+                  <BillingStaffNavTree onNavigate={onNavigate} />
+                </>
+              ) : null}
+            </Fragment>
+          );
+        })}
       </nav>
       <div className="space-y-3 border-t border-base-300 p-4">
         {showSettings && onOpenSettings ? (
-          <button type="button" className="btn btn-ghost btn-sm w-full justify-start" onClick={onOpenSettings}>
-            <Settings2 className="h-4 w-4" />
-            Settings
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-base-200"
+            onClick={onOpenSettings}
+            aria-label={`Open user settings for ${profile.full_name}`}
+          >
+            <ProfileAvatar name={profile.full_name} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold">{profile.full_name}</span>
+              <span className="block truncate text-xs opacity-60">{statusLabel(profile.role)}</span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 opacity-50" />
           </button>
         ) : null}
         <p className="text-xs opacity-70">
@@ -160,11 +129,17 @@ export function AppShell({
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
 
   useEffect(() => {
     setMobileOpen(false);
     setSettingsOpen(false);
+    setAppearanceOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!settingsOpen) setAppearanceOpen(false);
+  }, [settingsOpen]);
 
   useEffect(() => {
     if (!settingsOpen && !mobileOpen) return;
@@ -227,22 +202,15 @@ export function AppShell({
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
-              className="btn btn-ghost btn-sm"
+              className="flex items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-base-200"
               onClick={() => setSettingsOpen(true)}
-              title="Settings"
+              aria-label={`Open user settings for ${profile.full_name}`}
             >
-              <Settings2 className="h-4 w-4" />
-              <span className="hidden md:inline">Settings</span>
-            </button>
-            <div className="hidden text-right lg:block">
-              <p className="text-sm font-medium">{profile.full_name}</p>
-              <p className="text-xs opacity-60">
-                {statusLabel(profile.role)} · {profile.email}
-              </p>
-            </div>
-            <button className="btn btn-ghost btn-sm" onClick={logout} title="Log out">
-              <LogOut className="h-4 w-4" />
-              <span className="hidden md:inline">Log out</span>
+              <ProfileAvatar name={profile.full_name} size="sm" />
+              <span className="hidden text-left lg:block">
+                <span className="block text-sm font-medium">{profile.full_name}</span>
+                <span className="block text-xs opacity-60">{statusLabel(profile.role)}</span>
+              </span>
             </button>
           </div>
         </header>
@@ -283,32 +251,69 @@ export function AppShell({
         </div>
       ) : null}
 
-      {/* Settings panel (theme) */}
+      {/* User settings panel */}
       {settingsOpen ? (
         <div className="fixed inset-0 z-[60]">
           <button
             type="button"
             className="absolute inset-0 bg-black/50"
-            aria-label="Close settings"
+            aria-label="Close user settings"
             onClick={() => setSettingsOpen(false)}
           />
           <aside className="absolute right-0 top-0 flex h-full w-80 max-w-[85vw] flex-col bg-base-100 shadow-2xl">
             <div className="flex items-start justify-between gap-3 border-b border-base-300 p-4">
               <div>
-                <h2 className="text-base font-semibold">Settings</h2>
-                <p className="text-sm opacity-70">Appearance options for this workspace.</p>
+                <h2 className="text-base font-semibold">User settings</h2>
+                <p className="text-sm opacity-70">Account and appearance options.</p>
               </div>
               <button
                 type="button"
                 className="btn btn-ghost btn-square btn-sm"
-                aria-label="Close settings"
+                aria-label="Close user settings"
                 onClick={() => setSettingsOpen(false)}
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-              <ThemeSelector />
+            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
+              <section className="flex items-center gap-3">
+                <ProfileAvatar name={profile.full_name} size="lg" />
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{profile.full_name}</p>
+                  <p className="truncate text-sm opacity-70">{profile.email}</p>
+                  <p className="mt-1">
+                    <span className="badge badge-primary badge-outline badge-sm">
+                      {statusLabel(profile.role)}
+                    </span>
+                  </p>
+                </div>
+              </section>
+              <section className="space-y-2">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-base-200"
+                  aria-expanded={appearanceOpen}
+                  onClick={() => setAppearanceOpen((value) => !value)}
+                >
+                  <span>Appearance</span>
+                  {appearanceOpen ? (
+                    <ChevronDown className="h-4 w-4 opacity-70" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 opacity-70" />
+                  )}
+                </button>
+                {appearanceOpen ? (
+                  <div className="px-1">
+                    <ThemeSelector />
+                  </div>
+                ) : null}
+              </section>
+            </div>
+            <div className="border-t border-base-300 p-4">
+              <button type="button" className="btn btn-outline btn-block" onClick={logout}>
+                <LogOut className="h-4 w-4" />
+                Log out
+              </button>
             </div>
           </aside>
         </div>

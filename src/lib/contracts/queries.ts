@@ -269,7 +269,7 @@ export async function getContractRelatedWork(supabase: SupabaseClient, contractI
   const [monthEntries, tickets, projects, invoices] = await Promise.all([
     supabase
       .from("time_entries")
-      .select("hours_worked")
+      .select("hours_worked, work_date, description")
       .eq("contract_id", contractId)
       .eq("classification", "included")
       .gte("work_date", monthStart)

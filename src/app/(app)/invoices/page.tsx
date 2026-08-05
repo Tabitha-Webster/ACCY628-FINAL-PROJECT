@@ -71,7 +71,7 @@ export default async function InvoicesPage() {
     <div>
       <PageHeader
         title="Invoices"
-        description="Review issued invoices, open balances, and generate monthly contract charges for the current period."
+        description="Review draft invoices before sending, check open balances, and generate monthly contract charges."
       />
       {error ? <ErrorState message={error.message} /> : <InvoiceListClient invoices={rows} />}
     </div>

@@ -173,7 +173,7 @@ async function main() {
       } else fail("Ticket number assigned", "TKT-#### not found on detail page or DB");
     }
 
-    if (/Apex Legal/i.test(bodyText)) pass("Customer org shown on ticket");
+    if (/Chad Corporation/i.test(bodyText)) pass("Customer org shown on ticket");
     else fail("Customer org shown on ticket");
 
     if (/CTR-1001|Managed Support/i.test(bodyText)) pass("Active contract connected on ticket");

@@ -1,8 +1,21 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { computeMonthlyUsage, currentBillingPeriod, makeInvoiceLine, round2, summarizeInvoice } from "@/lib/billing";
-import { isApprovedForBilling, isOpenBillingStatus, projectBillingBlockReason } from "@/lib/billing-eligibility";
+import {
+  billingPeriodFromStart,
+  computeMonthlyUsage,
+  currentBillingPeriod,
+  invoiceTotalsMismatchReason,
+  makeInvoiceLine,
+  round2,
+  summarizeInvoice,
+} from "@/lib/billing";
+import {
+  isApprovedForBilling,
+  isOpenBillingStatus,
+  isTimeEntryAlreadyInvoiced,
+  projectBillingBlockReason,
+} from "@/lib/billing-eligibility";
 
 function generateInvoiceNumber(): string {
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -17,7 +30,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Only billing and manager roles can generate invoices." }, { status: 403 });
   }
 
-  let body: { contractIds?: string[] } = {};
+  let body: { contractIds?: string[]; periodStart?: string } = {};
   try {
     body = await request.json();
   } catch {
@@ -25,7 +38,10 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
-  const { start: periodStart, end: periodEnd, label: periodLabel } = currentBillingPeriod();
+  const requestedStart = typeof body.periodStart === "string" && /^\d{4}-\d{2}-01$/.test(body.periodStart) ? body.periodStart : null;
+  const { start: periodStart, end: periodEnd, label: periodLabel } = requestedStart
+    ? billingPeriodFromStart(requestedStart)
+    : currentBillingPeriod();
 
   let contractQuery = supabase
     .from("contracts")
@@ -68,7 +84,7 @@ export async function POST(request: Request) {
     const [{ data: timeEntries }, { data: directCosts }, { data: projects }, { data: milestones }] = await Promise.all([
       supabase
         .from("time_entries")
-        .select("id, hours_worked, classification, approval_status, billing_status, work_date")
+        .select("id, hours_worked, classification, approval_status, billing_status, work_date, invoice_id, invoice_line_item_id, billed_at")
         .eq("contract_id", contract.id)
         .gte("work_date", periodStart)
         .lte("work_date", periodEnd),
@@ -188,7 +204,7 @@ export async function POST(request: Request) {
     const totals = summarizeInvoice(drafts, {
       taxStatus: contract.tax_status,
       paymentTerms: contract.payment_terms,
-      currentStatus: "issued",
+      currentStatus: "draft",
     });
 
     if (totals.subtotal <= 0) {
@@ -242,10 +258,34 @@ export async function POST(request: Request) {
           source_id: d.source_id,
         }))
       )
-      .select("id, source_type, source_id");
+      .select("id, source_type, source_id, line_amount");
 
     if (lineError || !lineItems) {
-      errors.push(`${contract.name}: invoice ${invoice.invoice_number} created but line items failed.`);
+      const duplicateTimeEntry = /already been invoiced|invoice_line_items_unique_source|duplicate key/i.test(
+        lineError?.message ?? ""
+      );
+      const unapproved = /unapproved/i.test(lineError?.message ?? "");
+      errors.push(
+        duplicateTimeEntry
+          ? `${contract.name}: a time entry on this invoice was already billed and cannot be invoiced again.`
+          : unapproved
+            ? `${contract.name}: unapproved changes cannot be billed.`
+            : `${contract.name}: invoice ${invoice.invoice_number} created but line items failed.`
+      );
+      continue;
+    }
+
+    const totalsMismatch = invoiceTotalsMismatchReason(
+      {
+        subtotal: totals.subtotal,
+        tax_amount: totals.taxAmount,
+        credits: totals.credits,
+        total_amount: totals.totalAmount,
+      },
+      lineItems
+    );
+    if (totalsMismatch) {
+      errors.push(`${contract.name}: ${totalsMismatch}`);
       continue;
     }
 
@@ -255,6 +295,7 @@ export async function POST(request: Request) {
       const billableTimeIds = (timeEntries ?? [])
         .filter(
           (entry) =>
+            !isTimeEntryAlreadyInvoiced(entry) &&
             isOpenBillingStatus(entry.billing_status) &&
             (entry.classification === "included" ||
               (["billable", "out_of_scope"].includes(entry.classification) && isApprovedForBilling(entry.approval_status)))
@@ -262,11 +303,16 @@ export async function POST(request: Request) {
         .map((entry) => entry.id);
 
       if (billableTimeIds.length > 0) {
-        await supabase
-          .from("time_entries")
-          .update({ billing_status: "billed" })
-          .in("id", billableTimeIds)
-          .in("billing_status", ["unbilled", "ready"]);
+        const overageLineId = lineBySource.get("overage:" + contract.id) ?? lineBySource.get("hours_included:" + contract.id) ?? null;
+        const { error: markError } = await supabase.rpc("mark_time_entries_billed", {
+          p_entry_ids: billableTimeIds,
+          p_invoice_id: invoice.id,
+          p_line_item_id: overageLineId,
+        });
+        if (markError) {
+          errors.push(`${contract.name}: invoice ${invoice.invoice_number} created but a time entry was already invoiced.`);
+          continue;
+        }
       }
     }
 

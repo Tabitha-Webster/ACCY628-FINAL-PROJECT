@@ -3,12 +3,17 @@
 import { Children, isValidElement, useMemo, useState, type ReactElement, type ReactNode } from "react";
 import {
   type CompareOp,
+  type MultiFilter,
   CompareFilter,
+  DatePeriodFilter,
   DropdownHeader,
-  FilterOption,
+  MultiSelectFilter,
   TextFilter,
+  matchesAnySelected,
   matchesCompare,
+  matchesDatePeriod,
   matchesText,
+  parseDateParts,
   useHeaderFilter,
 } from "@/components/table-filters";
 
@@ -38,14 +43,20 @@ function uniqueValues(values: string[]) {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 }
 
+function isDateText(text: string) {
+  return parseDateParts(text) != null && /(\d{4}-\d{2}-\d{2}|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))/i.test(text);
+}
+
 type ColumnFilter = {
   query: string;
-  selected: string;
+  selected: MultiFilter;
+  years: MultiFilter;
+  months: MultiFilter;
   op: CompareOp;
   amount: string;
 };
 
-const EMPTY_FILTER: ColumnFilter = { query: "", selected: "all", op: "gt", amount: "" };
+const EMPTY_FILTER: ColumnFilter = { query: "", selected: null, years: null, months: null, op: "gt", amount: "" };
 
 export function DataTable({
   headers,
@@ -54,7 +65,7 @@ export function DataTable({
   headers: string[];
   children: ReactNode;
 }) {
-  const { openFilter, setOpenFilter, toggleFilter, tableRef } = useHeaderFilter<string>();
+  const { openFilter, toggleFilter, tableRef } = useHeaderFilter<string>();
   const [filters, setFilters] = useState<ColumnFilter[]>(() => headers.map(() => ({ ...EMPTY_FILTER })));
 
   const rows = useMemo(
@@ -73,14 +84,26 @@ export function DataTable({
     [headers, rows]
   );
 
+  const dateColumns = useMemo(
+    () =>
+      headers.map((header, colIdx) => {
+        const headerLooksLikeDate = /date|due|opened|submitted/i.test(header);
+        const values = (columnTexts[colIdx] ?? []).filter(Boolean);
+        if (values.length === 0) return headerLooksLikeDate;
+        return values.filter(isDateText).length / values.length >= 0.5 || headerLooksLikeDate;
+      }),
+    [headers, columnTexts]
+  );
+
   const numericColumns = useMemo(
     () =>
-      columnTexts.map((values) => {
+      columnTexts.map((values, colIdx) => {
+        if (dateColumns[colIdx]) return false;
         const usable = values.filter(Boolean);
         if (usable.length === 0) return false;
         return usable.filter((value) => parseNumeric(value) != null).length / usable.length >= 0.6;
       }),
-    [columnTexts]
+    [columnTexts, dateColumns]
   );
 
   const filteredRows = useMemo(
@@ -90,7 +113,8 @@ export function DataTable({
           const filter = filters[colIdx] ?? EMPTY_FILTER;
           const text = columnTexts[colIdx]?.[rowIdx] ?? "";
           if (!matchesText(text, filter.query)) return false;
-          if (filter.selected !== "all" && text.trim().toLowerCase() !== filter.selected.trim().toLowerCase()) return false;
+          if (!matchesAnySelected(text, filter.selected)) return false;
+          if (dateColumns[colIdx] && !matchesDatePeriod(text, filter.years, filter.months)) return false;
           if (numericColumns[colIdx] && filter.amount.trim()) {
             const amount = parseNumeric(text);
             if (amount == null || !matchesCompare(amount, filter.op, filter.amount)) return false;
@@ -98,7 +122,7 @@ export function DataTable({
           return true;
         })
       ),
-    [rows, headers, filters, columnTexts, numericColumns]
+    [rows, headers, filters, columnTexts, numericColumns, dateColumns]
   );
 
   function updateFilter(colIdx: number, patch: Partial<ColumnFilter>) {
@@ -112,9 +136,15 @@ export function DataTable({
           <tr>
             {headers.map((header, colIdx) => {
               const filter = filters[colIdx] ?? EMPTY_FILTER;
-              const values = uniqueValues(columnTexts[colIdx] ?? []).slice(0, 8);
+              const values = uniqueValues(columnTexts[colIdx] ?? []).slice(0, 12);
               const isNumeric = numericColumns[colIdx];
-              const active = Boolean(filter.query.trim()) || filter.selected !== "all" || Boolean(filter.amount.trim());
+              const isDate = dateColumns[colIdx];
+              const active =
+                Boolean(filter.query.trim()) ||
+                filter.selected != null ||
+                filter.years != null ||
+                filter.months != null ||
+                Boolean(filter.amount.trim());
               const label = header.trim() || "Filter";
               return (
                 <DropdownHeader
@@ -125,31 +155,27 @@ export function DataTable({
                   align={colIdx >= headers.length - 2 ? "right" : "left"}
                   onToggle={() => toggleFilter(String(colIdx))}
                 >
-                  {isNumeric ? (
+                  {isDate ? (
+                    <DatePeriodFilter
+                      dates={columnTexts[colIdx] ?? []}
+                      years={filter.years}
+                      months={filter.months}
+                      onYearsChange={(years) => updateFilter(colIdx, { years })}
+                      onMonthsChange={(months) => updateFilter(colIdx, { months })}
+                    />
+                  ) : isNumeric ? (
                     <CompareFilter
                       op={filter.op}
                       value={filter.amount}
                       onOpChange={(op) => updateFilter(colIdx, { op })}
                       onValueChange={(amount) => updateFilter(colIdx, { amount })}
                     />
-                  ) : values.length > 0 && values.length <= 8 ? (
-                    <>
-                      <FilterOption selected={filter.selected === "all"} onClick={() => updateFilter(colIdx, { selected: "all" })}>
-                        (All)
-                      </FilterOption>
-                      {values.map((value) => (
-                        <FilterOption
-                          key={value}
-                          selected={filter.selected.toLowerCase() === value.toLowerCase()}
-                          onClick={() => {
-                            updateFilter(colIdx, { selected: value });
-                            setOpenFilter(null);
-                          }}
-                        >
-                          <span className="block truncate">{value}</span>
-                        </FilterOption>
-                      ))}
-                    </>
+                  ) : values.length > 0 && values.length <= 12 ? (
+                    <MultiSelectFilter
+                      options={values}
+                      selected={filter.selected}
+                      onChange={(selected) => updateFilter(colIdx, { selected })}
+                    />
                   ) : (
                     <TextFilter
                       value={filter.query}
