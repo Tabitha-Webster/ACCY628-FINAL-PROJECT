@@ -247,7 +247,9 @@ export type SupportTicket = {
   status: TicketStatus;
   service_category: string | null;
   submitted_at: string;
+  submitted_by: string | null;
   assigned_technician_id: string | null;
+  assigned_at: string | null;
   target_response_at: string | null;
   target_resolution_at: string | null;
   actual_response_at: string | null;
@@ -256,9 +258,19 @@ export type SupportTicket = {
   classification: WorkClassification | null;
   billable_approval_status: ApprovalStatus | null;
   technician_notes: string | null;
+  completion_notes: string | null;
   customer_resolution_summary: string | null;
+  no_time_explanation: string | null;
+  completed_by: string | null;
+  reopened_at: string | null;
+  reopened_by: string | null;
+  reopen_reason: string | null;
   created_at: string;
+  updated_at: string | null;
   created_by: string | null;
+  updated_by: string | null;
+  archived_at: string | null;
+  archived_by: string | null;
 };
 
 export type TechnicianAssignment = {
@@ -288,6 +300,11 @@ export type TimeEntry = {
   labor_cost: number | null;
   approval_status: ApprovalStatus;
   billing_status: BillingStatus;
+  approved_by: string | null;
+  approved_at: string | null;
+  invoice_id: string | null;
+  invoice_line_item_id: string | null;
+  billed_at: string | null;
   submitted_at: string | null;
   created_at: string;
 };
@@ -310,6 +327,11 @@ export type DirectCost = {
   entered_after_invoice?: boolean;
   approval_status: ApprovalStatus;
   billing_status: BillingStatus;
+  approved_by: string | null;
+  approved_at: string | null;
+  invoice_id: string | null;
+  invoice_line_item_id: string | null;
+  billed_at: string | null;
   created_at: string;
 };
 

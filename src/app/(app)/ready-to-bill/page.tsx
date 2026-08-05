@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Legacy route — Billing Review is the contract-to-cash workspace on main. */
+/** Legacy path — Billing Review is the current invoice-prep / contract-to-cash surface. */
 export default function ReadyToBillRedirectPage() {
   redirect("/billing-review");
 }

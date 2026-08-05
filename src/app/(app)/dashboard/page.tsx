@@ -15,7 +15,15 @@ import {
 } from "@/components/ui";
 import { ManagerCharts, type MonthlyFinancials, type TicketsByStatus } from "@/components/ManagerCharts";
 import { ContractMetricsWidgets } from "@/components/ContractMetricsWidgets";
-import { slaStatus, usagePercentage, usageStatus, hoursRemaining } from "@/lib/calculations";
+import {
+  TechnicianWorkspaceClient,
+  type WorkspaceTicket,
+  type WorkspaceTimeEntry,
+  type WorkspaceAdditionalWork,
+  type ContractHourWarning,
+} from "@/components/TechnicianWorkspaceClient";
+import { usagePercentage, usageStatus, hoursRemaining } from "@/lib/calculations";
+import { evaluateTicketSla } from "@/lib/sla";
 import { arAgingBucket } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
 import { fetchContractReportMetrics } from "@/lib/contracts";
@@ -60,15 +68,17 @@ function lastNMonthKeys(n: number) {
 }
 
 function ticketSlaSeverity(t: {
+  submitted_at?: string | null;
   target_response_at: string | null;
   target_resolution_at: string | null;
   actual_response_at: string | null;
   completed_at: string | null;
+  status?: string | null;
+  priority?: string | null;
 }) {
-  const response = slaStatus(t.target_response_at, t.actual_response_at);
-  const resolution = slaStatus(t.target_resolution_at, t.completed_at);
-  if (response === "missed" || resolution === "missed") return "missed";
-  if (response === "at_risk" || resolution === "at_risk") return "at_risk";
+  const sla = evaluateTicketSla(t);
+  if (sla.overdue || sla.overall === "missed") return "missed";
+  if (sla.overall === "at_risk") return "at_risk";
   return "on_track";
 }
 
@@ -110,7 +120,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
     supabase
       .from("support_tickets")
       .select(
-        "id, ticket_number, customer_id, title, priority, status, target_response_at, target_resolution_at, actual_response_at, completed_at"
+        "id, ticket_number, customer_id, title, priority, status, submitted_at, target_response_at, target_resolution_at, actual_response_at, completed_at"
       )
       .in("status", OPEN_TICKET_STATUSES),
     supabase
@@ -353,227 +363,228 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
 }
 
 // ---------------------------------------------------------------------------
-// Technician
+// Technician workspace
 // ---------------------------------------------------------------------------
 
 async function TechnicianDashboard({ profile }: { profile: Profile }) {
   const supabase = await createClient();
-  const monthStart = `${lastNMonthKeys(1)[0]}-01`;
-
-  const [assignmentsRes, ticketsRes, myTicketsRes, additionalWorkRes, timeEntriesRes, myContractsRes] =
-    await Promise.all([
-      supabase
-        .from("technician_assignments")
-        .select("id, support_ticket_id, project_id, assigned_at, due_at, notes")
-        .eq("technician_id", profile.id)
-        .order("due_at", { ascending: true, nullsFirst: false }),
-      supabase
-        .from("support_tickets")
-        .select(
-          "id, ticket_number, customer_id, title, priority, status, target_response_at, target_resolution_at, actual_response_at, completed_at"
-        )
-        .or(`assigned_technician_id.eq.${profile.id},assigned_technician_id.is.null`)
-        .in("status", OPEN_TICKET_STATUSES),
-      supabase
-        .from("support_tickets")
-        .select("id")
-        .eq("assigned_technician_id", profile.id)
-        .in("status", OPEN_TICKET_STATUSES),
-      supabase
-        .from("additional_work_requests")
-        .select("id, title, customer_id, approval_status, created_at")
-        .eq("requested_by", profile.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("time_entries")
-        .select("id, contract_id, hours_worked, classification, work_date, approval_status, description")
-        .eq("technician_id", profile.id)
-        .gte("work_date", monthStart),
-      supabase.from("contracts").select("id, name, contract_number, included_hours_per_month"),
-    ]);
-
-  const customersRes = await supabase.from("customers").select("id, name");
-  const customerName = new Map((customersRes.data ?? []).map((c) => [c.id, c.name as string]));
-
-  const ticketIds = new Set(
-    (assignmentsRes.data ?? []).map((a) => a.support_ticket_id).filter((v): v is string => Boolean(v))
-  );
-  const projectIds = new Set(
-    (assignmentsRes.data ?? []).map((a) => a.project_id).filter((v): v is string => Boolean(v))
-  );
-  const [assignmentTicketsRes, assignmentProjectsRes] = await Promise.all([
-    ticketIds.size
-      ? supabase.from("support_tickets").select("id, ticket_number, title, customer_id").in("id", Array.from(ticketIds))
-      : Promise.resolve({ data: [] as { id: string; ticket_number: string; title: string; customer_id: string }[] }),
-    projectIds.size
-      ? supabase.from("projects").select("id, name, customer_id").in("id", Array.from(projectIds))
-      : Promise.resolve({ data: [] as { id: string; name: string; customer_id: string }[] }),
-  ]);
-  const ticketById = new Map((assignmentTicketsRes.data ?? []).map((t) => [t.id, t]));
-  const projectById = new Map((assignmentProjectsRes.data ?? []).map((p) => [p.id, p]));
-
-  const assignments = assignmentsRes.data ?? [];
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-  const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
+  const recentCompletedSince = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
 
-  const overdueAssignments = assignments.filter((a) => a.due_at && a.due_at < now.toISOString());
-  const todayAssignments = assignments.filter((a) => a.due_at && a.due_at.slice(0, 10) === todayStr);
-  const upcomingAssignments = assignments.filter(
-    (a) => a.due_at && a.due_at > now.toISOString() && a.due_at <= in7Days && a.due_at.slice(0, 10) !== todayStr
-  );
+  const [openTicketsRes, recentCompletedRes, timeEntriesRes, additionalWorkRes] = await Promise.all([
+    supabase
+      .from("support_tickets")
+      .select(
+        "id, ticket_number, title, customer_id, contract_id, priority, status, submitted_at, target_response_at, target_resolution_at, actual_response_at, completed_at, technician_notes, customer_resolution_summary, classification"
+      )
+      .eq("assigned_technician_id", profile.id)
+      .in("status", OPEN_TICKET_STATUSES)
+      .order("target_response_at", { ascending: true, nullsFirst: false }),
+    supabase
+      .from("support_tickets")
+      .select(
+        "id, ticket_number, title, customer_id, contract_id, priority, status, submitted_at, target_response_at, target_resolution_at, actual_response_at, completed_at, technician_notes, customer_resolution_summary, classification"
+      )
+      .eq("assigned_technician_id", profile.id)
+      .in("status", ["resolved", "closed"])
+      .gte("completed_at", recentCompletedSince)
+      .order("completed_at", { ascending: false })
+      .limit(12),
+    supabase
+      .from("time_entries")
+      .select("id, work_date, hours_worked, description, approval_status, submitted_at, support_ticket_id, contract_id, classification")
+      .eq("technician_id", profile.id)
+      .or("submitted_at.is.null,approval_status.eq.pending")
+      .order("work_date", { ascending: false })
+      .limit(25),
+    supabase
+      .from("additional_work_requests")
+      .select("id, title, customer_id, approval_status, created_at, estimated_hours, support_ticket_id")
+      .eq("requested_by", profile.id)
+      .eq("approval_status", "pending")
+      .order("created_at", { ascending: false }),
+  ]);
 
-  const tickets = (ticketsRes.data ?? []) as SupportTicket[];
-  const myOpenTicketCount = myTicketsRes.data?.length ?? 0;
-  const highPriority = tickets.filter((t) => t.assigned_technician_id === profile.id && ["high", "critical"].includes(t.priority));
-  const waitingOnCustomer = tickets.filter((t) => t.assigned_technician_id === profile.id && t.status === "waiting_on_customer");
-  const slaApproaching = tickets.filter(
-    (t) => t.assigned_technician_id === profile.id && ticketSlaSeverity(t) === "at_risk"
-  );
-
-  const additionalWork = (additionalWorkRes.data ?? []) as Pick<
-    AdditionalWorkRequest,
-    "id" | "title" | "customer_id" | "approval_status" | "created_at"
-  >[];
-  const pendingAdditionalWork = additionalWork.filter((w) => w.approval_status === "pending");
-
-  const timeEntries = (timeEntriesRes.data ?? []) as Pick<
-    TimeEntry,
-    "id" | "contract_id" | "hours_worked" | "classification" | "work_date" | "approval_status" | "description"
-  >[];
-  const pendingTimeEntries = timeEntries.filter((t) => t.approval_status === "pending");
-
-  const contracts = (myContractsRes.data ?? []) as Pick<
-    Contract,
-    "id" | "name" | "contract_number" | "included_hours_per_month"
-  >[];
-  const contractMap = new Map(contracts.map((c) => [c.id, c]));
-  const hoursByContract = new Map<string, number>();
-  for (const entry of timeEntries) {
-    if (!entry.contract_id || entry.classification !== "included") continue;
-    hoursByContract.set(entry.contract_id, (hoursByContract.get(entry.contract_id) ?? 0) + Number(entry.hours_worked));
-  }
-  const hourWarnings = Array.from(hoursByContract.entries())
-    .map(([contractId, used]) => {
-      const contract = contractMap.get(contractId);
-      if (!contract) return null;
-      const pct = usagePercentage(used, contract.included_hours_per_month);
-      return { contract, used, pct, status: usageStatus(pct) };
-    })
-    .filter((v): v is NonNullable<typeof v> => v !== null && v.status !== "normal");
-
-  function renderAssignment(a: (typeof assignments)[number]) {
-    const ticket = a.support_ticket_id ? ticketById.get(a.support_ticket_id) : null;
-    const project = a.project_id ? projectById.get(a.project_id) : null;
-    const label = ticket ? `${ticket.ticket_number} · ${ticket.title}` : project ? project.name : "Assignment";
-    const href = ticket ? `/tickets/${ticket.id}` : project ? `/projects/${project.id}` : "#";
-    const customerId = ticket?.customer_id ?? project?.customer_id;
+  if (openTicketsRes.error || recentCompletedRes.error) {
     return (
-      <tr key={a.id}>
-        <td>
-          <Link className="link link-hover" href={href}>
-            {label}
-          </Link>
-        </td>
-        <td>{customerId ? customerName.get(customerId) ?? "—" : "—"}</td>
-        <td>{a.due_at ? <DateText value={a.due_at} /> : "Unscheduled"}</td>
-        <td className="max-w-xs truncate opacity-70">{a.notes ?? "—"}</td>
-      </tr>
+      <div>
+        <PageHeader title="My Assignments" />
+        <EmptyState
+          title="Couldn't load your workspace"
+          description={openTicketsRes.error?.message ?? recentCompletedRes.error?.message ?? "Please try again."}
+        />
+      </div>
     );
   }
 
+  const ticketRows = [...(openTicketsRes.data ?? []), ...(recentCompletedRes.data ?? [])];
+  const customerIds = Array.from(new Set(ticketRows.map((t) => t.customer_id)));
+  const contractIds = Array.from(
+    new Set(
+      [
+        ...ticketRows.map((t) => t.contract_id),
+        ...(timeEntriesRes.data ?? []).map((e) => e.contract_id),
+      ].filter((v): v is string => Boolean(v))
+    )
+  );
+  const ticketIdsForLabels = Array.from(
+    new Set((timeEntriesRes.data ?? []).map((e) => e.support_ticket_id).filter((v): v is string => Boolean(v)))
+  );
+
+  const [customersRes, contractsRes, ticketLabelsRes, monthHoursRes] = await Promise.all([
+    customerIds.length
+      ? supabase.from("customers").select("id, name").in("id", customerIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    contractIds.length
+      ? supabase
+          .from("contracts")
+          .select("id, name, contract_number, included_hours_per_month, additional_hourly_rate")
+          .in("id", contractIds)
+      : Promise.resolve({
+          data: [] as {
+            id: string;
+            name: string;
+            contract_number: string | null;
+            included_hours_per_month: number | null;
+            additional_hourly_rate: number | null;
+          }[],
+        }),
+    ticketIdsForLabels.length
+      ? supabase.from("support_tickets").select("id, ticket_number, title").in("id", ticketIdsForLabels)
+      : Promise.resolve({ data: [] as { id: string; ticket_number: string; title: string }[] }),
+    contractIds.length
+      ? supabase
+          .from("time_entries")
+          .select("contract_id, hours_worked")
+          .in("contract_id", contractIds)
+          .eq("classification", "included")
+          .gte("work_date", monthStart)
+          .lt("work_date", monthEnd)
+      : Promise.resolve({ data: [] as { contract_id: string | null; hours_worked: number }[] }),
+  ]);
+
+  const customerName = new Map((customersRes.data ?? []).map((c) => [c.id, c.name]));
+  const contractById = new Map((contractsRes.data ?? []).map((c) => [c.id, c]));
+  const ticketLabelById = new Map(
+    (ticketLabelsRes.data ?? []).map((t) => [t.id, `${t.ticket_number} · ${t.title}`])
+  );
+
+  const hoursByContract = new Map<string, number>();
+  for (const entry of monthHoursRes.data ?? []) {
+    if (!entry.contract_id) continue;
+    hoursByContract.set(
+      entry.contract_id,
+      (hoursByContract.get(entry.contract_id) ?? 0) + Number(entry.hours_worked ?? 0)
+    );
+  }
+
+  function toWorkspaceTicket(t: (typeof ticketRows)[number]): WorkspaceTicket {
+    const live = evaluateTicketSla(t);
+    const contract = t.contract_id ? contractById.get(t.contract_id) : null;
+    const included = contract ? Number(contract.included_hours_per_month ?? 0) : null;
+    const used = t.contract_id ? hoursByContract.get(t.contract_id) ?? 0 : null;
+    const warning =
+      included != null && used != null ? usageStatus(usagePercentage(used, included)) : null;
+
+    return {
+      id: t.id,
+      ticket_number: t.ticket_number,
+      title: t.title,
+      customer_id: t.customer_id,
+      customer_name: customerName.get(t.customer_id) ?? "Unknown customer",
+      contract_id: t.contract_id,
+      contract_label: contract
+        ? `${contract.contract_number ?? "Contract"} · ${contract.name}`
+        : null,
+      priority: t.priority,
+      status: t.status,
+      submitted_at: t.submitted_at,
+      target_response_at: t.target_response_at,
+      target_resolution_at: t.target_resolution_at,
+      actual_response_at: t.actual_response_at,
+      completed_at: t.completed_at,
+      technician_notes: t.technician_notes,
+      customer_resolution_summary: t.customer_resolution_summary,
+      classification: t.classification,
+      hours_warning: warning,
+      hours_used: used,
+      hours_included: included,
+      additional_hourly_rate: contract ? Number(contract.additional_hourly_rate ?? 0) : null,
+      sla: live.overall,
+      response_sla: live.response,
+      resolution_sla: live.resolution,
+      overdue: live.overdue,
+    };
+  }
+
+  const workspaceTickets: WorkspaceTicket[] = [
+    ...(openTicketsRes.data ?? []).map(toWorkspaceTicket),
+    ...(recentCompletedRes.data ?? []).map(toWorkspaceTicket),
+  ];
+
+  const pendingTimeEntries: WorkspaceTimeEntry[] = (timeEntriesRes.data ?? []).map((e) => ({
+    id: e.id,
+    work_date: e.work_date,
+    hours_worked: Number(e.hours_worked),
+    description: e.description,
+    approval_status: e.submitted_at == null ? "pending" : e.approval_status,
+    support_ticket_id: e.support_ticket_id,
+    ticket_label: e.support_ticket_id ? ticketLabelById.get(e.support_ticket_id) ?? null : null,
+  }));
+
+  const addlCustomerIds = Array.from(
+    new Set((additionalWorkRes.data ?? []).map((w) => w.customer_id))
+  );
+  const addlCustomersRes = addlCustomerIds.length
+    ? await supabase.from("customers").select("id, name").in("id", addlCustomerIds)
+    : { data: [] as { id: string; name: string }[] };
+  const addlCustomerName = new Map((addlCustomersRes.data ?? []).map((c) => [c.id, c.name]));
+
+  const pendingAdditionalWork: WorkspaceAdditionalWork[] = (additionalWorkRes.data ?? []).map((w) => ({
+    id: w.id,
+    title: w.title,
+    customer_name: addlCustomerName.get(w.customer_id) ?? "—",
+    approval_status: w.approval_status,
+    created_at: w.created_at,
+    estimated_hours: w.estimated_hours != null ? Number(w.estimated_hours) : null,
+    support_ticket_id: w.support_ticket_id,
+  }));
+
+  const contractWarnings: ContractHourWarning[] = Array.from(hoursByContract.entries())
+    .map(([contractId, used]) => {
+      const contract = contractById.get(contractId);
+      if (!contract) return null;
+      const included = Number(contract.included_hours_per_month ?? 0);
+      const status = usageStatus(usagePercentage(used, included));
+      if (status === "normal") return null;
+      return {
+        contract_id: contractId,
+        label: `${contract.contract_number ?? "Contract"} · ${contract.name}`,
+        used,
+        included,
+        status: status as "warning" | "over_limit",
+      };
+    })
+    .filter((v): v is ContractHourWarning => v !== null);
+
   return (
     <div>
-      <PageHeader title="My Assignments" description={`Welcome back, ${profile.full_name}. Here's what needs your attention today.`} />
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Open Tickets Assigned to Me" value={String(myOpenTicketCount)} />
-        <StatCard label="High Priority" value={String(highPriority.length)} tone={highPriority.length > 0 ? "warning" : "default"} />
-        <StatCard label="SLA Approaching" value={String(slaApproaching.length)} tone={slaApproaching.length > 0 ? "error" : "success"} />
-        <StatCard label="Waiting on Customer" value={String(waitingOnCustomer.length)} />
-        <StatCard label="Additional Work Awaiting Approval" value={String(pendingAdditionalWork.length)} />
-        <StatCard label="Time Entries Pending Approval" value={String(pendingTimeEntries.length)} />
-        <StatCard label="Overdue Assignments" value={String(overdueAssignments.length)} tone={overdueAssignments.length > 0 ? "error" : "success"} />
-        <StatCard label="Contract Hour Warnings" value={String(hourWarnings.length)} tone={hourWarnings.length > 0 ? "warning" : "default"} />
-      </div>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Overdue</h2>
-          {overdueAssignments.length === 0 ? (
-            <EmptyState title="Nothing overdue" description="Great work — no assignments are past due." />
-          ) : (
-            <DataTable headers={["Assignment", "Customer", "Due", "Notes"]}>
-              {overdueAssignments.map(renderAssignment)}
-            </DataTable>
-          )}
-        </div>
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Due Today</h2>
-          {todayAssignments.length === 0 ? (
-            <EmptyState title="Nothing due today" />
-          ) : (
-            <DataTable headers={["Assignment", "Customer", "Due", "Notes"]}>{todayAssignments.map(renderAssignment)}</DataTable>
-          )}
-        </div>
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Upcoming (7 Days)</h2>
-          {upcomingAssignments.length === 0 ? (
-            <EmptyState title="Nothing scheduled" description="No assignments due in the next 7 days." />
-          ) : (
-            <DataTable headers={["Assignment", "Customer", "Due", "Notes"]}>{upcomingAssignments.map(renderAssignment)}</DataTable>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Additional Work Requests I&apos;ve Submitted</h2>
-          {additionalWork.length === 0 ? (
-            <EmptyState title="No requests yet" description="Flag out-of-scope work from a ticket to submit one." />
-          ) : (
-            <DataTable headers={["Request", "Customer", "Status", "Submitted"]}>
-              {additionalWork.slice(0, 8).map((w) => (
-                <tr key={w.id}>
-                  <td>
-                    <Link className="link link-hover" href="/additional-work">
-                      {w.title}
-                    </Link>
-                  </td>
-                  <td>{customerName.get(w.customer_id) ?? "—"}</td>
-                  <td>
-                    <StatusBadge status={w.approval_status} />
-                  </td>
-                  <td>
-                    <DateText value={w.created_at} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Contract Hour Warnings (My Logged Hours)</h2>
-          {hourWarnings.length === 0 ? (
-            <EmptyState title="No hour warnings" description="Your logged included-hours work is within contract limits this month." />
-          ) : (
-            <DataTable headers={["Contract", "Used / Included", "Status"]}>
-              {hourWarnings.map(({ contract, used, status }) => (
-                <tr key={contract.id}>
-                  <td>{contract.contract_number}</td>
-                  <td>
-                    <Hours value={used} /> / <Hours value={contract.included_hours_per_month} />
-                  </td>
-                  <td>
-                    <StatusBadge status={status} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title="My Assignments"
+        description="Action-oriented technician workspace for completing your assigned support work."
+      />
+      <TechnicianWorkspaceClient
+        technicianId={profile.id}
+        technicianName={profile.full_name}
+        internalCostRate={Number(profile.internal_cost_rate ?? 65)}
+        tickets={workspaceTickets}
+        pendingTimeEntries={pendingTimeEntries}
+        pendingAdditionalWork={pendingAdditionalWork}
+        contractWarnings={contractWarnings}
+      />
     </div>
   );
 }

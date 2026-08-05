@@ -80,13 +80,17 @@ export async function POST(request: Request) {
     timeEntryIds.length > 0
       ? supabase
           .from("time_entries")
-          .select("id, customer_id, contract_id, work_date, hours_worked, billing_rate, description, classification, approval_status, billing_status")
+          .select(
+            "id, customer_id, contract_id, support_ticket_id, technician_id, work_date, hours_worked, billing_rate, description, classification, approval_status, billing_status, invoice_id, invoice_line_item_id, billed_at"
+          )
           .in("id", timeEntryIds)
       : Promise.resolve({ data: [], error: null }),
     directCostIds.length > 0
       ? supabase
           .from("direct_costs")
-          .select("id, customer_id, contract_id, cost_category, cost_date, billable_amount, description, approval_status, billing_status")
+          .select(
+            "id, customer_id, contract_id, support_ticket_id, entered_by, cost_category, cost_date, billable_amount, description, approval_status, billing_status, invoice_id, invoice_line_item_id, billed_at"
+          )
           .in("id", directCostIds)
       : Promise.resolve({ data: [], error: null }),
     projectIds.length > 0
@@ -131,17 +135,39 @@ export async function POST(request: Request) {
 
   for (const entry of timeEntries) {
     if (entry.customer_id !== customerId) conflicts.push(`Time entry ${entry.id} belongs to a different customer.`);
+    if (entry.classification === "out_of_scope")
+      conflicts.push(`Time entry on ${entry.work_date} is out of scope and cannot be billed without approval.`);
     if (entry.classification !== "billable") conflicts.push(`Time entry on ${entry.work_date} is not classified as billable.`);
     if (!["approved", "not_required"].includes(entry.approval_status))
       conflicts.push(`Time entry on ${entry.work_date} is not approved for billing.`);
-    if (!["unbilled", "ready"].includes(entry.billing_status))
+    if (!["unbilled", "ready"].includes(entry.billing_status) || entry.invoice_id || entry.invoice_line_item_id || entry.billed_at)
       conflicts.push(`Time entry on ${entry.work_date} has already been billed.`);
+    if (entry.support_ticket_id) {
+      const { data: eligible, error: eligError } = await supabase.rpc("time_entry_ticket_billing_eligible", {
+        p_entry_id: entry.id,
+      });
+      if (eligError) conflicts.push(`Could not verify ticket billing eligibility for ${entry.work_date}: ${eligError.message}`);
+      else if (!eligible)
+        conflicts.push(
+          `Time entry on ${entry.work_date} is linked to a ticket but is not eligible to bill (incomplete ticket, missing notes, unapproved OOS, invalid contract date, or missing links).`
+        );
+    }
   }
   for (const cost of directCosts) {
     if (cost.customer_id !== customerId) conflicts.push(`Direct cost ${cost.id} belongs to a different customer.`);
     if (cost.approval_status !== "approved") conflicts.push(`Direct cost "${cost.description}" is not approved for billing.`);
-    if (!["unbilled", "ready"].includes(cost.billing_status))
+    if (!["unbilled", "ready"].includes(cost.billing_status) || cost.invoice_id || cost.invoice_line_item_id || cost.billed_at)
       conflicts.push(`Direct cost "${cost.description}" has already been billed.`);
+    if (cost.support_ticket_id) {
+      const { data: eligible, error: eligError } = await supabase.rpc("direct_cost_ticket_billing_eligible", {
+        p_cost_id: cost.id,
+      });
+      if (eligError) conflicts.push(`Could not verify ticket cost eligibility: ${eligError.message}`);
+      else if (!eligible)
+        conflicts.push(
+          `Direct cost "${cost.description}" is linked to a ticket but is not eligible to bill.`
+        );
+    }
   }
   for (const project of projects) {
     if (project.customer_id !== customerId) conflicts.push(`Project ${project.id} belongs to a different customer.`);
@@ -347,20 +373,20 @@ export async function POST(request: Request) {
 
   for (const entry of timeEntries) {
     const lineItemId = lineItemBySource.get(`time_entry:${entry.id}`) ?? null;
-    const { error } = await supabase
-      .from("time_entries")
-      .update({ billing_status: "billed", invoice_line_item_id: lineItemId })
-      .eq("id", entry.id)
-      .neq("billing_status", "billed");
+    const { error } = await supabase.rpc("mark_time_entry_billed", {
+      p_entry_id: entry.id,
+      p_invoice_id: invoice.id,
+      p_line_item_id: lineItemId,
+    });
     if (error) updateErrors.push(error.message);
   }
   for (const cost of directCosts) {
     const lineItemId = lineItemBySource.get(`direct_cost:${cost.id}`) ?? null;
-    const { error } = await supabase
-      .from("direct_costs")
-      .update({ billing_status: "billed", invoice_line_item_id: lineItemId })
-      .eq("id", cost.id)
-      .neq("billing_status", "billed");
+    const { error } = await supabase.rpc("mark_direct_cost_billed", {
+      p_cost_id: cost.id,
+      p_invoice_id: invoice.id,
+      p_line_item_id: lineItemId,
+    });
     if (error) updateErrors.push(error.message);
   }
   for (const project of projects) {
