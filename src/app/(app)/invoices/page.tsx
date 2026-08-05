@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { DataTable, EmptyState, ErrorState, Money, PageHeader, StatusBadge } from "@/components/ui";
-import { formatDate } from "@/lib/format";
+import { ErrorState, PageHeader } from "@/components/ui";
+import { InvoiceListClient, type InvoiceListRow } from "@/components/InvoiceListClient";
 
 export default async function InvoicesPage() {
   const profile = await getCurrentProfile();
@@ -13,59 +12,37 @@ export default async function InvoicesPage() {
   const supabase = await createClient();
   const { data: invoices, error } = await supabase
     .from("invoices")
-    .select("id, invoice_number, invoice_date, due_date, status, total_amount, remaining_balance, customers(name)")
+    .select(
+      "id, invoice_number, invoice_date, due_date, status, total_amount, amount_paid, remaining_balance, billing_period_start, billing_period_end, customers(name), contracts(name)"
+    )
     .order("invoice_date", { ascending: false });
+
+  const rows: InvoiceListRow[] = (invoices ?? []).map((invoice) => {
+    const customer = Array.isArray(invoice.customers) ? invoice.customers[0] : invoice.customers;
+    const contract = Array.isArray(invoice.contracts) ? invoice.contracts[0] : invoice.contracts;
+    return {
+      id: invoice.id,
+      invoice_number: invoice.invoice_number,
+      invoice_date: invoice.invoice_date,
+      due_date: invoice.due_date,
+      status: invoice.status,
+      total_amount: Number(invoice.total_amount ?? 0),
+      amount_paid: Number(invoice.amount_paid ?? 0),
+      remaining_balance: Number(invoice.remaining_balance ?? 0),
+      billing_period_start: invoice.billing_period_start,
+      billing_period_end: invoice.billing_period_end,
+      customer_name: customer?.name ?? "Unknown customer",
+      contract_name: contract?.name ?? null,
+    };
+  });
 
   return (
     <div>
-      <PageHeader title="Invoices" description="Every invoice generated for a customer, and its current balance." />
-
-      {error ? <ErrorState message={error.message} /> : null}
-
-      {!error && invoices && invoices.length === 0 ? (
-        <EmptyState
-          title="No invoices yet"
-          description="Generate your first invoice from the Ready to Bill workspace."
-        />
-      ) : null}
-
-      {!error && invoices && invoices.length > 0 ? (
-        <DataTable headers={["Invoice", "Customer", "Invoice Date", "Due Date", "Status", "Total", "Balance", ""]}>
-          {invoices.map((invoice) => {
-            const customer = Array.isArray(invoice.customers) ? invoice.customers[0] : invoice.customers;
-            return (
-              <tr key={invoice.id}>
-                <td className="font-medium">{invoice.invoice_number}</td>
-                <td>{customer?.name ?? "—"}</td>
-                <td className="text-xs">{formatDate(invoice.invoice_date)}</td>
-                <td className="text-xs">{formatDate(invoice.due_date)}</td>
-                <td>
-                  <StatusBadge status={invoice.status} />
-                </td>
-                <td>
-                  <Money value={Number(invoice.total_amount ?? 0)} />
-                </td>
-                <td>
-                  <Money value={Number(invoice.remaining_balance ?? 0)} />
-                </td>
-                <td className="text-right">
-                  <div className="flex justify-end gap-1">
-                    {Number(invoice.remaining_balance ?? 0) > 0 &&
-                    !["draft", "canceled"].includes(invoice.status) ? (
-                      <Link href={`/payments?invoiceId=${invoice.id}`} className="btn btn-primary btn-xs">
-                        Record Payment
-                      </Link>
-                    ) : null}
-                    <Link href={`/invoices/${invoice.id}`} className="btn btn-ghost btn-xs">
-                      View
-                    </Link>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </DataTable>
-      ) : null}
+      <PageHeader
+        title="Invoices"
+        description="Review issued invoices, open balances, and generate monthly contract charges for the current period."
+      />
+      {error ? <ErrorState message={error.message} /> : <InvoiceListClient invoices={rows} />}
     </div>
   );
 }
