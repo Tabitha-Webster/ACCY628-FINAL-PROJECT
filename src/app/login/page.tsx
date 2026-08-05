@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { ThemeSelector } from "@/components/ThemeSelector";
 import { DemoLoginSelector } from "@/components/DemoLoginSelector";
 
 export default function LoginPage() {
@@ -57,14 +56,9 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           <div className="card bg-base-100 shadow-2xl">
             <div className="card-body gap-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="card-title text-xl">Sign in</h2>
-                  <p className="text-sm opacity-70">Access your ServiceSync workspace</p>
-                </div>
-                <div className="w-36">
-                  <ThemeSelector compact />
-                </div>
+              <div>
+                <h2 className="card-title text-xl">Sign in</h2>
+                <p className="text-sm opacity-70">Access your ServiceSync workspace</p>
               </div>
 
               {error ? (
