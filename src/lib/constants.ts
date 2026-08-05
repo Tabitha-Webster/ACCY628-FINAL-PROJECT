@@ -56,13 +56,14 @@ export type NavItem = {
 
 export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   manager: [
-    { href: "/dashboard", label: "Executive Dashboard" },
+    { href: "/dashboard", label: "Dashboard" },
     { href: "/customers", label: "Customers" },
     { href: "/contracts", label: "Contracts & Agreements" },
     { href: "/contracts/reports", label: "Contract Reports" },
     { href: "/operations", label: "Service Operations" },
     { href: "/profitability", label: "Profitability" },
     { href: "/billing-collections", label: "Billing and Collections" },
+    { href: "/payments", label: "Payment History" },
     { href: "/hr-analytics", label: "HR Analytics" },
     { href: "/controls", label: "Controls and Exceptions" },
   ],
@@ -80,7 +81,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/contracts/reports", label: "Contract Reports" },
     { href: "/billing-review", label: "Billing Review" },
     { href: "/invoices", label: "Invoices" },
-    { href: "/payments", label: "Payments" },
+    { href: "/payments", label: "Payment History" },
     { href: "/accounts-receivable", label: "Accounts Receivable" },
     { href: "/accounting", label: "Accounting Review" },
     { href: "/hr-analytics", label: "HR Cost Analytics" },
@@ -93,10 +94,9 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   customer: [
     { href: "/dashboard", label: "Customer Home" },
     { href: "/my-contracts", label: "My Contracts & Agreements" },
-    { href: "/support-requests", label: "Support Requests" },
-    { href: "/service-usage", label: "Service Usage" },
     { href: "/my-projects", label: "Projects" },
-    { href: "/my-invoices", label: "Invoices and Payments" },
+    { href: "/service-usage", label: "Service Usage" },
+    { href: "/support-requests", label: "Support Requests" },
   ],
 };
 
@@ -126,8 +126,7 @@ export const CONTRACTS_NAV_COPY: Record<
   hr: {
     href: "/contracts",
     title: "Contracts & Agreements",
-    description: "Review active agreements only as needed for workforce and contractor cost context.",
-  },
+    description: "Review active agreements only as needed for workforce and contractor cost context.",  },
   customer: {
     href: "/my-contracts",
     title: "My Contracts & Agreements",
@@ -163,7 +162,7 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
     ],
     technician: ["/contracts", "/customers"],
     billing: ["/customers", "/contracts", "/projects", "/tickets", "/ready-to-bill"],
-    customer: ["/tickets"],
+    customer: ["/my-invoices", "/make-payment", "/tickets"],
   };
 
   return (shared[role] ?? []).some(

@@ -1,14 +1,15 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Menu, Settings2, X } from "lucide-react";
 import { ThemeSelector } from "@/components/ThemeSelector";
 import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
+import { CustomerBillingNavTree } from "@/components/CustomerBillingNavTree";
 import { ROLE_NAV, type Profile, type UserRole } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 function SideNav({
   profile,
@@ -24,6 +25,7 @@ function SideNav({
   onOpenSettings?: () => void;
 }) {
   const nav = ROLE_NAV[profile.role as UserRole] ?? [];
+  const isCustomer = profile.role === "customer";
 
   return (
     <>
@@ -38,16 +40,20 @@ function SideNav({
         {nav.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                active ? "bg-primary text-primary-content" : "hover:bg-base-200"
-              }`}
-              onClick={onNavigate}
-            >
-              {item.label}
-            </Link>
+            <Fragment key={item.href}>
+              <Link
+                href={item.href}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  active ? "bg-primary text-primary-content" : "hover:bg-base-200"
+                }`}
+                onClick={onNavigate}
+              >
+                {item.label}
+              </Link>
+              {isCustomer && item.href === "/my-contracts" ? (
+                <CustomerBillingNavTree onNavigate={onNavigate} />
+              ) : null}
+            </Fragment>
           );
         })}
       </nav>
