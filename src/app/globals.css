@@ -1,12 +1,11 @@
 @import "tailwindcss";
 @plugin "daisyui" {
-  themes: emerald --default;
+  themes: corporate --default, business, nord, emerald, cupcake, dim;
 }
 
 /* Keep emerald structure; shift brand green → blue */
 @plugin "daisyui/theme" {
   name: "emerald";
-  default: true;
   --color-primary: oklch(55% 0.18 250);
   --color-primary-content: oklch(98% 0.01 250);
 }
@@ -75,4 +74,9 @@ body {
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+.rounded-box.border,
+.card.border {
+  border-width: 2px;
 }
