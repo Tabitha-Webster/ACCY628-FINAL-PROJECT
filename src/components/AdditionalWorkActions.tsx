@@ -40,7 +40,11 @@ export function AdditionalWorkActions({ requestId, supportTicketId, reviewerId }
     if (supportTicketId) {
       await supabase
         .from("support_tickets")
-        .update({ billable_approval_status: decision })
+        .update({
+          billable_approval_status: decision,
+          billable_approved_by: reviewerId,
+          billable_approved_at: new Date().toISOString(),
+        })
         .eq("id", supportTicketId);
 
       if (decision === "approved") {

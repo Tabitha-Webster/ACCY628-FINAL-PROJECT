@@ -5,12 +5,19 @@ import { getCurrentProfile } from "@/lib/auth";
 import { PageHeader, ErrorState } from "@/components/ui";
 import { TicketListClient, type TicketListItem } from "@/components/TicketListClient";
 
-export default async function TicketsPage() {
+export default async function TicketsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
 
   // Customers submit from Support Requests; keep that as their primary entry.
   if (profile.role === "customer") redirect("/support-requests");
+
+  const params = (await searchParams) ?? {};
+  const priorityParam = typeof params.priority === "string" ? params.priority : "";
 
   const supabase = await createClient();
 
@@ -133,6 +140,7 @@ export default async function TicketsPage() {
         customers={filterCustomers}
         technicians={filterTechnicians}
         categories={categories}
+        initialPriority={priorityParam}
       />
     </div>
   );

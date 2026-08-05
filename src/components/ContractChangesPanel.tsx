@@ -2,7 +2,11 @@
 
 import { EmptyState } from "@/components/ui";
 import { formatDateTime, statusLabel } from "@/lib/format";
-import { CONTRACT_CHANGE_FIELD_LABELS, unwrapProfile } from "@/lib/contracts";
+import {
+  CONTRACT_CHANGE_FIELD_LABELS,
+  isContractMajorTermField,
+  unwrapProfile,
+} from "@/lib/contracts";
 import type { ContractChange } from "@/lib/types";
 
 export type ContractChangeRow = ContractChange & {
@@ -14,7 +18,7 @@ export function ContractChangesPanel({ changes }: { changes: ContractChangeRow[]
     return (
       <EmptyState
         title="No contract changes recorded"
-        description="Edits made through the contract form are logged here with previous values, user, date, and reason."
+        description="Edits made through the contract form are logged here with previous values, user, date, and reason. Major commercial terms are highlighted."
       />
     );
   }
@@ -38,10 +42,19 @@ export function ContractChangesPanel({ changes }: { changes: ContractChangeRow[]
             const user = unwrapProfile(change.changed_by_profile)?.full_name ?? "—";
             const fieldLabel =
               CONTRACT_CHANGE_FIELD_LABELS[change.field_name] ?? statusLabel(change.field_name);
+            const major = isContractMajorTermField(change.field_name);
             return (
-              <tr key={change.id}>
-                <td className="font-medium">{fieldLabel}</td>
-                <td className="max-w-[14rem] truncate text-xs opacity-80" title={change.previous_value ?? ""}>
+              <tr key={change.id} className={major ? "bg-base-200/60" : undefined}>
+                <td className="font-medium">
+                  {fieldLabel}
+                  {major ? (
+                    <span className="badge badge-ghost badge-xs ml-2 align-middle">Major</span>
+                  ) : null}
+                </td>
+                <td
+                  className="max-w-[14rem] truncate text-xs opacity-80"
+                  title={change.previous_value ?? ""}
+                >
                   {change.previous_value || "—"}
                 </td>
                 <td className="max-w-[14rem] truncate text-xs" title={change.new_value ?? ""}>

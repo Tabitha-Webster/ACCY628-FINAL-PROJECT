@@ -22,12 +22,27 @@ const CONTROLS: Control[] = [
   {
     category: "Contract",
     risk: "work could be performed or billed without an active, approved service agreement in place",
-    control: "role-based contract permissions control view, create, edit, delete, approve, renew, cancel, and reporting; managers own lifecycle writes while billing can view reports and technicians can view agreements",
+    control: "billing and Ready-to-Bill eligibility require an active contract within its term dates; draft, on-hold, expired, and canceled agreements cannot be billed",
+  },
+  {
+    category: "Contract",
+    risk: "price or commercial terms on a live agreement could change without manager oversight",
+    control: "price changes on active contracts are held as pending modifications until a manager explicitly approves them; they do not update the live contract until approved",
+  },
+  {
+    category: "Contract",
+    risk: "contract terms could be edited without an audit trail explaining why",
+    control: "every contract edit requires a change reason, and field-level history records previous value, new value, user, date, and reason, with major commercial terms highlighted",
+  },
+  {
+    category: "Contract",
+    risk: "someone could edit an active agreement without realizing it affects live billing and SLA",
+    control: "editing an active contract shows a warning dialog and requires an on-form acknowledgment before changes can be saved",
   },
   {
     category: "Contract",
     risk: "a contract could lapse or auto-renew on unfavorable terms without anyone noticing",
-    control: "the contracts list and Renewal & Expiration page generate 90/60/30-day renewal reminders and expiration warnings, support auto-renew processing, and keep a renewal history so managers can act before a term lapses",
+    control: "the Renewal & Expiration page generates 90/60/30-day renewal reminders and expiration warnings, supports auto-renew processing, and keeps a renewal history so managers can act before a term lapses",
   },
   {
     category: "Work",
@@ -42,7 +57,7 @@ const CONTROLS: Control[] = [
   {
     category: "Billing",
     risk: "completed work could be forgotten and never invoiced, or the same work could be billed twice",
-    control: "Ready to Bill uses ticket eligibility views so only billable, approved, unbilled work with completion notes, valid contracts, and clear ticket/customer/technician links can be selected; once placed on an invoice the source row is marked billed with invoice_id and billed_at so it cannot be selected again",
+    control: "Ready to Bill uses ticket eligibility views so only billable, approved, unbilled work with completion notes, an active in-term contract, and clear ticket/customer/technician links can be selected; once placed on an invoice the source row is marked billed with invoice_id and billed_at so it cannot be selected again",
   },
   {
     category: "Billing",

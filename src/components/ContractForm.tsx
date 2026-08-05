@@ -19,6 +19,11 @@ import {
   emptyContractFormValues,
   validateContractFormValues,
   diffContractFormValues,
+  splitPriceAndOtherChanges,
+  priceChangesRequireManagerApproval,
+  CONTRACT_PRICE_FIELDS,
+  payloadWithBaselinePrices,
+  insertPendingPriceModification,
   type ContractFormFieldErrors,
   type ContractFormValues,
 } from "@/lib/contracts";
@@ -82,13 +87,25 @@ export function ContractForm({
     emptyContractFormValues(initialValues)
   );
   const [baseline] = useState<ContractFormValues>(() => emptyContractFormValues(initialValues));
+  const [selectedSlaLevel, setSelectedSlaLevel] = useState<
+    "critical" | "high" | "medium" | "low"
+  >("critical");
   const [changeReason, setChangeReason] = useState("");
+  const [activeEditAcknowledged, setActiveEditAcknowledged] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<ContractFormFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const title = mode === "create" ? "New Contract" : "Edit Contract";
-  const cancelHref = mode === "edit" && contractId ? `/contracts/${contractId}` : "/contracts";
+  const cancelHref = mode === "edit" && contractId ? `/contracts/${contractId}` : "/contracts/reports";
+  const isActiveContract = mode === "edit" && baseline.status === "active";
+
+  const slaHoursFieldKey = {
+    critical: "sla_critical_response_hours",
+    high: "sla_high_response_hours",
+    medium: "sla_medium_response_hours",
+    low: "sla_low_response_hours",
+  } as const satisfies Record<"critical" | "high" | "medium" | "low", keyof ContractFormValues>;
 
   function update<K extends keyof ContractFormValues>(key: K, value: ContractFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -140,9 +157,9 @@ export function ContractForm({
     }
 
     const supabase = createClient();
-    const payload = contractFormToPayload(values, profileId, mode);
 
     if (mode === "create") {
+      const payload = contractFormToPayload(values, profileId, mode);
       const { data, error } = await supabase.from("contracts").insert(payload).select("id").maybeSingle();
       if (error) {
         setSaving(false);
@@ -181,44 +198,105 @@ export function ContractForm({
       setSaving(false);
       return;
     }
-
-    const nextVersion = currentVersion + 1;
-    const { error } = await supabase
-      .from("contracts")
-      .update({ ...payload, version_number: nextVersion })
-      .eq("id", contractId);
-
-    if (error) {
+    if (isActiveContract && !activeEditAcknowledged) {
+      setFormError("Acknowledge the active-contract warning before saving changes.");
       setSaving(false);
-      if (error.message.toLowerCase().includes("contract_number")) {
-        setFieldErrors({ contract_number: "Contract number must be unique." });
-        setFormError("Please fix the highlighted validation errors before saving.");
-        return;
-      }
-      setFormError(error.message);
       return;
     }
 
     const reason = changeReason.trim();
-    await supabase.from("contract_changes").insert(
-      fieldChanges.map((change) => ({
-        contract_id: contractId,
-        field_name: change.field_name,
-        previous_value: change.previous_value || null,
-        new_value: change.new_value || null,
-        change_reason: reason,
-        changed_by: profileId,
-        source: "edit_form",
-      }))
-    );
+    const { priceChanges, otherChanges } = splitPriceAndOtherChanges(fieldChanges);
+    const holdPriceForApproval =
+      priceChanges.length > 0 && priceChangesRequireManagerApproval(baseline.status);
 
-    await supabase.from("contract_versions").insert({
-      contract_id: contractId,
-      version_number: nextVersion,
-      change_summary: reason,
-      created_by: profileId,
-      snapshot: { changes: fieldChanges },
-    });
+    if (holdPriceForApproval) {
+      const { data: existingPending } = await supabase
+        .from("contract_modifications")
+        .select("id")
+        .eq("contract_id", contractId)
+        .eq("approval_status", "pending")
+        .limit(1)
+        .maybeSingle();
+
+      if (existingPending) {
+        setFormError(
+          "A price change is already pending manager approval. Approve or reject it before submitting another."
+        );
+        setSaving(false);
+        return;
+      }
+    }
+
+    const changesToApplyNow = holdPriceForApproval ? otherChanges : fieldChanges;
+    const shouldUpdateContract = changesToApplyNow.length > 0;
+    const nextVersion = currentVersion + 1;
+
+    if (shouldUpdateContract) {
+      const updatePayload = holdPriceForApproval
+        ? payloadWithBaselinePrices(values, baseline, profileId, CONTRACT_PRICE_FIELDS)
+        : contractFormToPayload(values, profileId, mode);
+
+      const { error } = await supabase
+        .from("contracts")
+        .update({ ...updatePayload, version_number: nextVersion })
+        .eq("id", contractId);
+
+      if (error) {
+        setSaving(false);
+        if (error.message.toLowerCase().includes("contract_number")) {
+          setFieldErrors({ contract_number: "Contract number must be unique." });
+          setFormError("Please fix the highlighted validation errors before saving.");
+          return;
+        }
+        setFormError(error.message);
+        return;
+      }
+
+      const { error: changesError } = await supabase.from("contract_changes").insert(
+        changesToApplyNow.map((change) => ({
+          contract_id: contractId,
+          field_name: change.field_name,
+          previous_value: change.previous_value || null,
+          new_value: change.new_value || null,
+          change_reason: reason,
+          changed_by: profileId,
+          source: "edit_form",
+        }))
+      );
+      if (changesError) {
+        setFormError(changesError.message);
+        setSaving(false);
+        return;
+      }
+
+      const { error: versionError } = await supabase.from("contract_versions").insert({
+        contract_id: contractId,
+        version_number: nextVersion,
+        change_summary: reason,
+        created_by: profileId,
+        snapshot: { changes: changesToApplyNow },
+      });
+      if (versionError) {
+        setFormError(versionError.message);
+        setSaving(false);
+        return;
+      }
+    }
+
+    if (holdPriceForApproval) {
+      const { error: modError } = await insertPendingPriceModification(supabase, {
+        contractId: contractId!,
+        profileId,
+        reason,
+        priceChanges,
+        effectiveDate: values.effective_date || values.start_date,
+      });
+      if (modError) {
+        setFormError(modError.message);
+        setSaving(false);
+        return;
+      }
+    }
 
     setSaving(false);
     router.push(`/contracts/${contractId}`);
@@ -246,10 +324,33 @@ export function ContractForm({
 
       {formError ? <div className="alert alert-error text-sm">{formError}</div> : null}
 
+      {isActiveContract ? (
+        <section className="rounded-box border border-warning bg-warning/10 p-5">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide">
+            Warning: active contract
+          </h2>
+          <p className="text-sm opacity-80">
+            This agreement is live. Edits can affect billing, SLA response times, and support
+            coverage. Price and commercial term changes require manager approval before they apply.
+          </p>
+          <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="checkbox checkbox-warning mt-0.5"
+              checked={activeEditAcknowledged}
+              onChange={(e) => setActiveEditAcknowledged(e.target.checked)}
+            />
+            <span>
+              I understand this is an active contract and want to proceed with modifications.
+            </span>
+          </label>
+        </section>
+      ) : null}
+
       {mode === "edit" ? (
         <section className="rounded-box border border-warning/40 bg-warning/5 p-5">
           <h2 className="mb-4 text-center text-sm font-semibold uppercase tracking-wide opacity-60">
-            Change reason (audit trail)
+            Change reason (required)
           </h2>
           <FormField label="Reason for change *">
             <textarea
@@ -262,7 +363,8 @@ export function ContractForm({
             />
           </FormField>
           <p className="mt-2 text-center text-xs opacity-60">
-            Every modified field is logged with previous value, new value, user, date, and this reason.
+            Every modified field is logged with previous value, new value, user, date, and this
+            reason. Price changes on active contracts are held for manager approval.
           </p>
         </section>
       ) : null}
@@ -600,44 +702,36 @@ export function ContractForm({
           Coverage & SLA
         </h2>
         <div className={fieldGridClass}>
-          <FormField label="SLA Critical (hrs)">
-            <input
-              type="number"
-              min={0}
-              step="0.1"
-              className={fieldControlClass}
-              value={values.sla_critical_response_hours}
-              onChange={(e) => update("sla_critical_response_hours", e.target.value)}
-            />
+          <FormField label="SLA level">
+            <select
+              className={selectControlClass}
+              value={selectedSlaLevel}
+              onChange={(e) =>
+                setSelectedSlaLevel(e.target.value as "critical" | "high" | "medium" | "low")
+              }
+            >
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
           </FormField>
-          <FormField label="SLA High (hrs)">
+          <FormField
+            label="Response hours"
+            error={fieldErrors[slaHoursFieldKey[selectedSlaLevel]]}
+          >
             <input
-              type="number"
-              min={0}
-              step="0.1"
+              type="text"
+              inputMode="decimal"
               className={fieldControlClass}
-              value={values.sla_high_response_hours}
-              onChange={(e) => update("sla_high_response_hours", e.target.value)}
-            />
-          </FormField>
-          <FormField label="SLA Medium (hrs)">
-            <input
-              type="number"
-              min={0}
-              step="0.1"
-              className={fieldControlClass}
-              value={values.sla_medium_response_hours}
-              onChange={(e) => update("sla_medium_response_hours", e.target.value)}
-            />
-          </FormField>
-          <FormField label="SLA Low (hrs)">
-            <input
-              type="number"
-              min={0}
-              step="0.1"
-              className={fieldControlClass}
-              value={values.sla_low_response_hours}
-              onChange={(e) => update("sla_low_response_hours", e.target.value)}
+              value={values[slaHoursFieldKey[selectedSlaLevel]]}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (next === "" || /^\d*\.?\d*$/.test(next)) {
+                  update(slaHoursFieldKey[selectedSlaLevel], next);
+                }
+              }}
+              placeholder="Hours"
             />
           </FormField>
           <FormField label="Covered sites / locations" className="sm:col-span-2 lg:col-span-3">

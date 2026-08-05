@@ -53,6 +53,7 @@ export type NavItem = {
   href: string;
   label: string;
   disabled?: boolean;
+  children?: NavItem[];
 };
 
 export const ROLE_NAV: Record<UserRole, NavItem[]> = {
@@ -60,38 +61,28 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/dashboard", label: "Dashboard" },
     { href: "/customers", label: "Customers" },
     { href: "/customer-approvals", label: "Approvals" },
-    { href: "/contracts", label: "Contracts & Agreements" },
-    { href: "/contracts/reports", label: "Contract Reports" },
-    { href: "/tickets", label: "Support Tickets" },
+    // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
     { href: "/projects", label: "Projects" },
-    { href: "/time-costs", label: "Time and Costs" },
     { href: "/operations", label: "Service Operations" },
     { href: "/profitability", label: "Profitability" },
     { href: "/billing-collections", label: "Billing and Collections" },
-    { href: "/accounts-receivable", label: "Accounts Receivable" },
+    { href: "/payments", label: "Payment History" },
     { href: "/hr-analytics", label: "HR Analytics" },
     { href: "/controls", label: "Controls and Exceptions" },
   ],
   technician: [
     { href: "/dashboard", label: "My Assignments" },
     { href: "/customers", label: "Customers" },
-    { href: "/contracts", label: "Contracts & Agreements" },
+    // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
     { href: "/tickets", label: "Support Tickets" },
     { href: "/projects", label: "Project Tasks" },
     { href: "/time-costs", label: "Submit Time and Costs" },
     { href: "/additional-work", label: "Additional Work Requests" },
   ],
   billing: [
-    { href: "/dashboard", label: "Billing Dashboard" },
+    { href: "/dashboard", label: "Dashboard" },
     { href: "/customers", label: "Customers" },
-    { href: "/contracts", label: "Contracts & Agreements" },
-    { href: "/contracts/reports", label: "Contract Reports" },
-    { href: "/billing-review", label: "Billing Review" },
-    { href: "/invoices", label: "Invoices" },
-    { href: "/payments", label: "Payments" },
-    { href: "/accounts-receivable", label: "Accounts Receivable" },
-    { href: "/accounting", label: "Accounting Review" },
-    { href: "/hr-analytics", label: "HR Cost Analytics" },
+    // Contracts & Agreements + Billing/Collections/Accounting trees render in AppShell
   ],
   hr: [
     { href: "/dashboard", label: "HR Home" },
@@ -104,10 +95,9 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/dashboard", label: "Customer Home" },
     { href: "/pending-approval", label: "Pending Approval" },
     { href: "/my-contracts", label: "My Contracts & Agreements" },
-    { href: "/support-requests", label: "Support Requests" },
-    { href: "/service-usage", label: "Service Usage" },
     { href: "/my-projects", label: "Projects" },
-    { href: "/my-invoices", label: "Invoices and Payments" },
+    { href: "/service-usage", label: "Service Usage" },
+    { href: "/support-requests", label: "Support Requests" },
   ],
 };
 
@@ -118,7 +108,7 @@ export const CONTRACTS_NAV_COPY: Record<
 > = {
   manager: {
     href: "/contracts",
-    title: "Contracts & Agreements",
+    title: "Manage Contracts",
     description:
       "Manage the full agreement lifecycle — draft, approval, active service, holds, renewals, and cancellations.",
   },
@@ -130,7 +120,7 @@ export const CONTRACTS_NAV_COPY: Record<
   },
   billing: {
     href: "/contracts",
-    title: "Contracts & Agreements",
+    title: "Manage Contracts",
     description:
       "Confirm recurring fees, billing frequency, payment terms, and rates before generating invoices.",
   },
@@ -173,15 +163,28 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/accounting",
       "/accounts-receivable",
       "/time-costs",
+      "/contracts",
       "/customer-approvals",
       "/operations",
       "/controls",
       "/hr-analytics",
     ],
-    technician: ["/contracts"],
-    billing: ["/contracts", "/projects", "/tickets", "/ready-to-bill"],
-    hr: ["/contracts"],
-    customer: ["/tickets"],
+    technician: ["/contracts", "/customers"],
+    billing: [
+      "/customers",
+      "/contracts",
+      "/projects",
+      "/tickets",
+      "/ready-to-bill",
+      "/billing-review",
+      "/invoices",
+      "/payments",
+      "/accounts-receivable",
+      "/accounting",
+      "/hr-analytics",
+    ],
+    hr: ["/contracts", "/customers", "/customer-approvals"],
+    customer: ["/projects", "/my-invoices", "/make-payment", "/tickets", "/pending-approval"],
   };
 
   return (shared[role] ?? []).some(

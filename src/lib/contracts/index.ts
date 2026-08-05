@@ -36,6 +36,7 @@ export * from "./warnings";
 export * from "./queries";
 export * from "./validation";
 export * from "./audit";
+export * from "./modifications";
 export * from "./renewals";
 export * from "./billing";
 export * from "./reporting";

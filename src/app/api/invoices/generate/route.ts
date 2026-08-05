@@ -7,6 +7,7 @@ import {
   directCostBillingBlockReason,
   hasDuplicateIds,
   milestoneBillingBlockReason,
+  pendingAdditionalWorkBlockReason,
   projectBillingBlockReason,
   timeEntryBillingBlockReason,
 } from "@/lib/billing-eligibility";
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
       ? supabase
           .from("time_entries")
           .select(
-            "id, customer_id, contract_id, support_ticket_id, technician_id, work_date, hours_worked, billing_rate, description, classification, approval_status, billing_status, invoice_id, invoice_line_item_id, billed_at"
+            "id, customer_id, contract_id, project_id, support_ticket_id, technician_id, work_date, hours_worked, billing_rate, description, classification, approval_status, billing_status, invoice_id, invoice_line_item_id, billed_at"
           )
           .in("id", timeEntryIds)
       : Promise.resolve({ data: [], error: null }),
@@ -120,6 +121,43 @@ export async function POST(request: Request) {
   const milestones = milestonesRes.data ?? [];
   const recurringContracts = contractsRes.data ?? [];
 
+  const linkedProjectIds = Array.from(
+    new Set(
+      [
+        ...projects.map((p) => p.id),
+        ...timeEntries.map((e) => e.project_id).filter((id): id is string => Boolean(id)),
+        ...milestones.map((m) => m.project_id).filter((id): id is string => Boolean(id)),
+      ].filter(Boolean)
+    )
+  );
+  const linkedTicketIds = Array.from(
+    new Set(timeEntries.map((e) => e.support_ticket_id).filter((id): id is string => Boolean(id)))
+  );
+
+  const pendingAwFilters: string[] = [];
+  if (linkedProjectIds.length > 0) pendingAwFilters.push(`project_id.in.(${linkedProjectIds.join(",")})`);
+  if (linkedTicketIds.length > 0) pendingAwFilters.push(`support_ticket_id.in.(${linkedTicketIds.join(",")})`);
+
+  const pendingAwRes =
+    pendingAwFilters.length > 0
+      ? await supabase
+          .from("additional_work_requests")
+          .select("id, project_id, support_ticket_id, title")
+          .eq("approval_status", "pending")
+          .or(pendingAwFilters.join(","))
+      : { data: [] as { id: string; project_id: string | null; support_ticket_id: string | null; title: string }[], error: null };
+
+  if (pendingAwRes.error) {
+    return NextResponse.json({ error: pendingAwRes.error.message }, { status: 500 });
+  }
+
+  const pendingAwByProject = new Set(
+    (pendingAwRes.data ?? []).map((r) => r.project_id).filter((id): id is string => Boolean(id))
+  );
+  const pendingAwByTicket = new Set(
+    (pendingAwRes.data ?? []).map((r) => r.support_ticket_id).filter((id): id is string => Boolean(id))
+  );
+
   const conflicts: string[] = [];
 
   if (hasDuplicateIds(timeEntryIds)) conflicts.push("The same time entry was selected more than once.");
@@ -132,10 +170,57 @@ export async function POST(request: Request) {
   if (milestones.length !== milestoneIds.length) conflicts.push("One or more milestones could not be found.");
   if (recurringContracts.length !== recurringIds.length) conflicts.push("One or more recurring fees could not be found.");
 
+  const relatedContractIds = Array.from(
+    new Set(
+      [
+        ...timeEntries.map((e) => e.contract_id),
+        ...directCosts.map((c) => c.contract_id),
+        ...projects.map((p) => p.contract_id),
+        ...milestones.map((m) => {
+          const project = Array.isArray(m.projects) ? m.projects[0] : m.projects;
+          return project?.contract_id ?? null;
+        }),
+      ].filter((id): id is string => Boolean(id))
+    )
+  );
+
+  if (relatedContractIds.length > 0) {
+    const { data: relatedContracts, error: relatedContractsError } = await supabase
+      .from("contracts")
+      .select("id, name, status")
+      .in("id", relatedContractIds);
+    if (relatedContractsError) {
+      return NextResponse.json({ error: relatedContractsError.message }, { status: 500 });
+    }
+    const byId = new Map((relatedContracts ?? []).map((c) => [c.id, c]));
+    for (const contractId of relatedContractIds) {
+      const contract = byId.get(contractId);
+      if (!contract) {
+        conflicts.push("A selected item references a missing contract.");
+        continue;
+      }
+      if (contract.status !== "active") {
+        conflicts.push(
+          `Cannot bill against contract "${contract.name}" because it is not active (${contract.status}).`
+        );
+      }
+    }
+  }
+
   for (const entry of timeEntries) {
+    if (!entry.contract_id) conflicts.push(`Time entry on ${entry.work_date} has no active contract link.`);
     if (entry.customer_id !== customerId) conflicts.push(`Time entry ${entry.id} belongs to a different customer.`);
     const reason = timeEntryBillingBlockReason(entry);
     if (reason) conflicts.push(reason);
+    if (entry.classification === "out_of_scope" || entry.classification === "billable") {
+      const pendingOnProject = entry.project_id ? pendingAwByProject.has(entry.project_id) : false;
+      const pendingOnTicket = entry.support_ticket_id ? pendingAwByTicket.has(entry.support_ticket_id) : false;
+      const pendingReason = pendingAdditionalWorkBlockReason({
+        hasPendingAdditionalWork: pendingOnProject || pendingOnTicket,
+        contextLabel: `Time entry on ${entry.work_date}`,
+      });
+      if (pendingReason) conflicts.push(pendingReason);
+    }
     if (entry.support_ticket_id) {
       const { data: eligible, error: eligError } = await supabase.rpc("time_entry_ticket_billing_eligible", {
         p_entry_id: entry.id,
@@ -143,11 +228,12 @@ export async function POST(request: Request) {
       if (eligError) conflicts.push(`Could not verify ticket billing eligibility for ${entry.work_date}: ${eligError.message}`);
       else if (!eligible)
         conflicts.push(
-          `Time entry on ${entry.work_date} is linked to a ticket but is not eligible to bill (incomplete ticket, missing notes, unapproved OOS, invalid contract date, or missing links).`
+          `Time entry on ${entry.work_date} is linked to a ticket but is not eligible to bill (incomplete ticket, missing notes, unapproved OOS, inactive/invalid contract, or missing links).`
         );
     }
   }
   for (const cost of directCosts) {
+    if (!cost.contract_id) conflicts.push(`Direct cost "${cost.description}" has no active contract link.`);
     if (cost.customer_id !== customerId) conflicts.push(`Direct cost ${cost.id} belongs to a different customer.`);
     const reason = directCostBillingBlockReason(cost);
     if (reason) conflicts.push(reason);
@@ -162,16 +248,28 @@ export async function POST(request: Request) {
     }
   }
   for (const project of projects) {
+    if (!project.contract_id) conflicts.push(`Project "${project.name}" has no active contract link.`);
     if (project.customer_id !== customerId) conflicts.push(`Project ${project.id} belongs to a different customer.`);
     const reason = projectBillingBlockReason(project);
     if (reason) conflicts.push(reason);
+    const pendingReason = pendingAdditionalWorkBlockReason({
+      hasPendingAdditionalWork: pendingAwByProject.has(project.id),
+      contextLabel: `Project "${project.name}"`,
+    });
+    if (pendingReason) conflicts.push(pendingReason);
   }
   for (const milestone of milestones) {
     const project = Array.isArray(milestone.projects) ? milestone.projects[0] : milestone.projects;
     if (!project || project.customer_id !== customerId)
       conflicts.push(`Milestone "${milestone.name}" belongs to a different customer.`);
+    if (!project?.contract_id) conflicts.push(`Milestone "${milestone.name}" has no active contract link.`);
     const reason = milestoneBillingBlockReason(milestone);
     if (reason) conflicts.push(reason);
+    const pendingReason = pendingAdditionalWorkBlockReason({
+      hasPendingAdditionalWork: pendingAwByProject.has(milestone.project_id),
+      contextLabel: `Milestone "${milestone.name}"`,
+    });
+    if (pendingReason) conflicts.push(pendingReason);
   }
   for (const contract of recurringContracts) {
     if (contract.customer_id !== customerId) conflicts.push(`Contract "${contract.name}" belongs to a different customer.`);

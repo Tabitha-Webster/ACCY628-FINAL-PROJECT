@@ -64,7 +64,8 @@ export function statusBadgeClass(status: string) {
     )
   )
     return "badge-success";
-  if (["issued", "current"].includes(s)) return "badge-info";
+  if (["disputed", "overdue", "issued"].includes(s)) return "badge-ghost";
+  if (s === "current") return "badge-info";
   if (
     [
       "pending",
@@ -84,8 +85,6 @@ export function statusBadgeClass(status: string) {
     return "badge-warning";
   if (
     [
-      "overdue",
-      "disputed",
       "rejected",
       "canceled",
       "expired",

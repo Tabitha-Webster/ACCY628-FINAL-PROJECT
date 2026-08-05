@@ -3,9 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { AccountingExplainer, DataTable, EmptyState, ErrorState, Money, PageHeader, StatCard } from "@/components/ui";
 import { PeriodViewControls } from "@/components/PeriodViewControls";
-import { statusLabel } from "@/lib/format";
+import { formatCurrency, statusLabel } from "@/lib/format";
 import { monthKeyInDashboardPeriod, periodViewControlProps, resolveDashboardPeriod } from "@/lib/dashboard-period";
-
 const RECOGNITION_ORDER = ["earned", "deferred", "unbilled"];
 
 function recognitionTone(recognition: string): "success" | "warning" | "default" {
@@ -61,14 +60,14 @@ export default async function AccountingPage({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Total Revenue Recorded"
-          value={`$${totalRevenue.toFixed(2)}`}
+          value={formatCurrency(totalRevenue)}
           explanation={{
             title: "Total Revenue Recorded",
-            result: `$${totalRevenue.toFixed(2)}`,
+            result: formatCurrency(totalRevenue),
             formula: `Sum of all revenue_records.amount in ${period.label} across earned, deferred, and unbilled recognition`,
             lines: Array.from(byRecognition.entries()).map(([recognition, amount]) => ({
               label: statusLabel(recognition),
-              value: `$${amount.toFixed(2)}`,
+              value: formatCurrency(amount),
             })),
           }}
         />
@@ -76,7 +75,7 @@ export default async function AccountingPage({
           <StatCard
             key={recognition}
             label={statusLabel(recognition)}
-            value={`$${(byRecognition.get(recognition) ?? 0).toFixed(2)}`}
+            value={formatCurrency(byRecognition.get(recognition) ?? 0)}
             tone={recognitionTone(recognition)}
             explanation={{
               title: statusLabel(recognition),

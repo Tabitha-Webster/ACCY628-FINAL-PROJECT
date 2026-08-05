@@ -46,6 +46,8 @@ import { ContractDocumentsPanel } from "@/components/ContractDocumentsPanel";
 import { ContractChangesPanel } from "@/components/ContractChangesPanel";
 import { ContractRenewalsPanel } from "@/components/ContractRenewalsPanel";
 import { ContractLifecycleActions } from "@/components/ContractLifecycleActions";
+import { EditContractButton } from "@/components/EditContractButton";
+import { ContractModificationsPanel } from "@/components/ContractModificationsPanel";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -164,9 +166,15 @@ export default async function ContractDetailPage({
     renewal_type: contract.renewal_type,
   });
 
-  const [remindersResult, renewalsResult] = await Promise.all([
+  const [remindersResult, renewalsResult, changeRequestsRes] = await Promise.all([
     listContractRenewalReminders(supabase, id),
     listContractRenewals(supabase, id),
+    supabase
+      .from("additional_work_requests")
+      .select("id, title, approval_status, project_id, estimated_hours, estimated_amount, created_at")
+      .eq("contract_id", id)
+      .order("created_at", { ascending: false })
+      .limit(10),
   ]);
 
   const services = servicesResult.data ?? [];
@@ -177,6 +185,14 @@ export default async function ContractDetailPage({
   const reminders = remindersResult.data ?? [];
   const renewals = renewalsResult.data ?? [];
   const { tickets, projects, invoices, monthEntries } = related;
+  const changeRequestRows = changeRequestsRes.data ?? [];
+  const linkedProjectIds = Array.from(
+    new Set(changeRequestRows.map((r) => r.project_id).filter((v): v is string => Boolean(v)))
+  );
+  const changeRequestProjectsRes = linkedProjectIds.length
+    ? await supabase.from("projects").select("id, name").in("id", linkedProjectIds)
+    : { data: [] as { id: string; name: string }[] };
+  const changeRequestProjectName = new Map((changeRequestProjectsRes.data ?? []).map((p) => [p.id, p.name]));
 
   const includedHours = Number(contract.included_hours_per_month ?? 0);
   const usedHours = monthEntries.reduce((sum, e) => sum + Number(e.hours_worked ?? 0), 0);
@@ -189,8 +205,8 @@ export default async function ContractDetailPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
-        <Link href="/contracts" className="btn btn-ghost btn-sm">
-          ← Back to contracts
+        <Link href="/contracts/reports" className="btn btn-ghost btn-sm">
+          ← Back to reports
         </Link>
         {permissions.report ? (
           <Link href="/contracts/reports" className="btn btn-ghost btn-sm">
@@ -201,9 +217,7 @@ export default async function ContractDetailPage({
           Renewal & Expiration
         </Link>
         {permissions.edit ? (
-          <Link href={`/contracts/${id}/edit`} className="btn btn-primary btn-sm">
-            Edit contract
-          </Link>
+          <EditContractButton href={`/contracts/${id}/edit`} isActive={status === "active"} />
         ) : null}
       </div>
 
@@ -594,32 +608,16 @@ export default async function ContractDetailPage({
         )}
       </Section>
 
-      <Section title="Modification History">
-        {modifications.length > 0 ? (
-          <DataTable headers={["Summary", "Effective", "Approval", "Requested By"]}>
-            {modifications.map((mod) => {
-              const requester = unwrapProfile(
-                (mod as { created_by_profile?: { full_name: string } | { full_name: string }[] | null })
-                  .created_by_profile
-              );
-              return (
-                <tr key={mod.id}>
-                  <td className="text-sm">{mod.modification_summary}</td>
-                  <td className="text-xs">{formatDate(mod.effective_date)}</td>
-                  <td>
-                    <StatusBadge status={mod.approval_status} />
-                  </td>
-                  <td className="text-xs">{requester?.full_name ?? "—"}</td>
-                </tr>
-              );
-            })}
-          </DataTable>
-        ) : (
-          <EmptyState
-            title="No modifications recorded"
-            description="Amendments and change orders will appear in this history."
-          />
-        )}
+      <Section title="Price Change Approvals">
+        <ContractModificationsPanel
+          contractId={id}
+          profileId={profile.id}
+          currentVersion={Number(contract.version_number ?? 1)}
+          canApprove={permissions.approve}
+          modifications={
+            modifications as Parameters<typeof ContractModificationsPanel>[0]["modifications"]
+          }
+        />
       </Section>
 
       <Section title="Audit Log">
@@ -711,6 +709,41 @@ export default async function ContractDetailPage({
             <EmptyState title="No invoices linked to this contract" />
           )}
         </div>
+      </div>
+
+      <div>
+        <h2 className="mb-2 text-lg font-semibold">Related Change Requests</h2>
+        <p className="mb-3 text-sm opacity-70">
+          Out-of-scope and additional-work requests connected to this contract (and their projects).
+        </p>
+        {changeRequestRows.length > 0 ? (
+          <DataTable headers={["Request", "Project", "Status", "Additional Hours", "Additional Price", "Submitted"]}>
+            {changeRequestRows.map((request) => (
+              <tr key={request.id}>
+                <td className="font-medium">{request.title}</td>
+                <td>
+                  {request.project_id ? (
+                    <Link href={`/projects/${request.project_id}`} className="link link-hover text-sm">
+                      {changeRequestProjectName.get(request.project_id) ?? "View project"}
+                    </Link>
+                  ) : (
+                    <span className="opacity-50">—</span>
+                  )}
+                </td>
+                <td>
+                  <StatusBadge status={request.approval_status} />
+                </td>
+                <td>{request.estimated_hours != null ? <Hours value={Number(request.estimated_hours)} /> : "—"}</td>
+                <td>
+                  {request.estimated_amount != null ? <Money value={Number(request.estimated_amount)} /> : "—"}
+                </td>
+                <td className="text-xs">{formatDate(request.created_at)}</td>
+              </tr>
+            ))}
+          </DataTable>
+        ) : (
+          <EmptyState title="No change requests linked to this contract" />
+        )}
       </div>
     </div>
   );

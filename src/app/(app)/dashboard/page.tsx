@@ -175,6 +175,9 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
     activeContractsRes,
     customersRes,
     contractReportRes,
+    proposedProjectsRes,
+    awaitingCustomerRes,
+    pendingMilestonesRes,
   ] = await Promise.all([
     supabase.from("customers").select("id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("contracts").select("id", { count: "exact", head: true }).eq("status", "active"),
@@ -186,7 +189,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
       .in("status", OPEN_TICKET_STATUSES),
     supabase
       .from("additional_work_requests")
-      .select("id, customer_id, title, estimated_hours, estimated_amount, created_at")
+      .select("id, customer_id, title, estimated_hours, estimated_amount, created_at, project_id")
       .eq("approval_status", "pending"),
     supabase
       .from("time_entries")
@@ -203,6 +206,25 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
       .eq("status", "active"),
     supabase.from("customers").select("id, name, status"),
     fetchContractReportMetrics(supabase),
+    supabase
+      .from("projects")
+      .select("id, name, customer_id, status, customer_approval_status")
+      .eq("status", "proposed")
+      .order("created_at", { ascending: false })
+      .limit(8),
+    // Waiting on customer only — exclude "proposed" so the same project is not also in proposedProjects.
+    supabase
+      .from("projects")
+      .select("id, name, customer_id, status, customer_approval_status")
+      .eq("status", "awaiting_customer_approval")
+      .order("created_at", { ascending: false })
+      .limit(8),
+    supabase
+      .from("project_milestones")
+      .select("id, name, project_id, approval_status, projects(id, name, customer_id)")
+      .eq("approval_status", "pending")
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .limit(8),
   ]);
 
   const customerName = new Map((customersRes.data ?? []).map((c) => [c.id, c.name as string]));
@@ -210,8 +232,29 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
   const tickets = (openTicketsRes.data ?? []) as SupportTicket[];
   const additionalWork = (additionalWorkRes.data ?? []) as Pick<
     AdditionalWorkRequest,
-    "id" | "customer_id" | "title" | "estimated_hours" | "estimated_amount" | "created_at"
+    "id" | "customer_id" | "title" | "estimated_hours" | "estimated_amount" | "created_at" | "project_id"
   >[];
+  const proposedProjects = (proposedProjectsRes.data ?? []) as Pick<
+    Project,
+    "id" | "name" | "customer_id" | "status" | "customer_approval_status"
+  >[];
+  const proposedProjectIds = new Set(proposedProjects.map((p) => p.id));
+  const awaitingCustomerProjects = (
+    (awaitingCustomerRes.data ?? []) as Pick<
+      Project,
+      "id" | "name" | "customer_id" | "status" | "customer_approval_status"
+    >[]
+  ).filter((p) => !proposedProjectIds.has(p.id));
+  const projectsNeedingCustomerAction = [...proposedProjects, ...awaitingCustomerProjects];
+  const pendingMilestones = (pendingMilestonesRes.data ?? []) as Array<{
+    id: string;
+    name: string;
+    project_id: string;
+    approval_status: string | null;
+    projects: { id: string; name: string; customer_id: string } | { id: string; name: string; customer_id: string }[] | null;
+  }>;
+  const pendingApprovalsTotal =
+    additionalWork.length + projectsNeedingCustomerAction.length + pendingMilestones.length;
   const timeEntries = (timeEntriesRes.data ?? []) as Pick<
     TimeEntry,
     "contract_id" | "customer_id" | "hours_worked" | "labor_cost" | "classification" | "work_date"
@@ -226,6 +269,12 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
 
   const slaAtRisk = tickets.filter((t) => ticketSlaSeverity(t) === "at_risk");
   const slaMissed = tickets.filter((t) => ticketSlaSeverity(t) === "missed");
+  const criticalTickets = tickets.filter((t) => t.priority === "critical");
+  const ticketsNeedingAttention = Array.from(
+    new Map(
+      [...slaMissed, ...slaAtRisk, ...criticalTickets].map((t) => [t.id, t] as const)
+    ).values()
+  );
 
   const includedHoursByContract = new Map<string, number>();
   for (const entry of timeEntries) {
@@ -362,6 +411,11 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
           }}
         />
         <StatCard
+          label="Critical Open Tickets"
+          value={String(criticalTickets.length)}
+          tone={criticalTickets.length > 0 ? "error" : "success"}
+        />
+        <StatCard
           label="Contracts Over Included Hours"
           value={String(contractsOverHours.length)}
           tone={contractsOverHours.length > 0 ? "warning" : "success"}
@@ -377,18 +431,36 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
           }}
         />
         <StatCard
-          label="Pending Additional Work"
-          value={String(additionalWork.length)}
-          tone={additionalWork.length > 0 ? "warning" : "default"}
+          label="Pending Approvals"
+          value={String(pendingApprovalsTotal)}
+          tone={pendingApprovalsTotal > 0 ? "warning" : "default"}
+          hint="Projects, change requests, milestones"
           explanation={{
-            title: "Pending Additional Work",
-            result: String(additionalWork.length),
-            formula: "Count of additional work requests where approval_status = pending",
-            lines: additionalWork.map((request) => ({
-              label: request.title,
-              value: formatCurrency(Number(request.estimated_amount ?? 0)),
-              detail: customerName.get(request.customer_id) ?? "Unknown customer",
-            })),
+            title: "Pending Approvals",
+            result: String(pendingApprovalsTotal),
+            formula: "Pending additional work + proposed projects + awaiting customer approval + pending milestones",
+            lines: [
+              ...additionalWork.map((request) => ({
+                label: request.title,
+                value: formatCurrency(Number(request.estimated_amount ?? 0)),
+                detail: customerName.get(request.customer_id) ?? "Unknown customer",
+              })),
+              ...proposedProjects.map((project) => ({
+                label: project.name,
+                value: "Proposed",
+                detail: customerName.get(project.customer_id) ?? "Unknown customer",
+              })),
+              ...awaitingCustomerProjects.map((project) => ({
+                label: project.name,
+                value: "Awaiting customer",
+                detail: customerName.get(project.customer_id) ?? "Unknown customer",
+              })),
+              ...pendingMilestones.map((milestone) => ({
+                label: milestone.name,
+                value: "Milestone",
+                detail: "Pending approval",
+              })),
+            ],
           }}
         />
         <StatCard
@@ -427,6 +499,27 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
           }}
         />
       </div>
+
+      {criticalTickets.length > 0 ? (
+        <div className="alert alert-error mt-4 text-sm" role="alert">
+          <div>
+            <p className="font-semibold">
+              {criticalTickets.length} critical ticket{criticalTickets.length === 1 ? "" : "s"} need immediate attention
+            </p>
+            <p className="mt-1 opacity-90">
+              {criticalTickets
+                .slice(0, 4)
+                .map((t) => t.ticket_number)
+                .join(", ")}
+              {criticalTickets.length > 4 ? ` +${criticalTickets.length - 4} more` : ""}. Open them from Tickets or the
+              list below.
+            </p>
+          </div>
+          <Link href="/tickets?priority=critical" className="btn btn-sm">
+            View critical tickets
+          </Link>
+        </div>
+      ) : null}
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
@@ -500,12 +593,12 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <div>
           <h2 className="mb-2 text-sm font-semibold">Tickets Needing Attention</h2>
-          {slaAtRisk.length + slaMissed.length === 0 ? (
-            <EmptyState title="No SLA issues" description="Every open ticket is within its SLA window." />
+          {ticketsNeedingAttention.length === 0 ? (
+            <EmptyState title="No urgent tickets" description="No critical, at-risk, or missed-SLA tickets right now." />
           ) : (
             <DataTable headers={["Ticket", "Customer", "Priority", "SLA"]}>
-              {[...slaMissed, ...slaAtRisk].slice(0, 8).map((t) => (
-                <tr key={t.id}>
+              {ticketsNeedingAttention.slice(0, 8).map((t) => (
+                <tr key={t.id} className={t.priority === "critical" ? "bg-error/5" : undefined}>
                   <td>
                     <Link className="link link-hover" href={`/tickets/${t.id}`}>
                       {t.ticket_number}
@@ -513,7 +606,13 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
                   </td>
                   <td>{customerName.get(t.customer_id) ?? "—"}</td>
                   <td>
-                    <StatusBadge status={t.priority} />
+                    {t.priority === "critical" ? (
+                      <span className="inline-flex items-center gap-1 rounded-box border border-error/40 bg-error/10 px-2 py-0.5 text-xs font-semibold text-error">
+                        Critical
+                      </span>
+                    ) : (
+                      <StatusBadge status={t.priority} />
+                    )}
                   </td>
                   <td>
                     <StatusBadge status={ticketSlaSeverity(t)} />
@@ -548,27 +647,103 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
       </div>
 
       <div className="mt-6">
-        <h2 className="mb-2 text-sm font-semibold">Pending Additional Work Approvals</h2>
-        {additionalWork.length === 0 ? (
-          <EmptyState title="Nothing to review" description="No additional work requests are waiting on manager approval." />
+        <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold">Pending Approvals</h2>
+            <p className="text-xs opacity-70">
+              {pendingApprovalsTotal} item{pendingApprovalsTotal === 1 ? "" : "s"} waiting — manage actions on Projects
+            </p>
+          </div>
+          <Link href="/projects" className="btn btn-outline btn-sm">
+            Open approval queue
+          </Link>
+        </div>
+
+        {pendingApprovalsTotal === 0 ? (
+          <EmptyState title="Nothing to review" description="No projects, change requests, or milestones are waiting on approval." />
         ) : (
-          <DataTable headers={["Request", "Customer", "Est. Hours", "Est. Amount", "Submitted"]}>
-            {additionalWork.slice(0, 8).map((w) => (
-              <tr key={w.id}>
-                <td>
-                  <Link className="link link-hover" href="/additional-work">
-                    {w.title}
-                  </Link>
-                </td>
-                <td>{customerName.get(w.customer_id) ?? "—"}</td>
-                <td>{w.estimated_hours != null ? <Hours value={Number(w.estimated_hours)} /> : "—"}</td>
-                <td>{w.estimated_amount != null ? <Money value={Number(w.estimated_amount)} /> : "—"}</td>
-                <td>
-                  <DateText value={w.created_at} />
-                </td>
-              </tr>
-            ))}
-          </DataTable>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div>
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-wide opacity-60">Change requests / additional work</h3>
+              {additionalWork.length === 0 ? (
+                <EmptyState title="No pending change requests" />
+              ) : (
+                <DataTable headers={["Request", "Customer", "Est. Hours", "Est. Amount", "Submitted"]}>
+                  {additionalWork.slice(0, 8).map((w) => (
+                    <tr key={w.id}>
+                      <td>
+                        <Link className="link link-hover" href={w.project_id ? `/projects/${w.project_id}` : "/additional-work"}>
+                          {w.title}
+                        </Link>
+                      </td>
+                      <td>{customerName.get(w.customer_id) ?? "—"}</td>
+                      <td>{w.estimated_hours != null ? <Hours value={Number(w.estimated_hours)} /> : "—"}</td>
+                      <td>{w.estimated_amount != null ? <Money value={Number(w.estimated_amount)} /> : "—"}</td>
+                      <td>
+                        <DateText value={w.created_at} />
+                      </td>
+                    </tr>
+                  ))}
+                </DataTable>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide opacity-60">Projects to send / waiting on customer</h3>
+                {projectsNeedingCustomerAction.length === 0 ? (
+                  <EmptyState title="No project approvals pending" />
+                ) : (
+                  <DataTable headers={["Project", "Customer", "Status"]}>
+                    {projectsNeedingCustomerAction.slice(0, 8).map((p) => (
+                      <tr key={p.id}>
+                        <td>
+                          <Link className="link link-hover" href={`/projects/${p.id}`}>
+                            {p.name}
+                          </Link>
+                        </td>
+                        <td>{customerName.get(p.customer_id) ?? "—"}</td>
+                        <td>
+                          <StatusBadge
+                            status={
+                              p.status === "proposed"
+                                ? "proposed"
+                                : p.customer_approval_status === "pending" || p.status === "awaiting_customer_approval"
+                                  ? "pending"
+                                  : p.status
+                            }
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </DataTable>
+                )}
+              </div>
+
+              <div>
+                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide opacity-60">Milestone approvals</h3>
+                {pendingMilestones.length === 0 ? (
+                  <EmptyState title="No milestone approvals pending" />
+                ) : (
+                  <DataTable headers={["Milestone", "Project"]}>
+                    {pendingMilestones.map((m) => {
+                      const project = Array.isArray(m.projects) ? m.projects[0] : m.projects;
+                      return (
+                        <tr key={m.id}>
+                          <td>{m.name}</td>
+                          <td>
+                            <Link className="link link-hover" href={`/projects/${m.project_id}`}>
+                              {project?.name ?? "View project"}
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </DataTable>
+                )}
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

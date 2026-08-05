@@ -1,11 +1,11 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile, requireApprovedCustomer } from "@/lib/auth";
 import { PageHeader, DataTable, EmptyState, StatusBadge, Money, DateText, ErrorState, StatCard } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
 import { withDerivedInvoiceStatus } from "@/lib/billing";
-import type { Dispute, Payment } from "@/lib/types";
-
+import type { Dispute } from "@/lib/types";
 export default async function MyInvoicesPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
@@ -23,25 +23,27 @@ export default async function MyInvoicesPage() {
       .order("invoice_date", { ascending: false }),
     supabase
       .from("payments")
-      .select("id, payment_number, payment_date, payment_amount, payment_method, reference_number")
+      .select(
+        "id, payment_number, payment_date, payment_amount, payment_method, reference_number, payment_applications(amount_applied, invoices(invoice_number))"
+      )
       .eq("customer_id", customerId)
       .order("payment_date", { ascending: false }),
     supabase.from("disputes").select("id, invoice_id, dispute_date, dispute_reason, disputed_amount, resolution_status").eq("customer_id", customerId),
   ]);
 
-  if (invoicesRes.error) {
+  const error = invoicesRes.error || paymentsRes.error || disputesRes.error;
+  if (error) {
     return (
       <div>
         <PageHeader title="Invoices and Payments" />
-        <ErrorState message={invoicesRes.error.message} />
+        <ErrorState message={error.message} />
       </div>
     );
   }
 
   const invoices = (invoicesRes.data ?? []).map((invoice) => withDerivedInvoiceStatus(invoice));
-  const payments = (paymentsRes.data ?? []) as (Pick<Payment, "payment_number" | "payment_date" | "payment_amount" | "payment_method" | "reference_number"> & { id: string })[];
+  const payments = paymentsRes.data ?? [];
   const disputes = (disputesRes.data ?? []) as (Pick<Dispute, "invoice_id" | "dispute_date" | "dispute_reason" | "disputed_amount" | "resolution_status"> & { id: string })[];
-
   const openInvoices = invoices.filter((i) => !["draft", "canceled", "paid"].includes(i.status) && i.remaining_balance > 0.01);
   const balanceDue = openInvoices.reduce((sum, i) => sum + i.remaining_balance, 0);
   const totalPaid = payments.reduce((sum, p) => sum + Number(p.payment_amount), 0);
@@ -49,7 +51,17 @@ export default async function MyInvoicesPage() {
 
   return (
     <div>
-      <PageHeader title="Invoices and Payments" description="Your billing history and current balance." />
+      <PageHeader
+        title="Invoices and Payments"
+        description="Your billing history and current balance."
+        actions={
+          balanceDue > 0 ? (
+            <Link href="/make-payment" className="btn btn-primary btn-sm">
+              Make a Payment
+            </Link>
+          ) : null
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
@@ -103,7 +115,7 @@ export default async function MyInvoicesPage() {
         {invoices.length === 0 ? (
           <EmptyState title="No invoices yet" description="Invoices for your account will appear here once issued." />
         ) : (
-          <DataTable headers={["Invoice", "Period", "Total", "Paid", "Balance", "Due", "Status"]}>
+          <DataTable headers={["Invoice", "Period", "Total", "Paid", "Balance", "Due", "Status", ""]}>
             {invoices.map((i) => (
               <tr key={i.id}>
                 <td>{i.invoice_number}</td>
@@ -131,6 +143,13 @@ export default async function MyInvoicesPage() {
                 <td>
                   <StatusBadge status={i.status} />
                 </td>
+                <td className="text-right">
+                  {Number(i.remaining_balance) > 0 && !["draft", "canceled"].includes(i.status) ? (
+                    <Link href={`/make-payment?invoiceId=${i.id}`} className="btn btn-primary btn-xs">
+                      Pay
+                    </Link>
+                  ) : null}
+                </td>
               </tr>
             ))}
           </DataTable>
@@ -143,21 +162,30 @@ export default async function MyInvoicesPage() {
           {payments.length === 0 ? (
             <EmptyState title="No payments recorded yet" />
           ) : (
-            <DataTable headers={["Payment #", "Amount", "Method", "Date"]}>
-              {payments.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.payment_number}</td>
-                  <td>
-                    <Money value={Number(p.payment_amount)} />
-                  </td>
-                  <td>
-                    <StatusBadge status={p.payment_method} />
-                  </td>
-                  <td>
-                    <DateText value={p.payment_date} />
-                  </td>
-                </tr>
-              ))}
+            <DataTable headers={["Payment #", "Invoice", "Amount Applied", "Method", "Date"]}>
+              {payments.map((p) => {
+                const application = p.payment_applications?.[0];
+                const invoice = application
+                  ? Array.isArray(application.invoices)
+                    ? application.invoices[0]
+                    : application.invoices
+                  : null;
+                return (
+                  <tr key={p.id}>
+                    <td>{p.payment_number}</td>
+                    <td>{invoice?.invoice_number ?? "—"}</td>
+                    <td>
+                      <Money value={Number(application?.amount_applied ?? p.payment_amount)} />
+                    </td>
+                    <td>
+                      <StatusBadge status={p.payment_method} />
+                    </td>
+                    <td>
+                      <DateText value={p.payment_date} />
+                    </td>
+                  </tr>
+                );
+              })}
             </DataTable>
           )}
         </div>

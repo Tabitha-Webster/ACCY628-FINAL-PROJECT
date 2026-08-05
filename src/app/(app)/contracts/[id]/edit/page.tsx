@@ -18,7 +18,7 @@ export default async function EditContractPage({
 }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!canEditContracts(profile.role)) redirect("/contracts");
+  if (!canEditContracts(profile.role)) redirect("/contracts/reports");
 
   const { id } = await params;
   const supabase = await createClient();
