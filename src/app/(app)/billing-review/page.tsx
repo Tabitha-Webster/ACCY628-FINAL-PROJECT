@@ -9,6 +9,7 @@ import {
   type ReviewItem,
 } from "@/components/BillingReviewClient";
 import { computeMonthlyUsage, currentBillingPeriod, round2 } from "@/lib/billing";
+import { projectBillingBlockReason } from "@/lib/billing-eligibility";
 
 function unwrapName(rel: { name?: string } | { name?: string }[] | null | undefined, fallback = "Unknown customer") {
   if (!rel) return fallback;
@@ -49,7 +50,7 @@ export default async function BillingReviewPage() {
       .eq("status", "active"),
     supabase
       .from("time_entries")
-      .select("id, contract_id, hours_worked, classification, approval_status, work_date")
+      .select("id, contract_id, hours_worked, classification, approval_status, billing_status, work_date")
       .gte("work_date", billingPeriodStart)
       .lte("work_date", billingPeriodEnd),
     supabase
@@ -70,7 +71,7 @@ export default async function BillingReviewPage() {
     supabase
       .from("projects")
       .select(
-        "id, customer_id, contract_id, name, fixed_fee, estimated_billing_amount, status, uses_milestone_billing, customers(name), contracts(name)"
+        "id, customer_id, contract_id, name, fixed_fee, estimated_billing_amount, status, uses_milestone_billing, customer_approval_status, billing_status, customers(name), contracts(name)"
       )
       .eq("uses_milestone_billing", false)
       .in("status", ["completed", "approved"])
@@ -85,7 +86,10 @@ export default async function BillingReviewPage() {
       .eq("approval_status", "pending")
       .in("classification", ["billable", "out_of_scope"]),
     supabase.from("direct_costs").select("id, description, billable_amount, cost_date, customers(name)").eq("approval_status", "pending"),
-    supabase.from("additional_work_requests").select("id, title, estimated_amount, customers(name)").eq("approval_status", "pending"),
+    supabase
+      .from("additional_work_requests")
+      .select("id, title, estimated_amount, support_ticket_id, customers(name)")
+      .eq("approval_status", "pending"),
   ]);
 
   const billedRecurring = new Set(
@@ -100,7 +104,7 @@ export default async function BillingReviewPage() {
 
   const timeByContract = new Map<
     string,
-    { hours_worked: number | string; classification: string; approval_status: string }[]
+    { hours_worked: number | string; classification: string; approval_status: string; billing_status?: string | null }[]
   >();
   for (const entry of timeEntries ?? []) {
     if (!entry.contract_id) continue;
@@ -120,7 +124,7 @@ export default async function BillingReviewPage() {
     );
 
     const projectCharges = (projects ?? [])
-      .filter((project) => project.contract_id === contract.id)
+      .filter((project) => project.contract_id === contract.id && !projectBillingBlockReason(project))
       .map((project) => ({
         id: project.id,
         name: project.name,
@@ -217,21 +221,28 @@ export default async function BillingReviewPage() {
   const exceptions: ReviewException[] = [
     ...(pendingTime ?? []).map((row) => ({
       id: `time-${row.id}`,
+      recordId: row.id,
+      kind: "time_entry" as const,
       customerName: unwrapName(row.customers),
       reason: "Unapproved additional hours",
       detail: `${row.description} · ${Number(row.hours_worked ?? 0).toFixed(1)} hrs on ${row.work_date}`,
     })),
     ...(pendingCosts ?? []).map((row) => ({
       id: `cost-${row.id}`,
+      recordId: row.id,
+      kind: "direct_cost" as const,
       customerName: unwrapName(row.customers),
       reason: "Unapproved direct cost",
       detail: `${row.description} · ${row.cost_date}`,
     })),
     ...(pendingWork ?? []).map((row) => ({
       id: `awr-${row.id}`,
+      recordId: row.id,
+      kind: "additional_work" as const,
       customerName: unwrapName(row.customers),
       reason: "Additional work awaiting manager approval",
       detail: row.title,
+      supportTicketId: row.support_ticket_id,
     })),
   ];
 

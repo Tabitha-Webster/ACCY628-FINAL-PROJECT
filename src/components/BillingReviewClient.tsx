@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DataTable, EmptyState, Money, StatusBadge } from "@/components/ui";
+import { BillingExceptionActions } from "@/components/BillingExceptionActions";
 import { formatCurrency, formatHours } from "@/lib/format";
 
 export type ReviewItemType = "recurring" | "time_entry" | "direct_cost" | "milestone" | "project";
@@ -23,9 +24,12 @@ export type ReviewItem = {
 
 export type ReviewException = {
   id: string;
+  recordId: string;
+  kind: "time_entry" | "direct_cost" | "additional_work";
   customerName: string;
   reason: string;
   detail: string;
+  supportTicketId?: string | null;
 };
 
 export type MonthlyPackage = {
@@ -431,7 +435,7 @@ export function BillingReviewClient({
         {exceptions.length === 0 ? (
           <EmptyState title="No billing exceptions" description="Unapproved or incomplete charges will show up here." />
         ) : (
-          <DataTable headers={["Customer", "Reason", "Detail", "Status"]}>
+          <DataTable headers={["Customer", "Reason", "Detail", "Status", ""]}>
             {exceptions.map((exception) => (
               <tr key={exception.id}>
                 <td>{exception.customerName}</td>
@@ -439,6 +443,9 @@ export function BillingReviewClient({
                 <td className="text-sm opacity-80">{exception.detail}</td>
                 <td>
                   <StatusBadge status="pending" />
+                </td>
+                <td className="text-right">
+                  <BillingExceptionActions exception={exception} />
                 </td>
               </tr>
             ))}

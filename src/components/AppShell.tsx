@@ -201,7 +201,7 @@ export function AppShell({
         </div>
       ) : null}
 
-      {/* Settings panel from main (theme) */}
+      {/* Settings panel (theme) */}
       {settingsOpen ? (
         <div className="fixed inset-0 z-[60]">
           <button

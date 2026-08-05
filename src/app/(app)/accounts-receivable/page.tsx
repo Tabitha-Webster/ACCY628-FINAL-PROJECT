@@ -1,23 +1,16 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { DataTable, EmptyState, ErrorState, Money, PageHeader, StatCard, StatusBadge } from "@/components/ui";
-import { formatDate } from "@/lib/format";
-import { arAgingBucket } from "@/lib/calculations";
+import { ErrorState, PageHeader, StatCard } from "@/components/ui";
+import { AR_AGING_BUCKETS, arAgingBucket } from "@/lib/calculations";
+import { OpenInvoicesTable, type OpenInvoiceRow } from "@/components/OpenInvoicesTable";
 
-const AGING_ORDER = [
-  "Current",
-  "1–30 Days Past Due",
-  "31–60 Days Past Due",
-  "61–90 Days Past Due",
-  "More Than 90 Days Past Due",
-];
-
-function bucketTone(label: string): "default" | "warning" | "error" {
-  if (label === "Current") return "default";
-  if (label === "61–90 Days Past Due" || label === "More Than 90 Days Past Due") return "error";
-  return "warning";
+function bucketCardClass(label: string) {
+  if (label === "Current") return "aging-card-current";
+  if (label === "1-30 Days") return "aging-card-30";
+  if (label === "31-60 Days") return "aging-card-60";
+  if (label === "61-90 Days") return "aging-card-90";
+  return "aging-card-over-90";
 }
 
 export default async function AccountsReceivablePage() {
@@ -40,7 +33,7 @@ export default async function AccountsReceivablePage() {
   }));
 
   const totalsByBucket = new Map<string, { count: number; amount: number }>();
-  for (const label of AGING_ORDER) totalsByBucket.set(label, { count: 0, amount: 0 });
+  for (const label of AR_AGING_BUCKETS) totalsByBucket.set(label, { count: 0, amount: 0 });
   for (const row of rows) {
     const bucket = totalsByBucket.get(row.bucket) ?? { count: 0, amount: 0 };
     bucket.count += 1;
@@ -71,7 +64,7 @@ export default async function AccountsReceivablePage() {
       <div>
         <h2 className="mb-2 text-lg font-semibold">Aging Summary</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
-          {AGING_ORDER.map((label) => {
+          {AR_AGING_BUCKETS.map((label) => {
             const bucket = totalsByBucket.get(label) ?? { count: 0, amount: 0 };
             return (
               <StatCard
@@ -79,47 +72,27 @@ export default async function AccountsReceivablePage() {
                 label={label}
                 value={`$${bucket.amount.toFixed(2)}`}
                 hint={`${bucket.count} invoice${bucket.count === 1 ? "" : "s"}`}
-                tone={bucketTone(label)}
+                className={bucketCardClass(label)}
               />
             );
           })}
         </div>
       </div>
 
-      <div>
-        <h2 className="mb-2 text-lg font-semibold">Open Invoices</h2>
-        {rows.length > 0 ? (
-          <DataTable headers={["Invoice", "Customer", "Due Date", "Status", "Aging Bucket", "Balance"]}>
-            {rows.map((row) => {
-              const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers;
-              return (
-                <tr key={row.id}>
-                  <td>
-                    <Link href={`/invoices/${row.id}`} className="link link-hover font-medium">
-                      {row.invoice_number}
-                    </Link>
-                  </td>
-                  <td>{customer?.name ?? "—"}</td>
-                  <td className="text-xs">{formatDate(row.due_date)}</td>
-                  <td>
-                    <StatusBadge status={row.status} />
-                  </td>
-                  <td>
-                    <span className={`badge ${bucketTone(row.bucket) === "error" ? "badge-error" : bucketTone(row.bucket) === "warning" ? "badge-warning" : "badge-ghost"}`}>
-                      {row.bucket}
-                    </span>
-                  </td>
-                  <td className="font-medium">
-                    <Money value={Number(row.remaining_balance ?? 0)} />
-                  </td>
-                </tr>
-              );
-            })}
-          </DataTable>
-        ) : (
-          <EmptyState title="No open receivables" description="Every issued invoice has been paid in full." />
-        )}
-      </div>
+      <OpenInvoicesTable
+        invoices={rows.map((row): OpenInvoiceRow => {
+          const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+          return {
+            id: row.id,
+            invoice_number: row.invoice_number,
+            customer_name: customer?.name ?? "Unknown customer",
+            due_date: row.due_date,
+            status: row.status,
+            aging_bucket: row.bucket,
+            balance: Number(row.remaining_balance ?? 0),
+          };
+        })}
+      />
     </div>
   );
 }
