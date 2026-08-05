@@ -85,6 +85,7 @@ type TableCellProps = {
   align?: TableAlign;
   numeric?: boolean;
   className?: string;
+  title?: string;
   /** Mark the trailing actions column for consistent right alignment. */
   actions?: boolean;
 };
@@ -94,6 +95,7 @@ export function TableCell({
   align,
   numeric = false,
   className = "",
+  title,
   actions = false,
 }: TableCellProps) {
   const resolvedAlign: TableAlign = align ?? (actions || numeric ? "right" : "left");
@@ -107,5 +109,9 @@ export function TableCell({
     .filter(Boolean)
     .join(" ");
 
-  return <td className={classes}>{children}</td>;
+  return (
+    <td className={classes} title={title}>
+      {children}
+    </td>
+  );
 }

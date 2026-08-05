@@ -4,12 +4,18 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { ButtonLink } from "@/components/Button";
 import { CustomerListRetryButton } from "@/components/CustomerListRetryButton";
-import {
-  CustomerListSearch,
-  type CustomerListRow,
-} from "@/components/CustomerListSearch";
+import { CustomerListSearch } from "@/components/CustomerListSearch";
+import { CustomerSchemaNotice } from "@/components/CustomerSchemaNotice";
+import { HrCustomerAccessNotice } from "@/components/HrCustomerAccessNotice";
 import { PageLayout } from "@/components/PageLayout";
 import { EmptyState, ErrorState } from "@/components/ui";
+import {
+  canEditCustomers,
+  canViewCustomers,
+  listCustomersForInternalRoles,
+} from "@/lib/customers/queries";
+
+export const dynamic = "force-dynamic";
 
 function CustomerListSkeleton() {
   return (
@@ -37,13 +43,9 @@ function CustomerListSkeleton() {
   );
 }
 
-async function CustomerListContent() {
+async function CustomerListContent({ role }: { role: string }) {
   const supabase = await createClient();
-  // Live schema only — same core fields the dashboard uses (plus contact/industry for the list).
-  const { data: customers, error } = await supabase
-    .from("customers")
-    .select("id, name, status, industry, primary_contact, contact_email")
-    .order("name", { ascending: true });
+  const { customers, error, schemaIncomplete } = await listCustomersForInternalRoles(supabase);
 
   if (error) {
     return (
@@ -62,9 +64,18 @@ async function CustomerListContent() {
     );
   }
 
-  const rows = (customers ?? []) as CustomerListRow[];
-
-  if (rows.length === 0) {
+  if (customers.length === 0) {
+    if (role === "hr") {
+      return (
+        <div className="space-y-4">
+          <EmptyState
+            title="No customers found"
+            description="HR is allowed in the app, but Supabase is not returning customer rows for this login yet."
+          />
+          <HrCustomerAccessNotice />
+        </div>
+      );
+    }
     return (
       <EmptyState
         title="No customers found"
@@ -73,26 +84,36 @@ async function CustomerListContent() {
     );
   }
 
-  return <CustomerListSearch customers={rows} />;
+  return (
+    <div className="space-y-4">
+      {schemaIncomplete ? <CustomerSchemaNotice /> : null}
+      <CustomerListSearch customers={customers} />
+    </div>
+  );
 }
 
 export default async function CustomersPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!["manager", "billing", "technician"].includes(profile.role)) redirect("/dashboard");
+  if (!canViewCustomers(profile.role)) redirect("/dashboard");
+
+  const canManage = canEditCustomers(profile.role);
+  const description = canManage
+    ? "Shared live customer list. Manager and HR can add or edit customers; Technician and Billing can view the same records."
+    : "Shared live customer list — same records Manager and HR maintain. Open a row to view the latest profile.";
 
   return (
     <PageLayout
       title="Customers"
-      description="Customer accounts loaded from Supabase."
+      description={description}
       actions={
         <>
-          {profile.role === "manager" ? (
+          {canManage ? (
             <ButtonLink href="/customer-approvals" variant="secondary" size="sm">
               Review approvals
             </ButtonLink>
           ) : null}
-          {["manager", "billing"].includes(profile.role) ? (
+          {canManage ? (
             <ButtonLink href="/customers/new" variant="primary" size="sm">
               Add Customer
             </ButtonLink>
@@ -101,7 +122,7 @@ export default async function CustomersPage() {
       }
     >
       <Suspense fallback={<CustomerListSkeleton />}>
-        <CustomerListContent />
+        <CustomerListContent role={profile.role} />
       </Suspense>
     </PageLayout>
   );

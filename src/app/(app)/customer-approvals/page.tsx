@@ -20,7 +20,7 @@ type ApprovalRow = {
 export default async function CustomerApprovalsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (profile.role !== "manager") redirect("/dashboard");
+  if (!["manager", "hr"].includes(profile.role)) redirect("/dashboard");
 
   const supabase = await createClient();
   const { data, error } = await supabase

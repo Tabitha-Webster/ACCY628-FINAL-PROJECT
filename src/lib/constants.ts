@@ -74,6 +74,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   ],
   technician: [
     { href: "/dashboard", label: "My Assignments" },
+    { href: "/customers", label: "Customers" },
     { href: "/contracts", label: "Contracts & Agreements" },
     { href: "/tickets", label: "Support Tickets" },
     { href: "/projects", label: "Project Tasks" },
@@ -82,6 +83,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   ],
   billing: [
     { href: "/dashboard", label: "Billing Dashboard" },
+    { href: "/customers", label: "Customers" },
     { href: "/contracts", label: "Contracts & Agreements" },
     { href: "/contracts/reports", label: "Contract Reports" },
     { href: "/billing-review", label: "Billing Review" },
@@ -93,6 +95,8 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   ],
   hr: [
     { href: "/dashboard", label: "HR Home" },
+    { href: "/customers", label: "Customers" },
+    { href: "/customer-approvals", label: "Approvals" },
     { href: "/hr-analytics", label: "HR Analytics" },
     { href: "/hr-positions", label: "Positions" },
   ],
@@ -174,8 +178,8 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/controls",
       "/hr-analytics",
     ],
-    technician: ["/contracts", "/customers"],
-    billing: ["/customers", "/contracts", "/projects", "/tickets", "/ready-to-bill"],
+    technician: ["/contracts"],
+    billing: ["/contracts", "/projects", "/tickets", "/ready-to-bill"],
     hr: ["/contracts"],
     customer: ["/tickets"],
   };

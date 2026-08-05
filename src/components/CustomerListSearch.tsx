@@ -1,24 +1,22 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useDeferredValue, useMemo, useState } from "react";
+import Link from "next/link";
 import { Search, X } from "lucide-react";
 import { Button } from "@/components/Button";
 import { Table, TableCell } from "@/components/Table";
 import { EmptyState } from "@/components/ui";
 import { matchesText } from "@/components/table-filters";
 import { statusBadgeClass, statusLabel } from "@/lib/format";
+import type { CustomerListRow } from "@/lib/customers/queries";
 import type { CustomerStatus } from "@/lib/types";
 
-/** Live customers columns used by the dashboard / list page. */
-export type CustomerListRow = {
-  id: string;
-  name: string | null;
-  status: string | null;
-  industry: string | null;
-  primary_contact: string | null;
-  contact_email: string | null;
-};
+export type { CustomerListRow };
+
+/** Detail route uses the customers.id primary key only. */
+function customerDetailPath(customerId: string) {
+  return `/customers/${customerId}`;
+}
 
 const CUSTOMER_COLUMNS = [
   { key: "id", header: "Customer ID" },
@@ -60,8 +58,10 @@ function displayContactEmail(row: CustomerListRow) {
   return row.contact_email?.trim() || "—";
 }
 
-/** Short readable form of the UUID for list display; full id remains the record key. */
+/** Prefer human customer_identifier when present so every role sees the same ID label. */
 function displayIdentifier(row: CustomerListRow) {
+  const identifier = row.customer_identifier?.trim();
+  if (identifier) return identifier;
   const id = row.id?.trim();
   if (!id) return "—";
   return id.length > 8 ? `${id.slice(0, 8)}…` : id;
@@ -91,6 +91,7 @@ function matchesCustomerSearch(row: CustomerListRow, query: string) {
   return (
     matchesText(row.name, q) ||
     matchesText(row.id, q) ||
+    matchesText(row.customer_identifier, q) ||
     matchesText(row.industry, q) ||
     matchesText(row.primary_contact, q) ||
     matchesText(row.contact_email, q)
@@ -103,20 +104,9 @@ function matchesCustomerStatus(row: CustomerListRow, statusFilter: StatusFilterV
 }
 
 export function CustomerListSearch({ customers }: { customers: CustomerListRow[] }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("all");
   const deferredQuery = useDeferredValue(query);
-
-  /** Open detail using the customer's unique database UUID (`customers.id`). */
-  function openCustomer(customerId: string) {
-    const id = customerId?.trim();
-    if (!id) return;
-    startTransition(() => {
-      router.push(`/customers/${encodeURIComponent(id)}`);
-    });
-  }
 
   const statusOptions =
     DB_CUSTOMER_STATUSES.length > 0 ? DB_CUSTOMER_STATUSES : FALLBACK_CUSTOMER_STATUSES;
@@ -137,11 +127,6 @@ export function CustomerListSearch({ customers }: { customers: CustomerListRow[]
 
   return (
     <div className="space-y-4">
-      {isPending ? (
-        <p className="text-sm opacity-70" aria-live="polite">
-          Opening customer…
-        </p>
-      ) : null}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end">
           <label className="form-control w-full max-w-xl">
@@ -213,36 +198,49 @@ export function CustomerListSearch({ customers }: { customers: CustomerListRow[]
         />
       ) : (
         <Table columns={CUSTOMER_COLUMNS}>
-          {filtered.map((customer) => (
-            <tr
-              key={customer.id}
-              data-customer-id={customer.id}
-              className={`cursor-pointer border-b border-base-200 transition-colors last:border-b-0 hover:bg-base-200/60 ${
-                isPending ? "opacity-70" : ""
-              }`}
-              tabIndex={0}
-              aria-label={`Open customer ${displayName(customer)}`}
-              aria-busy={isPending || undefined}
-              onClick={() => openCustomer(customer.id)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  openCustomer(customer.id);
-                }
-              }}
-            >
-              <TableCell className="font-mono text-xs tabular-nums" title={customer.id}>
-                {displayIdentifier(customer)}
-              </TableCell>
-              <TableCell className="font-medium">{displayName(customer)}</TableCell>
-              <TableCell>
-                <CustomerStatusBadge status={displayStatus(customer)} />
-              </TableCell>
-              <TableCell>{customer.industry?.trim() || "—"}</TableCell>
-              <TableCell>{displayContactName(customer)}</TableCell>
-              <TableCell className="text-sm">{displayContactEmail(customer)}</TableCell>
-            </tr>
-          ))}
+          {filtered.map((customer) => {
+            const databaseId = customer.id?.trim();
+            if (!databaseId) return null;
+            const href = customerDetailPath(databaseId);
+            return (
+              <tr
+                key={databaseId}
+                data-customer-id={databaseId}
+                className="border-b border-base-200 transition-colors last:border-b-0 hover:bg-base-200/60"
+              >
+                <TableCell className="font-mono text-xs tabular-nums" title={databaseId}>
+                  <Link href={href} className="link link-hover" aria-label={`Open customer ${displayName(customer)}`}>
+                    {displayIdentifier(customer)}
+                  </Link>
+                </TableCell>
+                <TableCell className="font-medium">
+                  <Link href={href} className="link link-hover">
+                    {displayName(customer)}
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  <Link href={href} className="block">
+                    <CustomerStatusBadge status={displayStatus(customer)} />
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  <Link href={href} className="block text-inherit no-underline">
+                    {customer.industry?.trim() || "—"}
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  <Link href={href} className="block text-inherit no-underline">
+                    {displayContactName(customer)}
+                  </Link>
+                </TableCell>
+                <TableCell className="text-sm">
+                  <Link href={href} className="block text-inherit no-underline">
+                    {displayContactEmail(customer)}
+                  </Link>
+                </TableCell>
+              </tr>
+            );
+          })}
         </Table>
       )}
 

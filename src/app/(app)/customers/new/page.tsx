@@ -3,11 +3,14 @@ import { getCurrentProfile } from "@/lib/auth";
 import { AddCustomerForm } from "@/components/AddCustomerForm";
 import { ButtonLink } from "@/components/Button";
 import { PageLayout } from "@/components/PageLayout";
+import { canEditCustomers } from "@/lib/customers/queries";
+
+export const dynamic = "force-dynamic";
 
 export default async function AddCustomerPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!["manager", "billing"].includes(profile.role)) redirect("/customers");
+  if (!canEditCustomers(profile.role)) redirect("/customers");
 
   return (
     <PageLayout
