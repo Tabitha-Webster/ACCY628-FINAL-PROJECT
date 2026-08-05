@@ -29,9 +29,12 @@ export default function LoginPage() {
     });
     setLoading(false);
     if (signError) {
-      setError(signError.message === "Invalid login credentials"
-        ? "That email or password did not match. Try again or use a demo account."
-        : signError.message);
+      const msg = (signError.message || "").trim();
+      setError(
+        !msg || msg === "Invalid login credentials"
+          ? "That email or password did not match. Try again or use a demo account."
+          : msg
+      );
       return;
     }
     router.push("/dashboard");

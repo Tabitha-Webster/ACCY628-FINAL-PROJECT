@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile, requireApprovedCustomer } from "@/lib/auth";
+import { CONTRACTS_NAV_COPY } from "@/lib/constants";
 import { PageHeader, EmptyState, StatusBadge, Money, Hours, DateText, ErrorState } from "@/components/ui";
-import type { Contract } from "@/lib/types";
+import type { Contract, ContractService } from "@/lib/types";
+import { listContractServices, listCustomerContracts } from "@/lib/contracts";
 
 export default async function MyContractsPage() {
   const profile = await getCurrentProfile();
@@ -10,17 +12,14 @@ export default async function MyContractsPage() {
   if (profile.role !== "customer" || !profile.customer_id) redirect("/contracts");
   await requireApprovedCustomer(profile);
 
+  const copy = CONTRACTS_NAV_COPY.customer;
   const supabase = await createClient();
-  const { data: contracts, error } = await supabase
-    .from("contracts")
-    .select("*")
-    .eq("customer_id", profile.customer_id)
-    .order("start_date", { ascending: false });
+  const { data: contracts, error } = await listCustomerContracts(supabase, profile.customer_id);
 
   if (error) {
     return (
       <div>
-        <PageHeader title="My Contracts" />
+        <PageHeader title={copy.title} />
         <ErrorState message={error.message} />
       </div>
     );
@@ -30,19 +29,21 @@ export default async function MyContractsPage() {
   if (rows.length === 0) {
     return (
       <div>
-        <PageHeader title="My Contracts" />
-        <EmptyState title="No contracts on file" description="Contact your account manager to set up a service agreement." />
+        <PageHeader title={copy.title} description={copy.description} />
+        <EmptyState
+          title="No contracts on file"
+          description="Contact your account manager to set up a service agreement."
+        />
       </div>
     );
   }
 
-  const contractIds = rows.map((c) => c.id);
-  const { data: services } = await supabase
-    .from("contract_services")
-    .select("contract_id, service_name, service_description, is_included")
-    .in("contract_id", contractIds);
-  const servicesByContract = new Map<string, { service_name: string; service_description: string | null; is_included: boolean }[]>();
-  for (const s of services ?? []) {
+  const { data: services } = await listContractServices(
+    supabase,
+    rows.map((c) => c.id)
+  );
+  const servicesByContract = new Map<string, ContractService[]>();
+  for (const s of (services ?? []) as ContractService[]) {
     const list = servicesByContract.get(s.contract_id) ?? [];
     list.push(s);
     servicesByContract.set(s.contract_id, list);
@@ -50,7 +51,7 @@ export default async function MyContractsPage() {
 
   return (
     <div>
-      <PageHeader title="My Contracts" description="Terms, included hours, and services covered under your service agreements." />
+      <PageHeader title={copy.title} description={copy.description} />
 
       <div className="space-y-6">
         {rows.map((c) => (
@@ -65,7 +66,9 @@ export default async function MyContractsPage() {
               <StatusBadge status={c.status} />
             </div>
 
-            {c.description ? <p className="mt-3 text-sm leading-relaxed opacity-80">{c.description}</p> : null}
+            {c.description ? (
+              <p className="mt-3 text-sm leading-relaxed opacity-80">{c.description}</p>
+            ) : null}
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
@@ -90,12 +93,13 @@ export default async function MyContractsPage() {
               <div>
                 <p className="text-xs uppercase tracking-wide opacity-60">Term</p>
                 <p className="mt-1 font-medium">
-                  <DateText value={c.start_date} /> – {c.end_date ? <DateText value={c.end_date} /> : "Ongoing"}
+                  <DateText value={c.start_date} /> –{" "}
+                  {c.end_date ? <DateText value={c.end_date} /> : "Ongoing"}
                 </p>
               </div>
             </div>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+            <div className="mt-4 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
               {c.sla_response_hours != null ? (
                 <div>
                   <p className="text-xs uppercase tracking-wide opacity-60">SLA Response</p>
@@ -124,11 +128,15 @@ export default async function MyContractsPage() {
 
             {servicesByContract.get(c.id)?.length ? (
               <div className="mt-4 border-t border-base-300 pt-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-60">Services</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-60">
+                  Services
+                </p>
                 <ul className="grid gap-1 sm:grid-cols-2">
                   {servicesByContract.get(c.id)!.map((s) => (
-                    <li key={s.service_name} className="flex items-center gap-2 text-sm">
-                      <span className={`badge badge-xs ${s.is_included ? "badge-success" : "badge-ghost"}`} />
+                    <li key={s.id ?? s.service_name} className="flex items-center gap-2 text-sm">
+                      <span
+                        className={`badge badge-xs ${s.is_included ? "badge-success" : "badge-ghost"}`}
+                      />
                       {s.service_name}
                     </li>
                   ))}

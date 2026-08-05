@@ -1,4 +1,4 @@
-export type UserRole = "manager" | "technician" | "billing" | "customer";
+export type UserRole = "manager" | "technician" | "billing" | "customer" | "hr";
 
 export type Profile = {
   id: string;
@@ -34,6 +34,13 @@ export const DEMO_ACCOUNTS = [
     name: "Jordan Blake",
   },
   {
+    role: "hr" as UserRole,
+    label: "HR",
+    email: "hr@servicesync.demo",
+    password: "1234",
+    name: "Harper Wells",
+  },
+  {
     role: "customer" as UserRole,
     label: "Customer (Apex Legal)",
     email: "customer@apexlegal.demo",
@@ -52,17 +59,22 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   manager: [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/customers", label: "Customers" },
-    { href: "/contracts", label: "Contracts" },
+    { href: "/customer-approvals", label: "Approvals" },
+    { href: "/contracts", label: "Contracts & Agreements" },
+    { href: "/contracts/reports", label: "Contract Reports" },
     { href: "/tickets", label: "Support Tickets" },
     { href: "/projects", label: "Projects" },
     { href: "/time-costs", label: "Time and Costs" },
-    { href: "/customer-approvals", label: "Approvals" },
-    { href: "/billing-collections", label: "Billing" },
-    { href: "/accounts-receivable", label: "Accounts Receivable" },
+    { href: "/operations", label: "Service Operations" },
     { href: "/profitability", label: "Profitability" },
+    { href: "/billing-collections", label: "Billing and Collections" },
+    { href: "/accounts-receivable", label: "Accounts Receivable" },
+    { href: "/hr-analytics", label: "HR Analytics" },
+    { href: "/controls", label: "Controls and Exceptions" },
   ],
   technician: [
     { href: "/dashboard", label: "My Assignments" },
+    { href: "/contracts", label: "Contracts & Agreements" },
     { href: "/tickets", label: "Support Tickets" },
     { href: "/projects", label: "Project Tasks" },
     { href: "/time-costs", label: "Submit Time and Costs" },
@@ -70,21 +82,65 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   ],
   billing: [
     { href: "/dashboard", label: "Billing Dashboard" },
+    { href: "/contracts", label: "Contracts & Agreements" },
+    { href: "/contracts/reports", label: "Contract Reports" },
     { href: "/billing-review", label: "Billing Review" },
     { href: "/invoices", label: "Invoices" },
     { href: "/payments", label: "Payments" },
     { href: "/accounts-receivable", label: "Accounts Receivable" },
     { href: "/accounting", label: "Accounting Review" },
+    { href: "/hr-analytics", label: "HR Cost Analytics" },
+  ],
+  hr: [
+    { href: "/dashboard", label: "HR Home" },
+    { href: "/hr-analytics", label: "HR Analytics" },
+    { href: "/hr-positions", label: "Positions" },
   ],
   customer: [
     { href: "/dashboard", label: "Customer Home" },
     { href: "/pending-approval", label: "Pending Approval" },
-    { href: "/my-contracts", label: "My Contracts" },
+    { href: "/my-contracts", label: "My Contracts & Agreements" },
     { href: "/support-requests", label: "Support Requests" },
     { href: "/service-usage", label: "Service Usage" },
     { href: "/my-projects", label: "Projects" },
     { href: "/my-invoices", label: "Invoices and Payments" },
   ],
+};
+
+/** Role-specific copy for the Contracts & Agreements nav destination. */
+export const CONTRACTS_NAV_COPY: Record<
+  UserRole,
+  { href: string; title: string; description: string }
+> = {
+  manager: {
+    href: "/contracts",
+    title: "Contracts & Agreements",
+    description:
+      "Manage the full agreement lifecycle — draft, approval, active service, holds, renewals, and cancellations.",
+  },
+  technician: {
+    href: "/contracts",
+    title: "Contracts & Agreements",
+    description:
+      "Review active service agreements, included hours, and SLA terms that guide your ticket and project work.",
+  },
+  billing: {
+    href: "/contracts",
+    title: "Contracts & Agreements",
+    description:
+      "Confirm recurring fees, billing frequency, payment terms, and rates before generating invoices.",
+  },
+  hr: {
+    href: "/contracts",
+    title: "Contracts & Agreements",
+    description: "Reference service agreements when reviewing staffing and labor cost needs.",
+  },
+  customer: {
+    href: "/my-contracts",
+    title: "My Contracts & Agreements",
+    description:
+      "View the service agreements for your organization, including fees, included hours, and covered services.",
+  },
 };
 
 export function roleHomePath(_role: UserRole) {
@@ -116,9 +172,11 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/customer-approvals",
       "/operations",
       "/controls",
+      "/hr-analytics",
     ],
     technician: ["/contracts", "/customers"],
-    billing: ["/customers", "/contracts", "/projects", "/tickets"],
+    billing: ["/customers", "/contracts", "/projects", "/tickets", "/ready-to-bill"],
+    hr: ["/contracts"],
     customer: ["/tickets"],
   };
 
