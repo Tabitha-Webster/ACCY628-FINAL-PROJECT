@@ -109,8 +109,8 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/time-costs",
     ],
     technician: ["/contracts", "/customers"],
-    billing: ["/customers", "/contracts", "/projects"],
-    customer: ["/projects"],
+    billing: ["/customers", "/contracts", "/projects", "/tickets"],
+    customer: ["/projects", "/tickets"],
   };
 
   return (shared[role] ?? []).some(
