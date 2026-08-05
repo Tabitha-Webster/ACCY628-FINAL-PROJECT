@@ -281,6 +281,15 @@ export type SupportTicket = {
   reopened_at: string | null;
   reopened_by: string | null;
   reopen_reason: string | null;
+  summary_generated_at: string | null;
+  summary_generated_by: string | null;
+  summary_source: "ai" | "fallback" | "manual" | string | null;
+  summary_model: string | null;
+  scheduled_start_at: string | null;
+  scheduled_end_at: string | null;
+  service_mode: "remote" | "onsite" | string | null;
+  service_location: string | null;
+  schedule_notes: string | null;
   created_at: string;
   updated_at: string | null;
   created_by: string | null;

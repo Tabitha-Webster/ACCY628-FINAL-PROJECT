@@ -50,6 +50,9 @@ export function statusLabel(status: string) {
   if (status === "not_defined") return "SLA Not Defined";
   if (status === "missed") return "Missed";
   if (status === "met") return "Met";
+  if (status === "not_submitted") return "Not Submitted";
+  if (status === "more_information_required") return "More Information Required";
+  if (status === "pending") return "Pending Approval";
   return status
     .split("_")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
@@ -59,13 +62,13 @@ export function statusLabel(status: string) {
 export function statusBadgeClass(status: string) {
   const s = status.toLowerCase();
   if (
-    ["active", "paid", "approved", "resolved", "closed", "met", "normal", "filled", "renewed", "sent"].includes(
+    ["active", "paid", "approved", "resolved", "closed", "met", "normal", "filled", "renewed", "sent", "loyal"].includes(
       s
     )
   )
     return "badge-success";
-  if (["disputed", "overdue", "issued"].includes(s)) return "badge-ghost";
-  if (s === "current") return "badge-info";
+  if (["disputed", "overdue", "issued", "steady"].includes(s)) return "badge-ghost";
+  if (s === "current" || s === "new") return "badge-info";
   if (
     [
       "pending",

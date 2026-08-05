@@ -206,11 +206,11 @@ export default async function ContractDetailPage({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
         <Link href="/contracts/reports" className="btn btn-ghost btn-sm">
-          ← Back to reports
+          ← Back to dashboard
         </Link>
         {permissions.report ? (
           <Link href="/contracts/reports" className="btn btn-ghost btn-sm">
-            Reports
+            Dashboard
           </Link>
         ) : null}
         <Link href="/contracts/renewals" className="btn btn-outline btn-sm">

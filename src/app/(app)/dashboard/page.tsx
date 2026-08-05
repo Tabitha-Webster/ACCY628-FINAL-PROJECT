@@ -23,7 +23,11 @@ import {
   type ContractHourWarning,
 } from "@/components/TechnicianWorkspaceClient";
 import { AR_AGING_BUCKETS, arAgingBucket, usagePercentage, usageStatus, hoursRemaining } from "@/lib/calculations";
-import { evaluateTicketSla } from "@/lib/sla";
+import {
+  evaluateTicketSla,
+  localDateKey,
+  localDateKeyFromIso,
+} from "@/lib/sla";
 import { formatCurrency } from "@/lib/format";
 import { fetchContractReportMetrics } from "@/lib/contracts";
 import { round2, withDerivedInvoiceStatus } from "@/lib/billing";
@@ -764,39 +768,72 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
   const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
   const recentCompletedSince = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [openTicketsRes, recentCompletedRes, timeEntriesRes, additionalWorkRes] = await Promise.all([
-    supabase
-      .from("support_tickets")
-      .select(
-        "id, ticket_number, title, customer_id, contract_id, priority, status, submitted_at, target_response_at, target_resolution_at, actual_response_at, completed_at, technician_notes, customer_resolution_summary, classification"
-      )
-      .eq("assigned_technician_id", profile.id)
-      .in("status", OPEN_TICKET_STATUSES)
-      .order("target_response_at", { ascending: true, nullsFirst: false }),
-    supabase
-      .from("support_tickets")
-      .select(
-        "id, ticket_number, title, customer_id, contract_id, priority, status, submitted_at, target_response_at, target_resolution_at, actual_response_at, completed_at, technician_notes, customer_resolution_summary, classification"
-      )
-      .eq("assigned_technician_id", profile.id)
-      .in("status", ["resolved", "closed"])
-      .gte("completed_at", recentCompletedSince)
-      .order("completed_at", { ascending: false })
-      .limit(12),
-    supabase
-      .from("time_entries")
-      .select("id, work_date, hours_worked, description, approval_status, submitted_at, support_ticket_id, contract_id, classification")
-      .eq("technician_id", profile.id)
-      .or("submitted_at.is.null,approval_status.eq.pending")
-      .order("work_date", { ascending: false })
-      .limit(25),
-    supabase
-      .from("additional_work_requests")
-      .select("id, title, customer_id, approval_status, created_at, estimated_hours, support_ticket_id")
-      .eq("requested_by", profile.id)
-      .eq("approval_status", "pending")
-      .order("created_at", { ascending: false }),
-  ]);
+  const ticketSelectBasic =
+    "id, ticket_number, title, customer_id, contract_id, priority, status, submitted_at, target_response_at, target_resolution_at, actual_response_at, completed_at, technician_notes, customer_resolution_summary, classification, billable_approval_status";
+  const ticketSelectWithSchedule = `${ticketSelectBasic}, scheduled_start_at, scheduled_end_at, service_mode, service_location, schedule_notes`;
+
+  const [openAttempt, recentAttempt, timeEntriesRes, additionalWorkRes, hoursTodayRes] =
+    await Promise.all([
+      supabase
+        .from("support_tickets")
+        .select(ticketSelectWithSchedule)
+        .eq("assigned_technician_id", profile.id)
+        .in("status", OPEN_TICKET_STATUSES)
+        .order("target_response_at", { ascending: true, nullsFirst: false }),
+      supabase
+        .from("support_tickets")
+        .select(ticketSelectWithSchedule)
+        .eq("assigned_technician_id", profile.id)
+        .in("status", ["resolved", "closed"])
+        .gte("completed_at", recentCompletedSince)
+        .order("completed_at", { ascending: false })
+        .limit(12),
+      supabase
+        .from("time_entries")
+        .select(
+          "id, work_date, hours_worked, description, approval_status, submitted_at, support_ticket_id, contract_id, classification"
+        )
+        .eq("technician_id", profile.id)
+        .or("submitted_at.is.null,approval_status.eq.pending")
+        .order("work_date", { ascending: false })
+        .limit(25),
+      supabase
+        .from("additional_work_requests")
+        .select(
+          "id, title, customer_id, approval_status, created_at, estimated_hours, support_ticket_id, review_notes"
+        )
+        .eq("requested_by", profile.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("time_entries")
+        .select("hours_worked, work_date")
+        .eq("technician_id", profile.id)
+        .eq("work_date", localDateKey(now)),
+    ]);
+
+  const scheduleColumnsMissing =
+    openAttempt.error?.message?.includes("scheduled_start_at") ||
+    recentAttempt.error?.message?.includes("scheduled_start_at");
+
+  const openTicketsRes = scheduleColumnsMissing
+    ? await supabase
+        .from("support_tickets")
+        .select(ticketSelectBasic)
+        .eq("assigned_technician_id", profile.id)
+        .in("status", OPEN_TICKET_STATUSES)
+        .order("target_response_at", { ascending: true, nullsFirst: false })
+    : openAttempt;
+
+  const recentCompletedRes = scheduleColumnsMissing
+    ? await supabase
+        .from("support_tickets")
+        .select(ticketSelectBasic)
+        .eq("assigned_technician_id", profile.id)
+        .in("status", ["resolved", "closed"])
+        .gte("completed_at", recentCompletedSince)
+        .order("completed_at", { ascending: false })
+        .limit(12)
+    : recentAttempt;
 
   if (openTicketsRes.error || recentCompletedRes.error) {
     return (
@@ -826,8 +863,8 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
 
   const [customersRes, contractsRes, ticketLabelsRes, monthHoursRes] = await Promise.all([
     customerIds.length
-      ? supabase.from("customers").select("id, name").in("id", customerIds)
-      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      ? supabase.from("customers").select("id, name, service_address").in("id", customerIds)
+      : Promise.resolve({ data: [] as { id: string; name: string; service_address: string | null }[] }),
     contractIds.length
       ? supabase
           .from("contracts")
@@ -857,6 +894,9 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
   ]);
 
   const customerName = new Map((customersRes.data ?? []).map((c) => [c.id, c.name]));
+  const customerAddress = new Map(
+    (customersRes.data ?? []).map((c) => [c.id, c.service_address ?? null])
+  );
   const contractById = new Map((contractsRes.data ?? []).map((c) => [c.id, c]));
   const ticketLabelById = new Map(
     (ticketLabelsRes.data ?? []).map((t) => [t.id, `${t.ticket_number} ┬╖ ${t.title}`])
@@ -899,6 +939,16 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
       technician_notes: t.technician_notes,
       customer_resolution_summary: t.customer_resolution_summary,
       classification: t.classification,
+      billable_approval_status: t.billable_approval_status ?? null,
+      scheduled_start_at: "scheduled_start_at" in t ? (t.scheduled_start_at as string | null) ?? null : null,
+      scheduled_end_at: "scheduled_end_at" in t ? (t.scheduled_end_at as string | null) ?? null : null,
+      service_mode: "service_mode" in t ? (t.service_mode as string | null) ?? null : null,
+      service_location:
+        ("service_location" in t ? (t.service_location as string | null) : null) ??
+        (("service_mode" in t ? t.service_mode : null) === "onsite"
+          ? customerAddress.get(t.customer_id) ?? null
+          : null),
+      schedule_notes: "schedule_notes" in t ? (t.schedule_notes as string | null) ?? null : null,
       hours_warning: warning,
       hours_used: used,
       hours_included: included,
@@ -933,7 +983,7 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
     : { data: [] as { id: string; name: string }[] };
   const addlCustomerName = new Map((addlCustomersRes.data ?? []).map((c) => [c.id, c.name]));
 
-  const pendingAdditionalWork: WorkspaceAdditionalWork[] = (additionalWorkRes.data ?? []).map((w) => ({
+  const allAdditionalWork: WorkspaceAdditionalWork[] = (additionalWorkRes.data ?? []).map((w) => ({
     id: w.id,
     title: w.title,
     customer_name: addlCustomerName.get(w.customer_id) ?? "ΓÇö",
@@ -941,7 +991,10 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
     created_at: w.created_at,
     estimated_hours: w.estimated_hours != null ? Number(w.estimated_hours) : null,
     support_ticket_id: w.support_ticket_id,
+    review_notes: w.review_notes ?? null,
   }));
+
+  const pendingAdditionalWork = allAdditionalWork.filter((w) => w.approval_status === "pending");
 
   const contractWarnings: ContractHourWarning[] = Array.from(hoursByContract.entries())
     .map(([contractId, used]) => {
@@ -960,6 +1013,42 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
     })
     .filter((v): v is ContractHourWarning => v !== null);
 
+  const today = localDateKey(now);
+  const openAssigned = workspaceTickets.filter((t) => OPEN_TICKET_STATUSES.includes(t.status));
+  const dueTodayCount = openAssigned.filter((t) => {
+    const responseDue =
+      localDateKeyFromIso(t.target_response_at) === today && !t.actual_response_at;
+    const resolutionDue =
+      localDateKeyFromIso(t.target_resolution_at) === today &&
+      !t.completed_at &&
+      t.status !== "resolved" &&
+      t.status !== "closed";
+    return responseDue || resolutionDue;
+  }).length;
+  const criticalHighCount = openAssigned.filter(
+    (t) => t.priority === "critical" || t.priority === "high"
+  ).length;
+  const overdueCount = openAssigned.filter((t) => t.overdue).length;
+  const completedTodayTickets = workspaceTickets.filter(
+    (t) =>
+      (t.status === "resolved" || t.status === "closed") &&
+      localDateKeyFromIso(t.completed_at) === today
+  );
+  const hoursToday = (hoursTodayRes.data ?? []).reduce(
+    (sum, row) => sum + Number(row.hours_worked ?? 0),
+    0
+  );
+
+  const summary = {
+    openAssigned: openAssigned.length,
+    dueToday: dueTodayCount,
+    criticalHigh: criticalHighCount,
+    overdue: overdueCount,
+    completedToday: completedTodayTickets.length,
+    hoursToday,
+    awaitingApproval: pendingAdditionalWork.length,
+  };
+
   return (
     <div>
       <PageHeader
@@ -973,7 +1062,11 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
         tickets={workspaceTickets}
         pendingTimeEntries={pendingTimeEntries}
         pendingAdditionalWork={pendingAdditionalWork}
+        allAdditionalWork={allAdditionalWork}
         contractWarnings={contractWarnings}
+        summary={summary}
+        completedTodayIds={completedTodayTickets.map((t) => t.id)}
+        timezoneLabel={Intl.DateTimeFormat().resolvedOptions().timeZone || "local time"}
       />
     </div>
   );

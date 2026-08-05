@@ -41,6 +41,8 @@ export * from "./renewals";
 export * from "./billing";
 export * from "./reporting";
 export * from "./reportQueries";
+export * from "./customerMetrics";
+
 
 
 

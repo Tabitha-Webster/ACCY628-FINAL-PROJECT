@@ -8,10 +8,17 @@ import { LARGE_COST_THRESHOLD } from "@/lib/time-cost-config";
 import { formatCurrency } from "@/lib/format";
 import Link from "next/link";
 
-export default async function TimeCostsPage() {
+export default async function TimeCostsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ ticket?: string }>;
+}) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
   if (profile.role !== "technician" && !isManagerRole(profile.role)) redirect("/dashboard");
+
+  const params = searchParams ? await searchParams : {};
+  const initialTicketId = params.ticket?.trim() || null;
 
   const supabase = await createClient();
   const isManager = profile.role === "manager";
@@ -71,6 +78,17 @@ export default async function TimeCostsPage() {
     customerId: t.customer_id,
     label: `${t.ticket_number} · ${t.title}`,
   }));
+  const preselectTicket = initialTicketId ? tickets.find((t) => t.id === initialTicketId) : null;
+  const preselectContractId = preselectTicket
+    ? contracts.find((c) => c.customerId === preselectTicket.customerId)?.id
+    : undefined;
+  const formDefaults = initialTicketId
+    ? {
+        ticketId: initialTicketId,
+        customerId: preselectTicket?.customerId,
+        contractId: preselectContractId,
+      }
+    : undefined;
   const projects = (projectsRes.data ?? []).map((p) => ({
     id: p.id,
     customerId: p.customer_id,
@@ -93,6 +111,7 @@ export default async function TimeCostsPage() {
         contracts={contracts}
         tickets={tickets}
         projects={projects}
+        defaults={formDefaults}
       />
 
       {isManager ? (

@@ -10,6 +10,8 @@ export function StatCard({
   tone = "default",
   className = "",
   explanation,
+  href,
+  onClick,
 }: {
   label: string;
   value: string;
@@ -17,6 +19,8 @@ export function StatCard({
   tone?: "default" | "success" | "warning" | "error" | "info";
   className?: string;
   explanation?: MetricExplanation;
+  href?: string;
+  onClick?: () => void;
 }) {
   const border =
     tone === "success"
@@ -29,14 +33,36 @@ export function StatCard({
             ? "border-info/40"
             : "border-base-300";
 
-  return (
-    <div className={`rounded-box border ${border} bg-base-100 p-4 shadow-sm ${className}`.trim()}>
+  const interactive = Boolean(href || onClick);
+  const body = (
+    <>
       <p className="text-xs font-medium uppercase tracking-wide opacity-60">{label}</p>
       <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
       {hint ? <p className="mt-1 text-xs opacity-60">{hint}</p> : null}
       {explanation ? <ExplainNumber explanation={explanation} /> : null}
-    </div>
+    </>
   );
+
+  const classes = `rounded-box border ${border} bg-base-100 p-4 shadow-sm text-left ${
+    interactive ? "transition hover:border-primary/40 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" : ""
+  } ${className}`.trim();
+
+  if (href) {
+    return (
+      <a href={href} className={`block ${classes}`}>
+        {body}
+      </a>
+    );
+  }
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={`w-full ${classes}`}>
+        {body}
+      </button>
+    );
+  }
+
+  return <div className={classes}>{body}</div>;
 }
 
 export function EmptyState({ title, description }: { title: string; description?: string }) {

@@ -23,34 +23,25 @@ export function ContractMetricsWidgets({
           <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">{title}</h2>
           {linkToFullReport ? (
             <Link href="/contracts/reports" className="link link-hover text-sm">
-              Open full report →
+              Open Contracts Dashboard →
             </Link>
           ) : null}
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        <StatCard label="Active contracts" value={String(metrics.activeContracts)} />
-        <StatCard
-          label="Expiring contracts"
-          value={String(metrics.expiringContracts)}
-          tone={metrics.expiringContracts > 0 ? "warning" : "default"}
-          hint="Within 90 days"
-        />
-        <StatCard
-          label="Renewals due"
-          value={String(metrics.renewalsDue)}
-          tone={metrics.renewalsDue > 0 ? "warning" : "default"}
-          hint="Within 90 days"
-        />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           label="Monthly recurring revenue"
           value={formatCurrency(metrics.monthlyRecurringRevenue)}
+          hint={`≈ ${formatCurrency(metrics.annualContractValue)} ACV`}
         />
         <StatCard
-          label="Annual contract value"
-          value={formatCurrency(metrics.annualContractValue)}
-          hint="MRR × 12"
+          label="At risk this quarter"
+          value={String(metrics.expiringContracts + metrics.renewalsDue)}
+          tone={
+            metrics.expiringContracts > 0 || metrics.renewalsDue > 0 ? "warning" : "default"
+          }
+          hint={`${metrics.expiringContracts} expiring · ${metrics.renewalsDue} renewals (90 days)`}
         />
         <StatCard
           label="SLA compliance"
@@ -69,27 +60,22 @@ export function ContractMetricsWidgets({
           hint={`${metrics.slaMet} met · ${metrics.slaMissed} missed · ${metrics.slaAtRisk} at risk`}
         />
         <StatCard
-          label="Support hours utilization"
-          value={
-            metrics.supportHoursUtilizationPct == null
-              ? "—"
-              : `${metrics.supportHoursUtilizationPct.toFixed(0)}%`
-          }
+          label="Hours pressure"
+          value={String(metrics.contractsOverHours)}
           tone={
             metrics.contractsOverHours > 0
-              ? "warning"
-              : metrics.supportHoursUtilizationPct != null &&
-                  metrics.supportHoursUtilizationPct >= 80
+              ? "error"
+              : metrics.contractsNearHours > 0 ||
+                  (metrics.supportHoursUtilizationPct != null &&
+                    metrics.supportHoursUtilizationPct >= 80)
                 ? "warning"
-                : "default"
+                : "success"
           }
-          hint={`${metrics.totalUsedHours.toFixed(1)} / ${metrics.totalIncludedHours.toFixed(1)} hrs`}
-        />
-        <StatCard
-          label="Over hours"
-          value={String(metrics.contractsOverHours)}
-          tone={metrics.contractsOverHours > 0 ? "error" : "success"}
-          hint={`${metrics.contractsNearHours} near limit`}
+          hint={
+            metrics.supportHoursUtilizationPct == null
+              ? `${metrics.contractsNearHours} near limit`
+              : `${metrics.supportHoursUtilizationPct.toFixed(0)}% utilized · ${metrics.contractsNearHours} near limit`
+          }
         />
       </div>
 
