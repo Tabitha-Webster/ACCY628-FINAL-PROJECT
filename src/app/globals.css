@@ -106,6 +106,12 @@ body {
   color: var(--color-base-content);
 }
 
+/* Same brand mark as login; lightened so it reads on the dark sidebar */
+.app-sidebar .sidebar-brand-logo {
+  filter: brightness(0) invert(1);
+  opacity: 0.96;
+}
+
 /* Application layout tokens — reuse across authenticated pages */
 :root {
   --app-space-1: 0.5rem;
@@ -145,6 +151,20 @@ body {
   }
 }
 
+/* Login brand — vector mark + CSS wordmark stay sharp on retina */
+.login-page-bg .login-brand-logo {
+  image-rendering: auto;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.login-page-bg .login-brand-wordmark {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 /* Login page — light geometric SaaS background (scoped) */
 .login-page-geo {
   background-color: transparent;
@@ -177,6 +197,48 @@ body {
   border-color: #0a2655;
   color: #ffffff;
   opacity: 0.7;
+}
+
+/* Demo role + create-account accents — powder blue (login only) */
+.login-page-bg .login-demo-role-btn,
+.login-page-bg .login-create-account-btn {
+  --btn-color: #ffffff;
+  --btn-fg: #123b5d;
+  background-color: #ffffff;
+  border-color: #cbd5e1;
+  color: #123b5d;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    --btn-color 180ms ease;
+}
+
+.login-page-bg .login-demo-role-btn:hover,
+.login-page-bg .login-create-account-btn:hover {
+  --btn-color: #b7ddf2;
+  --btn-fg: #123b5d;
+  background-color: #b7ddf2;
+  border-color: #8fc5e3;
+  color: #123b5d;
+}
+
+.login-page-bg .login-demo-role-btn.login-demo-role-btn-selected,
+.login-page-bg .login-demo-role-btn[aria-pressed="true"] {
+  --btn-color: #9fd0eb;
+  --btn-fg: #123b5d;
+  background-color: #9fd0eb;
+  border-color: #6fb4d9;
+  color: #123b5d;
+}
+
+.login-page-bg .login-demo-role-btn.login-demo-role-btn-selected:hover,
+.login-page-bg .login-demo-role-btn[aria-pressed="true"]:hover {
+  --btn-color: #92c9e8;
+  --btn-fg: #123b5d;
+  background-color: #92c9e8;
+  border-color: #6fb4d9;
+  color: #123b5d;
 }
 
 .tabular-nums {
