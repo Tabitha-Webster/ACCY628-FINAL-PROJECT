@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { PageHeader, DataTable, EmptyState, StatusBadge, Money, Hours, DateText, ErrorState } from "@/components/ui";
 import { grossMarginPct, marginBand } from "@/lib/calculations";
+import { ProjectActions, ProjectChangeRequestPanel } from "@/components/ProjectActions";
+import { ProjectProgressCard } from "@/components/ProjectProgressCard";
 import type { Project, ProjectMilestone } from "@/lib/types";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -32,20 +34,75 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   }
   const p = project as Project;
 
-  const [customerRes, contractRes, milestonesRes, timeRes, costsRes] = await Promise.all([
+  if (profile.role === "customer" && profile.customer_id && p.customer_id !== profile.customer_id) {
+    return (
+      <div>
+        <PageHeader title="Project" />
+        <EmptyState title="Project not found" description="You may not have access to this project." />
+      </div>
+    );
+  }
+
+  const [customerRes, contractRes, milestonesRes, timeRes, costsRes, changeRes, assignmentsRes, customerContractsRes] =
+    await Promise.all([
     supabase.from("customers").select("id, name").eq("id", p.customer_id).maybeSingle(),
-    p.contract_id ? supabase.from("contracts").select("id, name, contract_number").eq("id", p.contract_id).maybeSingle() : Promise.resolve({ data: null }),
+    p.contract_id
+      ? supabase
+          .from("contracts")
+          .select(
+            "id, name, contract_number, contract_type, included_hours_per_month, additional_hourly_rate, change_request_procedure"
+          )
+          .eq("id", p.contract_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
     supabase.from("project_milestones").select("*").eq("project_id", p.id).order("due_date", { ascending: true }),
     supabase.from("time_entries").select("hours_worked, labor_cost").eq("project_id", p.id),
     supabase.from("direct_costs").select("cost_category, internal_cost, billable_amount").eq("project_id", p.id),
+    supabase
+      .from("additional_work_requests")
+      .select(
+        "id, title, description, estimated_hours, estimated_amount, approval_status, created_at, requested_by, project_id, contract_id"
+      )
+      .eq("project_id", p.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("technician_assignments")
+      .select("id, technician_id, assigned_at, due_at, notes")
+      .eq("project_id", p.id)
+      .order("assigned_at", { ascending: false }),
+    supabase
+      .from("contracts")
+      .select("id, name, contract_number")
+      .eq("customer_id", p.customer_id)
+      .order("created_at", { ascending: false }),
   ]);
 
   const milestones = (milestonesRes.data ?? []) as ProjectMilestone[];
   const timeEntries = timeRes.data ?? [];
   const directCosts = costsRes.data ?? [];
+  const changeRequests = changeRes.data ?? [];
+  const assignments = assignmentsRes.data ?? [];
+  const customerContracts = (customerContractsRes.data ?? []).map((c) => ({
+    id: c.id,
+    label: `${c.contract_number} · ${c.name}`,
+  }));
+  const contractLabels = Object.fromEntries(customerContracts.map((c) => [c.id, c.label]));
+  if (contractRes.data) {
+    contractLabels[contractRes.data.id] = `${contractRes.data.contract_number} · ${contractRes.data.name}`;
+  }
+
+  const requesterIds = Array.from(new Set(changeRequests.map((r) => r.requested_by)));
+  const technicianIds = Array.from(new Set(assignments.map((a) => a.technician_id)));
+  const profileIds = Array.from(new Set([...requesterIds, ...technicianIds, p.project_manager_id].filter(Boolean))) as string[];
+  const profilesRes = profileIds.length
+    ? await supabase.from("profiles").select("id, full_name").in("id", profileIds)
+    : { data: [] as { id: string; full_name: string }[] };
+  const profileName = new Map((profilesRes.data ?? []).map((u) => [u.id, u.full_name]));
+  const requesterNames = Object.fromEntries(requesterIds.map((id) => [id, profileName.get(id) ?? "—"]));
 
   const laborActual = timeEntries.reduce((sum, t) => sum + Number(t.labor_cost ?? 0), 0);
   const laborHours = timeEntries.reduce((sum, t) => sum + Number(t.hours_worked), 0);
+  const materialsCost = directCosts.reduce((sum, c) => sum + Number(c.internal_cost), 0);
   const costsByCategory = (category: string) =>
     directCosts.filter((c) => c.cost_category === category).reduce((sum, c) => sum + Number(c.internal_cost), 0);
   const equipmentActual = costsByCategory("equipment");
@@ -68,6 +125,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   const completedMilestoneAmount = milestones.filter((m) => m.completed).reduce((sum, m) => sum + Number(m.amount), 0);
   const totalMilestoneAmount = milestones.reduce((sum, m) => sum + Number(m.amount), 0);
+  const pendingChangeCount = changeRequests.filter((r) => r.approval_status === "pending").length;
+
+  const backHref = profile.role === "customer" ? "/my-projects" : "/projects";
 
   return (
     <div>
@@ -75,107 +135,213 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         title={p.name}
         description={customerRes.data?.name ?? undefined}
         actions={
-          <Link href={profile.role === "customer" ? "/my-projects" : "/projects"} className="btn btn-sm btn-outline">
-            Back to Projects
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={profile.role === "customer" ? backHref : `${backHref}?selected=${p.id}`}
+              className="btn btn-sm btn-outline"
+            >
+              Back to Projects
+            </Link>
+          </div>
         }
       />
 
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <StatusBadge status={p.status} />
-        {p.customer_approval_status ? <StatusBadge status={p.customer_approval_status} /> : null}
-        {contractRes.data ? <span className="badge badge-ghost">{contractRes.data.contract_number}</span> : null}
-      </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
+          <div className="rounded-box border border-base-300 bg-base-100 p-4">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <StatusBadge status={p.status} />
+              {p.customer_approval_status ? <StatusBadge status={p.customer_approval_status} /> : null}
+              {contractRes.data ? (
+                <Link href={`/contracts/${contractRes.data.id}`} className="badge badge-ghost">
+                  {contractRes.data.contract_number}
+                </Link>
+              ) : null}
+              {pendingChangeCount > 0 ? (
+                <span className="badge badge-warning">{pendingChangeCount} out-of-scope / CR pending</span>
+              ) : null}
+            </div>
+            {p.description ? <p className="text-sm leading-relaxed opacity-80">{p.description}</p> : <p className="text-sm opacity-60">No description provided.</p>}
+          </div>
 
-      {p.description ? <p className="mb-6 max-w-3xl text-sm leading-relaxed opacity-80">{p.description}</p> : null}
+          <ProjectProgressCard
+            status={p.status}
+            startDate={p.start_date}
+            targetCompletionDate={p.target_completion_date}
+            projectManagerName={p.project_manager_id ? profileName.get(p.project_manager_id) ?? null : null}
+            milestones={milestones.map((m) => ({
+              id: m.id,
+              name: m.name,
+              completed: m.completed,
+              approval_status: m.approval_status,
+              due_date: m.due_date,
+            }))}
+            contract={contractRes.data}
+            laborHours={laborHours}
+            materialsCost={materialsCost}
+            pendingChangeRequests={pendingChangeCount}
+            pendingRequestedHours={changeRequests
+              .filter((r) => r.approval_status === "pending")
+              .reduce((sum, r) => sum + Number(r.estimated_hours ?? 0), 0)}
+            pendingRequestedPrice={changeRequests
+              .filter((r) => r.approval_status === "pending")
+              .reduce((sum, r) => sum + Number(r.estimated_amount ?? 0), 0)}
+            showMilestoneList={false}
+          />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-box border border-base-300 bg-base-100 p-4">
-          <p className="text-xs uppercase tracking-wide opacity-60">Fixed Fee / Est. Billing</p>
-          <p className="mt-1 text-xl font-semibold">
-            <Money value={revenue} />
-          </p>
-        </div>
-        <div className="rounded-box border border-base-300 bg-base-100 p-4">
-          <p className="text-xs uppercase tracking-wide opacity-60">Amount Billed</p>
-          <p className="mt-1 text-xl font-semibold">
-            <Money value={Number(p.amount_billed ?? 0)} />
-          </p>
-        </div>
-        <div className="rounded-box border border-base-300 bg-base-100 p-4">
-          <p className="text-xs uppercase tracking-wide opacity-60">Amount Collected</p>
-          <p className="mt-1 text-xl font-semibold">
-            <Money value={Number(p.amount_collected ?? 0)} />
-          </p>
-        </div>
-        <div className="rounded-box border border-base-300 bg-base-100 p-4">
-          <p className="text-xs uppercase tracking-wide opacity-60">Hours Logged</p>
-          <p className="mt-1 text-xl font-semibold">
-            <Hours value={laborHours} />
-          </p>
-        </div>
-      </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="rounded-box border border-base-300 bg-base-100 p-4">
+              <p className="text-xs uppercase tracking-wide opacity-60">Fixed Fee / Est. Billing</p>
+              <p className="mt-1 text-xl font-semibold">
+                <Money value={revenue} />
+              </p>
+            </div>
+            <div className="rounded-box border border-base-300 bg-base-100 p-4">
+              <p className="text-xs uppercase tracking-wide opacity-60">Amount Billed</p>
+              <p className="mt-1 text-xl font-semibold">
+                <Money value={Number(p.amount_billed ?? 0)} />
+              </p>
+            </div>
+            <div className="rounded-box border border-base-300 bg-base-100 p-4">
+              <p className="text-xs uppercase tracking-wide opacity-60">Amount Collected</p>
+              <p className="mt-1 text-xl font-semibold">
+                <Money value={Number(p.amount_collected ?? 0)} />
+              </p>
+            </div>
+            <div className="rounded-box border border-base-300 bg-base-100 p-4">
+              <p className="text-xs uppercase tracking-wide opacity-60">Hours Logged</p>
+              <p className="mt-1 text-xl font-semibold">
+                <Hours value={laborHours} />
+              </p>
+            </div>
+            <div className="rounded-box border border-base-300 bg-base-100 p-4">
+              <p className="text-xs uppercase tracking-wide opacity-60">Materials / Direct Costs</p>
+              <p className="mt-1 text-xl font-semibold">
+                <Money value={materialsCost} />
+              </p>
+            </div>
+          </div>
 
-      {isInternal ? (
-        <div className="mt-6">
-          <h2 className="mb-2 text-sm font-semibold">Budget vs. Actual</h2>
-          <DataTable headers={["Category", "Budget", "Actual", "Variance"]}>
-            {budgetRows.map((row) => (
-              <tr key={row.label}>
-                <td>{row.label}</td>
-                <td>
-                  <Money value={row.budget} />
-                </td>
-                <td>
-                  <Money value={row.actual} />
-                </td>
-                <td className={row.budget - row.actual < 0 ? "text-error" : "text-success"}>
-                  <Money value={row.budget - row.actual} />
-                </td>
-              </tr>
-            ))}
-            <tr className="font-semibold">
-              <td>Total</td>
-              <td>
-                <Money value={totalBudget} />
-              </td>
-              <td>
-                <Money value={totalActual} />
-              </td>
-              <td className={totalBudget - totalActual < 0 ? "text-error" : "text-success"}>
-                <Money value={totalBudget - totalActual} />
-              </td>
-            </tr>
-          </DataTable>
-          <p className="mt-2 text-xs opacity-60">
-            Gross margin: <StatusBadge status={marginBand(grossMarginPct(revenue, totalActual))} /> ({grossMarginPct(revenue, totalActual).toFixed(1)}%)
-          </p>
-        </div>
-      ) : null}
+          {isInternal ? (
+            <div>
+              <h2 className="mb-2 text-sm font-semibold">Budget vs. Actual</h2>
+              <DataTable headers={["Category", "Budget", "Actual", "Variance"]}>
+                {budgetRows.map((row) => (
+                  <tr key={row.label}>
+                    <td>{row.label}</td>
+                    <td>
+                      <Money value={row.budget} />
+                    </td>
+                    <td>
+                      <Money value={row.actual} />
+                    </td>
+                    <td className={row.budget - row.actual < 0 ? "text-error" : "text-success"}>
+                      <Money value={row.budget - row.actual} />
+                    </td>
+                  </tr>
+                ))}
+                <tr className="font-semibold">
+                  <td>Total</td>
+                  <td>
+                    <Money value={totalBudget} />
+                  </td>
+                  <td>
+                    <Money value={totalActual} />
+                  </td>
+                  <td className={totalBudget - totalActual < 0 ? "text-error" : "text-success"}>
+                    <Money value={totalBudget - totalActual} />
+                  </td>
+                </tr>
+              </DataTable>
+              <p className="mt-2 text-xs opacity-60">
+                Gross margin: <StatusBadge status={marginBand(grossMarginPct(revenue, totalActual))} /> (
+                {grossMarginPct(revenue, totalActual).toFixed(1)}%)
+              </p>
+            </div>
+          ) : null}
 
-      <div className="mt-6">
-        <h2 className="mb-2 text-sm font-semibold">
-          Milestones {totalMilestoneAmount > 0 ? <span className="opacity-60">({<Money value={completedMilestoneAmount} />} of {<Money value={totalMilestoneAmount} />} billed)</span> : null}
-        </h2>
-        {milestones.length === 0 ? (
-          <EmptyState title="No milestones defined" description="This project bills as a whole rather than by milestone." />
-        ) : (
-          <DataTable headers={["Milestone", "Amount", "Due", "Status", "Billing"]}>
-            {milestones.map((m) => (
-              <tr key={m.id}>
-                <td>{m.name}</td>
-                <td>
-                  <Money value={Number(m.amount)} />
-                </td>
-                <td>{m.due_date ? <DateText value={m.due_date} /> : "—"}</td>
-                <td>
-                  <StatusBadge status={m.completed ? "completed" : "in_progress"} />
-                </td>
-                <td>{m.billing_status ? <StatusBadge status={m.billing_status} /> : "—"}</td>
-              </tr>
-            ))}
-          </DataTable>
-        )}
+          <div>
+            <h2 className="mb-2 text-sm font-semibold">
+              Milestones{" "}
+              {totalMilestoneAmount > 0 ? (
+                <span className="opacity-60">
+                  (
+                  <Money value={completedMilestoneAmount} /> of <Money value={totalMilestoneAmount} /> billed)
+                </span>
+              ) : null}
+            </h2>
+            {milestones.length === 0 ? (
+              <EmptyState title="No milestones defined" description="This project bills as a whole rather than by milestone." />
+            ) : (
+              <DataTable headers={["Milestone", "Amount", "Due", "Status", "Approval", "Billing"]}>
+                {milestones.map((m) => (
+                  <tr key={m.id}>
+                    <td>{m.name}</td>
+                    <td>
+                      <Money value={Number(m.amount)} />
+                    </td>
+                    <td>{m.due_date ? <DateText value={m.due_date} /> : "—"}</td>
+                    <td>
+                      <StatusBadge status={m.completed ? "completed" : "in_progress"} />
+                    </td>
+                    <td>{m.approval_status ? <StatusBadge status={m.approval_status} /> : "—"}</td>
+                    <td>{m.billing_status ? <StatusBadge status={m.billing_status} /> : "—"}</td>
+                  </tr>
+                ))}
+              </DataTable>
+            )}
+          </div>
+
+          <div>
+            <h2 className="mb-2 text-sm font-semibold">Out of Scope & Change Requests</h2>
+            <ProjectChangeRequestPanel
+              requests={changeRequests}
+              requesterNames={requesterNames}
+              projectNames={{ [p.id]: p.name }}
+              contractLabels={contractLabels}
+              role={profile.role}
+              currentUserId={profile.id}
+            />
+          </div>
+
+          {assignments.length > 0 ? (
+            <div>
+              <h2 className="mb-2 text-sm font-semibold">Technician Assignments</h2>
+              <DataTable headers={["Technician", "Assigned", "Due", "Notes"]}>
+                {assignments.map((a) => (
+                  <tr key={a.id}>
+                    <td>{profileName.get(a.technician_id) ?? "—"}</td>
+                    <td>
+                      <DateText value={a.assigned_at} />
+                    </td>
+                    <td>{a.due_at ? <DateText value={a.due_at} /> : "—"}</td>
+                    <td className="max-w-xs truncate">{a.notes ?? "—"}</td>
+                  </tr>
+                ))}
+              </DataTable>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="space-y-4">
+          <ProjectActions
+            projectId={p.id}
+            projectName={p.name}
+            customerId={p.customer_id}
+            contractId={p.contract_id}
+            contractOptions={customerContracts}
+            status={p.status}
+            customerApprovalStatus={p.customer_approval_status}
+            currentUserId={profile.id}
+            role={profile.role}
+            milestones={milestones.map((m) => ({
+              id: m.id,
+              name: m.name,
+              completed: m.completed,
+              approval_status: m.approval_status,
+            }))}
+          />
+        </div>
       </div>
     </div>
   );

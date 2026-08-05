@@ -65,7 +65,7 @@ export default async function ContractDetailPage({
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
 
-  const [{ data: monthEntries }, { data: tickets }, { data: projects }] = await Promise.all([
+  const [{ data: monthEntries }, { data: tickets }, { data: projects }, { data: changeRequests }] = await Promise.all([
     supabase
       .from("time_entries")
       .select("hours_worked")
@@ -85,7 +85,22 @@ export default async function ContractDetailPage({
       .eq("contract_id", id)
       .order("created_at", { ascending: false })
       .limit(5),
+    supabase
+      .from("additional_work_requests")
+      .select("id, title, approval_status, project_id, estimated_hours, estimated_amount, created_at")
+      .eq("contract_id", id)
+      .order("created_at", { ascending: false })
+      .limit(10),
   ]);
+
+  const changeRequestRows = changeRequests ?? [];
+  const linkedProjectIds = Array.from(
+    new Set(changeRequestRows.map((r) => r.project_id).filter((v): v is string => Boolean(v)))
+  );
+  const changeRequestProjectsRes = linkedProjectIds.length
+    ? await supabase.from("projects").select("id, name").in("id", linkedProjectIds)
+    : { data: [] as { id: string; name: string }[] };
+  const changeRequestProjectName = new Map((changeRequestProjectsRes.data ?? []).map((p) => [p.id, p.name]));
 
   const includedHours = Number(contract.included_hours_per_month ?? 0);
   const usedHours = (monthEntries ?? []).reduce((sum, e) => sum + Number(e.hours_worked ?? 0), 0);
@@ -238,7 +253,11 @@ export default async function ContractDetailPage({
             <DataTable headers={["Project", "Status", "Fixed Fee", "Target Completion"]}>
               {projects.map((project) => (
                 <tr key={project.id}>
-                  <td className="font-medium">{project.name}</td>
+                  <td className="font-medium">
+                    <Link href={`/projects/${project.id}`} className="link link-hover">
+                      {project.name}
+                    </Link>
+                  </td>
                   <td>
                     <StatusBadge status={project.status} />
                   </td>
@@ -253,6 +272,41 @@ export default async function ContractDetailPage({
             <EmptyState title="No projects linked to this contract" />
           )}
         </div>
+      </div>
+
+      <div>
+        <h2 className="mb-2 text-lg font-semibold">Related Change Requests</h2>
+        <p className="mb-3 text-sm opacity-70">
+          Out-of-scope and additional-work requests connected to this contract (and their projects).
+        </p>
+        {changeRequestRows.length > 0 ? (
+          <DataTable headers={["Request", "Project", "Status", "Additional Hours", "Additional Price", "Submitted"]}>
+            {changeRequestRows.map((request) => (
+              <tr key={request.id}>
+                <td className="font-medium">{request.title}</td>
+                <td>
+                  {request.project_id ? (
+                    <Link href={`/projects/${request.project_id}`} className="link link-hover text-sm">
+                      {changeRequestProjectName.get(request.project_id) ?? "View project"}
+                    </Link>
+                  ) : (
+                    <span className="opacity-50">—</span>
+                  )}
+                </td>
+                <td>
+                  <StatusBadge status={request.approval_status} />
+                </td>
+                <td>{request.estimated_hours != null ? <Hours value={Number(request.estimated_hours)} /> : "—"}</td>
+                <td>
+                  {request.estimated_amount != null ? <Money value={Number(request.estimated_amount)} /> : "—"}
+                </td>
+                <td className="text-xs">{formatDate(request.created_at)}</td>
+              </tr>
+            ))}
+          </DataTable>
+        ) : (
+          <EmptyState title="No change requests linked to this contract" />
+        )}
       </div>
     </div>
   );

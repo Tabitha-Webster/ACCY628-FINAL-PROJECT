@@ -52,6 +52,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/dashboard", label: "Executive Dashboard" },
     { href: "/customers", label: "Customers" },
     { href: "/contracts", label: "Contracts" },
+    { href: "/projects", label: "Projects" },
     { href: "/operations", label: "Service Operations" },
     { href: "/profitability", label: "Profitability" },
     { href: "/billing-collections", label: "Billing and Collections" },
@@ -109,7 +110,7 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
     ],
     technician: ["/contracts", "/customers"],
     billing: ["/customers", "/contracts", "/projects"],
-    customer: [],
+    customer: ["/projects"],
   };
 
   return (shared[role] ?? []).some(
