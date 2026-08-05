@@ -92,6 +92,11 @@ export function ContractForm({
   >("critical");
   const [changeReason, setChangeReason] = useState("");
   const [activeEditAcknowledged, setActiveEditAcknowledged] = useState(false);
+  const [customerSource, setCustomerSource] = useState<"existing" | "new">(
+    mode === "create" && customers.length === 0 ? "new" : "existing"
+  );
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [customerOptions, setCustomerOptions] = useState(customers);
   const [fieldErrors, setFieldErrors] = useState<ContractFormFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -119,10 +124,65 @@ export function ContractForm({
 
   async function verifyCustomerExists(customerId: string) {
     if (!customerId) return false;
-    if (customers.some((c) => c.id === customerId)) return true;
+    if (customerOptions.some((c) => c.id === customerId)) return true;
     const supabase = createClient();
     const { data } = await supabase.from("customers").select("id").eq("id", customerId).maybeSingle();
     return Boolean(data);
+  }
+
+  async function createCustomerIfNeeded(): Promise<{ customerId: string | null; error: string | null }> {
+    if (customerSource !== "new") {
+      return { customerId: values.customer_id || null, error: null };
+    }
+
+    const name = newCustomerName.trim();
+    if (!name) {
+      return { customerId: null, error: "Enter a customer name." };
+    }
+
+    const supabase = createClient();
+    const { data: existing } = await supabase
+      .from("customers")
+      .select("id, name")
+      .ilike("name", name)
+      .limit(1)
+      .maybeSingle();
+
+    if (existing?.id) {
+      setCustomerOptions((prev) =>
+        prev.some((c) => c.id === existing.id)
+          ? prev
+          : [...prev, { id: existing.id, label: existing.name }].sort((a, b) =>
+              a.label.localeCompare(b.label)
+            )
+      );
+      update("customer_id", existing.id);
+      setCustomerSource("existing");
+      setNewCustomerName("");
+      return { customerId: existing.id, error: null };
+    }
+
+    const { data, error } = await supabase
+      .from("customers")
+      .insert({
+        name,
+        status: "active",
+        account_manager_id: profileId,
+      })
+      .select("id, name")
+      .maybeSingle();
+
+    if (error || !data?.id) {
+      return { customerId: null, error: error?.message ?? "Could not create customer." };
+    }
+
+    setCustomerOptions((prev) =>
+      [...prev, { id: data.id, label: data.name }].sort((a, b) => a.label.localeCompare(b.label))
+    );
+    update("customer_id", data.id);
+    setCustomerSource("existing");
+    setNewCustomerName("");
+    return { customerId: data.id, error: null };
   }
 
   async function verifyContractNumberUnique(contractNumber: string) {
@@ -142,9 +202,31 @@ export function ContractForm({
     setFormError(null);
     setSaving(true);
 
-    const customerExists = await verifyCustomerExists(values.customer_id);
-    const contractNumberUnique = await verifyContractNumberUnique(values.contract_number);
-    const validation = validateContractFormValues(values, {
+    const supabase = createClient();
+    let customerIdForSave = values.customer_id;
+
+    if (mode === "create" && customerSource === "new") {
+      const created = await createCustomerIfNeeded();
+      if (created.error || !created.customerId) {
+        setFieldErrors({ customer_id: created.error ?? "Enter a customer name." });
+        setFormError(created.error ?? "Enter a customer name to continue.");
+        setSaving(false);
+        return;
+      }
+      customerIdForSave = created.customerId;
+    }
+
+    const valuesForSave: ContractFormValues = {
+      ...values,
+      customer_id: customerIdForSave,
+    };
+
+    const customerExists =
+      customerSource === "new"
+        ? true
+        : await verifyCustomerExists(valuesForSave.customer_id);
+    const contractNumberUnique = await verifyContractNumberUnique(valuesForSave.contract_number);
+    const validation = validateContractFormValues(valuesForSave, {
       customerExists,
       contractNumberUnique,
     });
@@ -156,10 +238,8 @@ export function ContractForm({
       return;
     }
 
-    const supabase = createClient();
-
     if (mode === "create") {
-      const payload = contractFormToPayload(values, profileId, mode);
+      const payload = contractFormToPayload(valuesForSave, profileId, mode);
       const { data, error } = await supabase.from("contracts").insert(payload).select("id").maybeSingle();
       if (error) {
         setSaving(false);
@@ -389,19 +469,64 @@ export function ContractForm({
               onChange={(e) => update("name", e.target.value)}
             />
           </FormField>
-          <FormField label="Customer *" error={fieldErrors.customer_id}>
-            <select
-              className={`${selectControlClass} ${fieldErrors.customer_id ? "select-error" : ""}`}
-              value={values.customer_id}
-              onChange={(e) => update("customer_id", e.target.value)}
-            >
-              <option value="">Select a customer</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+          <FormField label="Customer *" error={fieldErrors.customer_id} className="sm:col-span-2">
+            {mode === "create" ? (
+              <div className="flex w-full flex-col gap-2">
+                <select
+                  className={`${selectControlClass} ${fieldErrors.customer_id ? "select-error" : ""}`}
+                  value={customerSource === "new" ? "__new__" : values.customer_id}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    if (next === "__new__") {
+                      setCustomerSource("new");
+                      update("customer_id", "");
+                      return;
+                    }
+                    setCustomerSource("existing");
+                    update("customer_id", next);
+                  }}
+                >
+                  <option value="">Select a customer</option>
+                  {customerOptions.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                  <option value="__new__">+ Add new customer…</option>
+                </select>
+                {customerSource === "new" ? (
+                  <input
+                    className={`${fieldControlClass} ${fieldErrors.customer_id ? "input-error" : ""}`}
+                    value={newCustomerName}
+                    onChange={(e) => {
+                      setNewCustomerName(e.target.value);
+                      if (fieldErrors.customer_id) {
+                        setFieldErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.customer_id;
+                          return next;
+                        });
+                      }
+                    }}
+                    placeholder="Type the new customer name"
+                    autoFocus
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <select
+                className={`${selectControlClass} ${fieldErrors.customer_id ? "select-error" : ""}`}
+                value={values.customer_id}
+                onChange={(e) => update("customer_id", e.target.value)}
+              >
+                <option value="">Select a customer</option>
+                {customerOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            )}
           </FormField>
           <FormField label="Contract type *">
             <select

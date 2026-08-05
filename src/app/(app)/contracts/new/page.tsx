@@ -28,17 +28,6 @@ export default async function NewContractPage() {
     return <ErrorState message={customersError.message} />;
   }
 
-  if (!customers || customers.length === 0) {
-    return (
-      <div className="space-y-4">
-        <ErrorState message="Customer must exist before creating a contract. Add a customer first." />
-        <Link href="/customers" className="btn btn-primary">
-          Go to customers
-        </Link>
-      </div>
-    );
-  }
-
   const suggestedNumber = suggestNextContractNumber(
     (numbers ?? []).map((row) => row.contract_number as string)
   );
@@ -47,7 +36,7 @@ export default async function NewContractPage() {
     <div>
       <div className="mb-4">
         <Link href="/contracts/reports" className="btn btn-ghost btn-sm">
-          ← Back to reports
+          ← Back to dashboard
         </Link>
       </div>
       <ContractForm

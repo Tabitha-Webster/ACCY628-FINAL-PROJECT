@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { canUseBillingTools } from "@/lib/constants";
 import { PageHeader, DataTable, EmptyState, StatusBadge, Money, Hours, DateText, ErrorState } from "@/components/ui";
 import { grossMarginPct, marginBand } from "@/lib/calculations";
 import { ProjectActions, ProjectChangeRequestPanel } from "@/components/ProjectActions";
@@ -134,7 +135,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const totalBudget = budgetRows.reduce((sum, r) => sum + r.budget, 0);
   const totalActual = budgetRows.reduce((sum, r) => sum + r.actual, 0);
   const revenue = Number(p.fixed_fee ?? 0) || Number(p.estimated_billing_amount ?? 0);
-  const isInternal = profile.role === "manager" || profile.role === "billing";
+  const isInternal = canUseBillingTools(profile.role);
 
   const completedMilestoneAmount = milestones.filter((m) => m.completed).reduce((sum, m) => sum + Number(m.amount), 0);
   const totalMilestoneAmount = milestones.reduce((sum, m) => sum + Number(m.amount), 0);

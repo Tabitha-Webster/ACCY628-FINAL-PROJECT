@@ -70,7 +70,13 @@ export function DemoRoleSwitcher({ currentRole }: { currentRole: UserRole }) {
     const path = window.location.pathname;
     const stayOnSharedCustomerView =
       path === "/customers" || path.startsWith("/customers/");
-    window.location.assign(stayOnSharedCustomerView ? path : "/dashboard");
+    if (stayOnSharedCustomerView) {
+      window.location.assign(path);
+      return;
+    }
+    window.location.assign(
+      pending.role === "admin" ? "/admin" : pending.role === "technician" ? "/dashboard" : "/dashboard"
+    );
   }
 
   const selectedRole = pending?.role ?? currentRole;

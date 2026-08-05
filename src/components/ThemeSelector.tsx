@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from "react";
 
-export const DEFAULT_THEME = "corporate";
+export const DEFAULT_THEME = "servicesync";
 export const THEME_STORAGE_KEY = "servicesync-theme";
 
 const THEMES = [
-  { id: "corporate", label: "Corporate", hint: "Default light business look" },
+  { id: "servicesync", label: "ServiceSync", hint: "Default dark blue console" },
+  { id: "corporate", label: "Corporate", hint: "Light business look" },
   { id: "business", label: "Business", hint: "Dark professional look" },
   { id: "nord", label: "Nord", hint: "Cool muted palette" },
-  { id: "emerald", label: "Emerald", hint: "Green accent theme" },
+  { id: "emerald", label: "Emerald", hint: "Blue-accent emerald" },
   { id: "cupcake", label: "Cupcake", hint: "Soft light theme" },
   { id: "dim", label: "Dim", hint: "Low-contrast dark theme" },
 ] as const;
@@ -32,7 +33,7 @@ export function ThemeSelector() {
   return (
     <fieldset className="space-y-2">
       <legend className="text-sm font-medium">Theme</legend>
-      <p className="text-xs opacity-70">Corporate is the default. Your choice is saved on this device.</p>
+      <p className="text-xs opacity-70">ServiceSync dark is the default. Your choice is saved on this device.</p>
       <div className="space-y-2">
         {THEMES.map((item) => {
           const selected = theme === item.id;

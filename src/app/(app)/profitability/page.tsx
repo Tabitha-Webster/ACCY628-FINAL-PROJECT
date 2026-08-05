@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { isManagerRole } from "@/lib/constants";
 import { DataTable, EmptyState, ErrorState, Money, PageHeader, Percent } from "@/components/ui";
 import { grossMarginPct, grossProfit, marginBand } from "@/lib/calculations";
 import { statusLabel } from "@/lib/format";
@@ -21,7 +22,7 @@ function marginBadgeClass(band: "profitable" | "low_margin" | "unprofitable") {
 export default async function ProfitabilityPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (profile.role !== "manager") redirect("/dashboard");
+  if (!isManagerRole(profile.role)) redirect("/dashboard");
 
   const supabase = await createClient();
 
