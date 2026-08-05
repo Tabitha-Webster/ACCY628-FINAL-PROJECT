@@ -41,6 +41,7 @@ type Props = {
   recordedHours: number;
   hasTimeEntryDescriptions: boolean;
   compact?: boolean;
+  initialFocus?: "status" | "notes" | "time" | "scope" | "complete" | null;
 };
 
 export function TechnicianWorkPanel({
@@ -62,6 +63,7 @@ export function TechnicianWorkPanel({
   recordedHours,
   hasTimeEntryDescriptions,
   compact = false,
+  initialFocus = null,
 }: Props) {
   const router = useRouter();
   const openStatuses = TECHNICIAN_STATUSES as readonly string[];
@@ -73,7 +75,7 @@ export function TechnicianWorkPanel({
   const [workDate, setWorkDate] = useState(todayDateInputValue());
   const [workCategory, setWorkCategory] = useState<string>("Support");
   const [scope, setScope] = useState<WorkScope>(
-    classification === "out_of_scope" ? "out_of_scope" : "included"
+    classification === "out_of_scope" || initialFocus === "scope" ? "out_of_scope" : "included"
   );
   const [costAmount, setCostAmount] = useState("");
   const [costDescription, setCostDescription] = useState("");
@@ -86,6 +88,8 @@ export function TechnicianWorkPanel({
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [summaryNotice, setSummaryNotice] = useState<string | null>(null);
+  const [summaryIsDraft, setSummaryIsDraft] = useState(false);
   const [liveHours, setLiveHours] = useState(recordedHours);
   const [liveHasDescriptions, setLiveHasDescriptions] = useState(hasTimeEntryDescriptions);
 
@@ -98,7 +102,8 @@ export function TechnicianWorkPanel({
         .select("hours_worked, description")
         .eq("support_ticket_id", ticketId);
       if (cancelled || !data) return;
-      setLiveHours(data.reduce((sum, row) => sum + Number(row.hours_worked ?? 0), 0));
+      const total = data.reduce((sum, row) => sum + Number(row.hours_worked ?? 0), 0);
+      setLiveHours(total);
       setLiveHasDescriptions(data.some((row) => Boolean(row.description?.trim())));
     }
     void refreshEffort();
@@ -106,6 +111,27 @@ export function TechnicianWorkPanel({
       cancelled = true;
     };
   }, [ticketId, message]);
+
+  useEffect(() => {
+    if (!initialFocus) return;
+    const id =
+      initialFocus === "complete"
+        ? "tech-complete-section"
+        : initialFocus === "notes"
+          ? "tech-notes-section"
+          : initialFocus === "time"
+            ? "tech-time-section"
+            : initialFocus === "scope"
+              ? "tech-scope-section"
+              : "tech-status-section";
+    const timer = window.setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      if (initialFocus === "notes") {
+        (document.querySelector("#tech-notes-section textarea") as HTMLTextAreaElement | null)?.focus();
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [initialFocus, ticketId]);
 
   const isAssignedTech = assignedTechnicianId === currentUserId;
   const canEdit = isAssignedTech;
@@ -369,7 +395,53 @@ export function TechnicianWorkPanel({
     }
 
     setMessage(payload.message ?? "Ticket marked complete successfully.");
+    setSummaryIsDraft(false);
     router.refresh();
+  }
+
+  async function generateCustomerSummary() {
+    setError(null);
+    setSummaryNotice(null);
+    if (resolutionSummary.trim()) {
+      const ok = window.confirm(
+        "A customer-visible summary already exists. Replace the draft text in this form? Nothing is saved until you Save or Mark Work Complete."
+      );
+      if (!ok) return;
+    }
+
+    setLoading("summary");
+    const res = await fetch("/api/tickets/generate-summary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticketId }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    setLoading(null);
+
+    if (!res.ok) {
+      setError(payload.error ?? "Could not generate a summary.");
+      return;
+    }
+
+    if (typeof payload.summary === "string" && payload.summary.trim()) {
+      setResolutionSummary(payload.summary.trim());
+      setSummaryIsDraft(true);
+      setSummaryNotice(
+        [
+          payload.message,
+          payload.notice,
+          payload.source === "fallback"
+            ? "Source: non-AI fallback draft."
+            : payload.source === "ai"
+              ? "Source: AI draft."
+              : null,
+        ]
+          .filter(Boolean)
+          .join(" ")
+      );
+    } else {
+      setError("Generation returned an empty summary. Write one manually.");
+    }
   }
 
   if (!canEdit) {
@@ -433,7 +505,7 @@ export function TechnicianWorkPanel({
         {message ? <div className="alert alert-success text-sm">{message}</div> : null}
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="form-control">
+          <label className="form-control" id="tech-status-section">
             <span className="label-text mb-1 font-medium">Ticket status</span>
             <select
               className="select select-bordered select-sm"
@@ -458,7 +530,7 @@ export function TechnicianWorkPanel({
             ) : null}
           </label>
 
-          <label className="form-control">
+          <label className="form-control" id="tech-scope-section">
             <span className="label-text mb-1 font-medium">Work scope</span>
             <select
               className="select select-bordered select-sm"
@@ -480,7 +552,7 @@ export function TechnicianWorkPanel({
           </label>
         </div>
 
-        <label className="form-control">
+        <label className="form-control" id="tech-notes-section">
           <span className="label-text mb-1 font-medium">Work notes (appended to history)</span>
           <textarea
             className="textarea textarea-bordered w-full"
@@ -491,7 +563,7 @@ export function TechnicianWorkPanel({
           />
         </label>
 
-        <div className="rounded-box border border-dashed border-base-300 p-3">
+        <div className="rounded-box border border-dashed border-base-300 p-3" id="tech-time-section">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-60">Record time</p>
           <p className="mb-2 text-xs opacity-60">
             Recorded effort on this ticket: {liveHours.toFixed(2)} hrs
@@ -602,6 +674,7 @@ export function TechnicianWorkPanel({
       </form>
 
       <form
+        id="tech-complete-section"
         className="space-y-3 rounded-box border border-success/40 bg-success/5 p-4"
         onSubmit={markComplete}
       >
@@ -628,12 +701,38 @@ export function TechnicianWorkPanel({
           <span className="label-text mb-1 font-medium">Customer-visible resolution summary *</span>
           <textarea
             className="textarea textarea-bordered w-full"
-            rows={2}
+            rows={3}
             value={resolutionSummary}
-            onChange={(e) => setResolutionSummary(e.target.value)}
+            onChange={(e) => {
+              setResolutionSummary(e.target.value);
+              setSummaryIsDraft(false);
+            }}
             placeholder="Shown to the customer"
             required
           />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={generateCustomerSummary}
+              disabled={loading !== null}
+            >
+              {loading === "summary" ? "Generating summary…" : "✨ Generate Summary"}
+            </button>
+            {summaryIsDraft ? (
+              <span className="badge badge-warning badge-outline">Draft — not saved yet</span>
+            ) : null}
+          </div>
+          {summaryNotice ? (
+            <p className="mt-2 text-xs opacity-70" role="status">
+              {summaryNotice}
+            </p>
+          ) : (
+            <p className="mt-2 text-xs opacity-60">
+              Optional AI draft from your work notes. Review and edit before Save or Mark Work Complete.
+              Generation never saves the summary by itself.
+            </p>
+          )}
         </label>
 
         <label className="form-control">
