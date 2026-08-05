@@ -49,31 +49,32 @@ export type NavItem = {
 
 export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   manager: [
-    { href: "/dashboard", label: "Executive Dashboard" },
+    { href: "/dashboard", label: "Dashboard" },
     { href: "/customers", label: "Customers" },
     { href: "/contracts", label: "Contracts" },
     { href: "/operations", label: "Service Operations" },
     { href: "/profitability", label: "Profitability" },
     { href: "/billing-collections", label: "Billing and Collections" },
+    { href: "/payments", label: "Payment Entry" },
     { href: "/controls", label: "Controls and Exceptions" },
   ],
   technician: [
-    { href: "/dashboard", label: "My Assignments" },
+    { href: "/dashboard", label: "Dashboard" },
     { href: "/tickets", label: "Support Tickets" },
     { href: "/projects", label: "Project Tasks" },
     { href: "/time-costs", label: "Submit Time and Costs" },
     { href: "/additional-work", label: "Additional Work Requests" },
   ],
   billing: [
-    { href: "/dashboard", label: "Billing Dashboard" },
+    { href: "/dashboard", label: "Dashboard" },
     { href: "/ready-to-bill", label: "Ready to Bill" },
     { href: "/invoices", label: "Invoices" },
-    { href: "/payments", label: "Payments" },
+    { href: "/payments", label: "Payment Entry" },
     { href: "/accounts-receivable", label: "Accounts Receivable" },
     { href: "/accounting", label: "Accounting Review" },
   ],
   customer: [
-    { href: "/dashboard", label: "Customer Home" },
+    { href: "/dashboard", label: "Dashboard" },
     { href: "/my-contracts", label: "My Contracts" },
     { href: "/support-requests", label: "Support Requests" },
     { href: "/service-usage", label: "Service Usage" },
