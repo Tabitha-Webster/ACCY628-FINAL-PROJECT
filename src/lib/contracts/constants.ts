@@ -44,9 +44,9 @@ export const CONTRACT_STATUS_LABELS: Record<ContractStatus, string> = {
   draft: "Draft",
   pending_approval: "Pending Approval",
   active: "Active",
-  on_hold: "On Hold",
+  on_hold: "Suspended",
   expired: "Expired",
-  canceled: "Canceled",
+  canceled: "Cancelled",
   renewed: "Renewed",
 };
 

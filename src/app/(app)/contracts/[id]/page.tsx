@@ -13,21 +13,28 @@ import {
   StatCard,
   StatusBadge,
 } from "@/components/ui";
-import { formatDate, statusLabel } from "@/lib/format";
+import { formatDate, formatDateTime, statusLabel } from "@/lib/format";
 import { usagePercentage, usageStatus } from "@/lib/calculations";
 import type { ContractStatus } from "@/lib/types";
 import {
+  CONTRACT_STATUS_LABELS,
+  CONTRACT_TYPE_LABELS,
   canManageContracts,
   canViewContractsModule,
   getContractById,
   getContractRelatedWork,
+  getContractRenewalDate,
   getContractWarnings,
   getLifecycleActions,
   isOperationalStatus,
+  listContractDocuments,
   listContractModifications,
   listContractServices,
+  listContractVersions,
   unwrapAssignedManager,
   unwrapCustomer,
+  unwrapProfile,
+  type ContractCustomerJoin,
   type ContractDetailRow,
 } from "@/lib/contracts";
 
@@ -35,9 +42,39 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
       <p className="text-xs uppercase tracking-wide opacity-50">{label}</p>
-      <p className="mt-0.5 text-sm">{value ?? "—"}</p>
+      <p className="mt-0.5 text-sm whitespace-pre-wrap">{value ?? "—"}</p>
     </div>
   );
+}
+
+function Section({
+  title,
+  children,
+  actions,
+}: {
+  title: string;
+  children: React.ReactNode;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-box border border-base-300 bg-base-100 p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">{title}</h2>
+        {actions}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function yesNo(value: boolean | null | undefined) {
+  if (value == null) return "—";
+  return value ? "Yes" : "No";
+}
+
+function hoursOrDash(value: number | null | undefined) {
+  if (value == null || Number.isNaN(Number(value))) return "—";
+  return `${Number(value)} hrs`;
 }
 
 function usageBadgeClass(status: "normal" | "warning" | "over_limit") {
@@ -67,66 +104,108 @@ export default async function ContractDetailPage({
   }
 
   const contract = contractData as ContractDetailRow;
-  const customer = unwrapCustomer(contract);
+  const customer = unwrapCustomer(contract) as ContractCustomerJoin | null;
   const manager = unwrapAssignedManager(contract);
+  const salesRep = unwrapProfile(contract.sales_representative);
+  const createdBy = unwrapProfile(contract.created_by_profile);
+  const updatedBy = unwrapProfile(contract.updated_by_profile);
   const status = contract.status as ContractStatus;
+  const statusLabelText = CONTRACT_STATUS_LABELS[status] ?? statusLabel(status);
   const lifecycleActions = getLifecycleActions(status);
   const warnings = getContractWarnings(contract);
   const managerCanEdit = canManageContracts(profile.role);
+  const renewalDate = getContractRenewalDate(contract);
+  const autoRenew = (contract.renewal_type ?? "").toLowerCase() === "auto";
 
-  const [related, servicesResult, modificationsResult] = await Promise.all([
-    getContractRelatedWork(supabase, id),
-    listContractServices(supabase, [id]),
-    listContractModifications(supabase, id),
-  ]);
+  const [related, servicesResult, modificationsResult, documentsResult, versionsResult] =
+    await Promise.all([
+      getContractRelatedWork(supabase, id),
+      listContractServices(supabase, [id]),
+      listContractModifications(supabase, id),
+      listContractDocuments(supabase, id),
+      listContractVersions(supabase, id),
+    ]);
 
   const services = servicesResult.data ?? [];
   const modifications = modificationsResult.data ?? [];
+  const documents = documentsResult.data ?? [];
+  const versions = versionsResult.data ?? [];
   const { tickets, projects, invoices, monthEntries } = related;
 
   const includedHours = Number(contract.included_hours_per_month ?? 0);
   const usedHours = monthEntries.reduce((sum, e) => sum + Number(e.hours_worked ?? 0), 0);
   const pctUsed = usagePercentage(usedHours, includedHours);
   const usage = usageStatus(pctUsed);
+  const typeLabel =
+    CONTRACT_TYPE_LABELS[contract.contract_type as keyof typeof CONTRACT_TYPE_LABELS] ??
+    statusLabel(String(contract.contract_type));
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href="/contracts" className="btn btn-ghost btn-sm">
+          ← Back to contracts
+        </Link>
+      </div>
+
       <PageHeader
         title={contract.name}
-        description={`${contract.contract_number} · ${
-          customer ? customer.name : "Unknown customer"
-        }`}
-        actions={<StatusBadge status={contract.status} />}
+        description={`${contract.contract_number} · ${customer ? customer.name : "Unknown customer"} · Version ${contract.version_number ?? 1}`}
+        actions={<StatusBadge status={contract.status} label={statusLabelText} />}
       />
 
       {warnings.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {warnings.map((warning) => (
-            <span key={warning.code} className="badge badge-warning">
+            <span
+              key={warning.code}
+              className={`badge ${
+                warning.code === "past_end_date"
+                  ? "badge-error"
+                  : warning.code === "renewal_soon"
+                    ? "badge-info"
+                    : "badge-warning"
+              }`}
+            >
               {warning.label}
             </span>
           ))}
         </div>
       ) : null}
 
-      <div className="rounded-box border border-base-300 bg-base-100 p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">
-            Contract Lifecycle
-          </h2>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Contract Number" value={contract.contract_number} hint="Auto-generated" />
+        <StatCard
+          label="Monthly Recurring Fee"
+          value={`$${Number(contract.monthly_recurring_fee ?? 0).toFixed(2)}`}
+        />
+        <StatCard
+          label="Included Hours / Month"
+          value={`${includedHours.toFixed(1)} hrs`}
+          hint={`${pctUsed.toFixed(0)}% used this month`}
+          tone={usage === "over_limit" ? "error" : usage === "warning" ? "warning" : "default"}
+        />
+        <StatCard
+          label="Additional Hourly Rate"
+          value={`$${Number(contract.additional_hourly_rate ?? 0).toFixed(2)}/hr`}
+        />
+      </div>
+
+      <Section
+        title="Contract Lifecycle"
+        actions={
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={status} />
+            <StatusBadge status={status} label={statusLabelText} />
             {isOperationalStatus(status) ? (
               <span className="badge badge-success badge-outline">Operational</span>
             ) : (
               <span className="badge badge-ghost">Not operational</span>
             )}
           </div>
-        </div>
+        }
+      >
         <p className="text-sm opacity-70">
-          Lifecycle supports draft → approval → active service → hold / expiry / cancel / renewal.
-          Billing, technicians, and reporting should only treat <strong>active</strong> agreements as
-          operational unless a future rule says otherwise.
+          Status values: Draft, Pending Approval, Active, Suspended, Expired, Renewed, Cancelled.
         </p>
         {lifecycleActions.length > 0 ? (
           <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -148,53 +227,14 @@ export default async function ContractDetailPage({
         ) : (
           <p className="mt-3 text-sm opacity-60">No further lifecycle transitions from this status.</p>
         )}
-      </div>
+      </Section>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard
-          label="Hours Used This Month"
-          value={`${usedHours.toFixed(1)} / ${includedHours.toFixed(1)} hrs`}
-          hint={`${pctUsed.toFixed(0)}% of included hours`}
-          tone={usage === "over_limit" ? "error" : usage === "warning" ? "warning" : "default"}
-        />
-        <StatCard
-          label="Monthly Recurring Fee"
-          value={`$${Number(contract.monthly_recurring_fee ?? 0).toFixed(2)}`}
-        />
-        <StatCard
-          label="Additional Hourly Rate"
-          value={`$${Number(contract.additional_hourly_rate ?? 0).toFixed(2)}/hr`}
-        />
-      </div>
-
-      <div className="rounded-box border border-base-300 bg-base-100 p-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">
-            Hour Usage This Month
-          </h2>
-          <span className={`badge ${usageBadgeClass(usage)}`}>{statusLabel(usage)}</span>
-        </div>
-        <div className="mt-3 flex items-center gap-4">
-          <progress
-            className={`progress w-full ${
-              usage === "over_limit"
-                ? "progress-error"
-                : usage === "warning"
-                  ? "progress-warning"
-                  : "progress-success"
-            }`}
-            value={Math.min(pctUsed, 100)}
-            max={100}
-          />
-          <span className="whitespace-nowrap text-sm font-medium">
-            <Percent value={pctUsed} />
-          </span>
-        </div>
-      </div>
-
-      <div className="rounded-box border border-base-300 bg-base-100 p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide opacity-60">Overview</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <Section title="Overview">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Field label="Contract Number" value={contract.contract_number} />
+          <Field label="Contract Name" value={contract.name} />
+          <Field label="Status" value={<StatusBadge status={status} label={statusLabelText} />} />
+          <Field label="Contract Type" value={typeLabel} />
           <Field
             label="Customer"
             value={
@@ -207,88 +247,166 @@ export default async function ContractDetailPage({
               )
             }
           />
-          <Field label="Contract Type" value={statusLabel(contract.contract_type)} />
-          <Field label="Assigned Manager" value={manager?.full_name} />
+          <Field
+            label="Customer Contact"
+            value={
+              customer?.primary_contact || customer?.contact_email
+                ? `${customer.primary_contact ?? "—"}${customer.contact_email ? ` · ${customer.contact_email}` : ""}`
+                : "—"
+            }
+          />
+          <Field label="Account Manager" value={manager?.full_name} />
+          <Field label="Sales Representative" value={salesRep?.full_name} />
+          <Field label="Billing Contact" value={contract.billing_contact} />
+          <Field label="Requires Customer Approval" value={yesNo(contract.requires_customer_approval)} />
+          <Field label="Requires Manager Approval" value={yesNo(contract.requires_manager_approval)} />
+          <Field label="Current Version" value={String(contract.version_number ?? 1)} />
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Field label="Description / Notes" value={contract.description} />
+          <Field label="Scope" value={contract.scope} />
+        </div>
+      </Section>
+
+      <Section title="Dates, Renewal & Cancellation">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Start Date" value={formatDate(contract.start_date)} />
           <Field label="End Date" value={formatDate(contract.end_date)} />
+          <Field label="Effective Date" value={formatDate(contract.effective_date)} />
+          <Field label="Signed Date" value={formatDate(contract.signed_date)} />
+          <Field label="Renewal Date" value={formatDate(renewalDate)} />
+          <Field label="Auto-Renew" value={autoRenew ? "Enabled" : "Disabled"} />
           <Field
             label="Renewal Type"
-            value={contract.renewal_type ? statusLabel(contract.renewal_type) : "—"}
+            value={contract.renewal_type ? statusLabel(String(contract.renewal_type)) : "—"}
           />
           <Field
-            label="Cancellation Notice"
+            label="Notice Period"
             value={
-              contract.cancellation_notice_days
+              contract.cancellation_notice_days != null
                 ? `${contract.cancellation_notice_days} days`
                 : "—"
             }
           />
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Field label="Renewal Terms" value={contract.renewal_terms} />
+          <Field label="Cancellation Terms" value={contract.cancellation_terms} />
+        </div>
+      </Section>
+
+      <Section title="Commercial & Billing Terms">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field
-            label="Requires Customer Approval"
-            value={contract.requires_customer_approval ? "Yes" : "No"}
+            label="Monthly Recurring Fee (MRR)"
+            value={<Money value={Number(contract.monthly_recurring_fee ?? 0)} />}
           />
           <Field
-            label="Requires Manager Approval"
-            value={contract.requires_manager_approval ? "Yes" : "No"}
+            label="One-Time Setup Fee"
+            value={<Money value={Number(contract.one_time_setup_fee ?? contract.deposit_amount ?? 0)} />}
+          />
+          <Field
+            label="Deposit Amount"
+            value={<Money value={Number(contract.deposit_amount ?? 0)} />}
+          />
+          <Field
+            label="Billing Frequency"
+            value={contract.billing_frequency ? statusLabel(String(contract.billing_frequency)) : "—"}
+          />
+          <Field
+            label="Billing Method"
+            value={contract.billing_method ? statusLabel(String(contract.billing_method)) : "—"}
+          />
+          <Field
+            label="Billing Timing"
+            value={contract.billing_timing ? statusLabel(String(contract.billing_timing)) : "—"}
+          />
+          <Field label="Invoice Terms" value={contract.payment_terms} />
+          <Field label="Tax Status" value={contract.tax_status ? statusLabel(contract.tax_status) : "—"} />
+          <Field label="Late Fee Terms" value={contract.late_fee_terms} />
+          <Field
+            label="Software Markup"
+            value={<Percent value={Number(contract.software_markup_pct ?? 0) * 100} />}
+          />
+          <Field
+            label="Equipment Markup"
+            value={<Percent value={Number(contract.equipment_markup_pct ?? 0) * 100} />}
           />
         </div>
-        {contract.description ? (
+        {contract.reimbursable_cost_policy ? (
           <div className="mt-4">
-            <p className="text-xs uppercase tracking-wide opacity-50">Description</p>
-            <p className="mt-1 text-sm leading-relaxed">{contract.description}</p>
+            <Field label="Reimbursable Cost Policy" value={contract.reimbursable_cost_policy} />
           </div>
         ) : null}
-        {contract.scope ? (
-          <div className="mt-4">
-            <p className="text-xs uppercase tracking-wide opacity-50">Scope</p>
-            <p className="mt-1 text-sm leading-relaxed">{contract.scope}</p>
-          </div>
-        ) : null}
-      </div>
+      </Section>
 
-      <div className="rounded-box border border-base-300 bg-base-100 p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide opacity-60">
-          Service Scope &amp; SLA
-        </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Field label="Included Hours / Month" value={<Hours value={includedHours} />} />
+      <Section title="Service Coverage & Rates">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Field label="Included Support Hours" value={<Hours value={includedHours} />} />
           <Field
-            label="SLA Response Time"
-            value={contract.sla_response_hours ? `${contract.sla_response_hours} hrs` : "—"}
-          />
-          <Field
-            label="SLA Resolution Time"
-            value={contract.sla_resolution_hours ? `${contract.sla_resolution_hours} hrs` : "—"}
+            label="Additional Hourly Rate"
+            value={<Money value={Number(contract.additional_hourly_rate ?? 0)} />}
           />
           <Field label="Remote Support" value={contract.remote_support ? "Included" : "Not included"} />
           <Field label="Onsite Support" value={contract.onsite_support ? "Included" : "Not included"} />
-          <Field label="Supported Locations" value={contract.supported_locations} />
-          <Field label="Supported Users / Devices" value={contract.supported_users_devices} />
+          <Field label="Covered Sites / Locations" value={contract.supported_locations} />
+          <Field label="Covered Devices / Users" value={contract.supported_users_devices} />
           <Field label="After-Hours Terms" value={contract.after_hours_terms} />
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <p className="text-xs uppercase tracking-wide opacity-50">Included Services</p>
-            <p className="mt-1 text-sm leading-relaxed">{contract.included_services ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide opacity-50">Excluded Services</p>
-            <p className="mt-1 text-sm leading-relaxed">{contract.excluded_services ?? "—"}</p>
-          </div>
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Field label="Covered Services" value={contract.included_services} />
+          <Field label="Excluded Services" value={contract.excluded_services} />
         </div>
-      </div>
+        {contract.change_request_procedure ? (
+          <div className="mt-4">
+            <Field label="Change Request Procedure" value={contract.change_request_procedure} />
+          </div>
+        ) : null}
+      </Section>
 
-      <div className="rounded-box border border-base-300 bg-base-100 p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide opacity-60">
-          Contract Services
-        </h2>
+      <Section title="SLA Response Times">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="Critical" value={hoursOrDash(contract.sla_critical_response_hours)} />
+          <Field label="High" value={hoursOrDash(contract.sla_high_response_hours ?? contract.sla_response_hours)} />
+          <Field label="Medium" value={hoursOrDash(contract.sla_medium_response_hours)} />
+          <Field label="Low" value={hoursOrDash(contract.sla_low_response_hours)} />
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Default Response SLA" value={hoursOrDash(contract.sla_response_hours)} />
+          <Field label="Resolution SLA" value={hoursOrDash(contract.sla_resolution_hours)} />
+        </div>
+      </Section>
+
+      <Section title="Hour Usage This Month">
+        <div className="flex items-center justify-between gap-3">
+          <span className={`badge ${usageBadgeClass(usage)}`}>{statusLabel(usage)}</span>
+          <span className="text-sm">
+            {usedHours.toFixed(1)} / {includedHours.toFixed(1)} hrs (<Percent value={pctUsed} />)
+          </span>
+        </div>
+        <progress
+          className={`progress mt-3 w-full ${
+            usage === "over_limit"
+              ? "progress-error"
+              : usage === "warning"
+                ? "progress-warning"
+                : "progress-success"
+          }`}
+          value={Math.min(pctUsed, 100)}
+          max={100}
+        />
+      </Section>
+
+      <Section title="Covered Service Line Items">
         {services.length > 0 ? (
           <DataTable headers={["Service", "Included", "Description"]}>
             {services.map((service) => (
               <tr key={service.id}>
                 <td className="font-medium">{service.service_name}</td>
                 <td>
-                  <span className={`badge badge-sm ${service.is_included ? "badge-success" : "badge-ghost"}`}>
+                  <span
+                    className={`badge badge-sm ${service.is_included ? "badge-success" : "badge-ghost"}`}
+                  >
                     {service.is_included ? "Included" : "Excluded"}
                   </span>
                 </td>
@@ -299,75 +417,105 @@ export default async function ContractDetailPage({
         ) : (
           <EmptyState
             title="No service line items yet"
-            description="contract_services rows will appear here for technicians and customer portals."
+            description="Add covered services under this agreement to show them here."
           />
         )}
-      </div>
+      </Section>
 
-      <div className="rounded-box border border-base-300 bg-base-100 p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide opacity-60">
-          Billing &amp; Payment Terms
-        </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Field
-            label="Billing Frequency"
-            value={contract.billing_frequency ? statusLabel(contract.billing_frequency) : "—"}
+      <Section title="Contract Documents">
+        {documents.length > 0 ? (
+          <DataTable headers={["Document", "Type", "Uploaded", "By", "Notes"]}>
+            {documents.map((doc) => {
+              const uploader = unwrapProfile(
+                (doc as { uploaded_by_profile?: { full_name: string } | { full_name: string }[] | null })
+                  .uploaded_by_profile
+              );
+              return (
+                <tr key={doc.id}>
+                  <td className="font-medium">
+                    {doc.file_url ? (
+                      <a href={doc.file_url} className="link link-hover" target="_blank" rel="noreferrer">
+                        {doc.document_name}
+                      </a>
+                    ) : (
+                      doc.document_name
+                    )}
+                  </td>
+                  <td className="text-xs">{doc.document_type ?? "—"}</td>
+                  <td className="text-xs">{formatDateTime(doc.uploaded_at)}</td>
+                  <td className="text-xs">{uploader?.full_name ?? "—"}</td>
+                  <td className="text-sm opacity-70">{doc.notes ?? "—"}</td>
+                </tr>
+              );
+            })}
+          </DataTable>
+        ) : (
+          <EmptyState
+            title="No documents attached"
+            description="Signed PDFs and exhibits will appear here once uploaded."
           />
-          <Field
-            label="Billing Timing"
-            value={contract.billing_timing ? statusLabel(contract.billing_timing) : "—"}
-          />
-          <Field label="Payment Terms" value={contract.payment_terms} />
-          <Field label="Deposit Amount" value={<Money value={Number(contract.deposit_amount ?? 0)} />} />
-          <Field label="Tax Status" value={contract.tax_status ? statusLabel(contract.tax_status) : "—"} />
-          <Field label="Billing Contact" value={contract.billing_contact} />
-          <Field
-            label="Software Markup"
-            value={<Percent value={Number(contract.software_markup_pct ?? 0) * 100} />}
-          />
-          <Field
-            label="Equipment Markup"
-            value={<Percent value={Number(contract.equipment_markup_pct ?? 0) * 100} />}
-          />
-          <Field label="Late Fee Terms" value={contract.late_fee_terms} />
-        </div>
-        {contract.reimbursable_cost_policy ? (
-          <div className="mt-4">
-            <p className="text-xs uppercase tracking-wide opacity-50">Reimbursable Cost Policy</p>
-            <p className="mt-1 text-sm leading-relaxed">{contract.reimbursable_cost_policy}</p>
-          </div>
-        ) : null}
-        {contract.change_request_procedure ? (
-          <div className="mt-4">
-            <p className="text-xs uppercase tracking-wide opacity-50">Change Request Procedure</p>
-            <p className="mt-1 text-sm leading-relaxed">{contract.change_request_procedure}</p>
-          </div>
-        ) : null}
-      </div>
+        )}
+      </Section>
 
-      <div className="rounded-box border border-base-300 bg-base-100 p-4">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide opacity-60">
-          Modifications &amp; Amendments
-        </h2>
+      <Section title="Version History">
+        {versions.length > 0 ? (
+          <DataTable headers={["Version", "Summary", "Created", "By"]}>
+            {versions.map((version) => {
+              const author = unwrapProfile(
+                (version as { created_by_profile?: { full_name: string } | { full_name: string }[] | null })
+                  .created_by_profile
+              );
+              return (
+                <tr key={version.id}>
+                  <td className="font-medium">v{version.version_number}</td>
+                  <td className="text-sm">{version.change_summary}</td>
+                  <td className="text-xs">{formatDateTime(version.created_at)}</td>
+                  <td className="text-xs">{author?.full_name ?? "—"}</td>
+                </tr>
+              );
+            })}
+          </DataTable>
+        ) : (
+          <EmptyState title="No version history recorded" />
+        )}
+      </Section>
+
+      <Section title="Modification History">
         {modifications.length > 0 ? (
-          <DataTable headers={["Summary", "Effective", "Approval"]}>
-            {modifications.map((mod) => (
-              <tr key={mod.id}>
-                <td className="text-sm">{mod.modification_summary}</td>
-                <td className="text-xs">{formatDate(mod.effective_date)}</td>
-                <td>
-                  <StatusBadge status={mod.approval_status} />
-                </td>
-              </tr>
-            ))}
+          <DataTable headers={["Summary", "Effective", "Approval", "Requested By"]}>
+            {modifications.map((mod) => {
+              const requester = unwrapProfile(
+                (mod as { created_by_profile?: { full_name: string } | { full_name: string }[] | null })
+                  .created_by_profile
+              );
+              return (
+                <tr key={mod.id}>
+                  <td className="text-sm">{mod.modification_summary}</td>
+                  <td className="text-xs">{formatDate(mod.effective_date)}</td>
+                  <td>
+                    <StatusBadge status={mod.approval_status} />
+                  </td>
+                  <td className="text-xs">{requester?.full_name ?? "—"}</td>
+                </tr>
+              );
+            })}
           </DataTable>
         ) : (
           <EmptyState
             title="No modifications recorded"
-            description="Future amendment workflow will write to contract_modifications."
+            description="Amendments and change orders will appear in this history."
           />
         )}
-      </div>
+      </Section>
+
+      <Section title="Audit Log">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="Created By" value={createdBy?.full_name ?? "—"} />
+          <Field label="Created At" value={formatDateTime(contract.created_at)} />
+          <Field label="Modified By" value={updatedBy?.full_name ?? "—"} />
+          <Field label="Modified At" value={formatDateTime(contract.updated_at)} />
+        </div>
+      </Section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div>

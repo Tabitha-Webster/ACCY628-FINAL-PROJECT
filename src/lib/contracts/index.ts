@@ -16,6 +16,8 @@ export type {
   Contract,
   ContractModification,
   ContractService,
+  ContractDocument,
+  ContractVersion,
   ContractStatus,
   ContractType,
   RenewalType,
@@ -24,6 +26,8 @@ export type {
 } from "@/lib/types";
 
 export * from "./constants";
+export * from "./dates";
 export * from "./lifecycle";
 export * from "./warnings";
 export * from "./queries";
+

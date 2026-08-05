@@ -86,13 +86,19 @@ export type Contract = {
   renewal_type: RenewalType | string | null;
   cancellation_notice_days: number | null;
   assigned_manager_id: string | null;
+  sales_representative_id: string | null;
   description: string | null;
   scope: string | null;
   monthly_recurring_fee: number;
+  one_time_setup_fee: number | null;
   included_hours_per_month: number;
   additional_hourly_rate: number;
   sla_response_hours: number | null;
   sla_resolution_hours: number | null;
+  sla_critical_response_hours: number | null;
+  sla_high_response_hours: number | null;
+  sla_medium_response_hours: number | null;
+  sla_low_response_hours: number | null;
   supported_locations: string | null;
   supported_users_devices: string | null;
   remote_support: boolean | null;
@@ -102,6 +108,7 @@ export type Contract = {
   excluded_services: string | null;
   billing_frequency: BillingFrequency | string | null;
   billing_timing: BillingTiming | string | null;
+  billing_method: string | null;
   payment_terms: string | null;
   deposit_amount: number | null;
   late_fee_terms: string | null;
@@ -113,6 +120,11 @@ export type Contract = {
   change_request_procedure: string | null;
   requires_customer_approval: boolean | null;
   requires_manager_approval: boolean | null;
+  effective_date: string | null;
+  signed_date: string | null;
+  renewal_terms: string | null;
+  cancellation_terms: string | null;
+  version_number: number | null;
   created_at: string;
   updated_at?: string;
   created_by?: string | null;
@@ -138,6 +150,28 @@ export type ContractModification = {
   created_by: string | null;
   created_at: string;
   updated_at?: string;
+};
+
+export type ContractDocument = {
+  id: string;
+  contract_id: string;
+  document_name: string;
+  document_type: string | null;
+  storage_path: string | null;
+  file_url: string | null;
+  uploaded_by: string | null;
+  uploaded_at: string;
+  notes: string | null;
+};
+
+export type ContractVersion = {
+  id: string;
+  contract_id: string;
+  version_number: number;
+  change_summary: string;
+  snapshot: Record<string, unknown> | null;
+  created_by: string | null;
+  created_at: string;
 };
 
 export type SupportTicket = {

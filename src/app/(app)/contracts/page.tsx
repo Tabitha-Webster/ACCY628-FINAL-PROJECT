@@ -1,17 +1,14 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { CONTRACTS_NAV_COPY } from "@/lib/constants";
-import { DataTable, EmptyState, ErrorState, Money, PageHeader, StatusBadge, StatCard } from "@/components/ui";
-import { formatDate } from "@/lib/format";
+import { ContractsListClient } from "@/components/ContractsListClient";
+import { EmptyState, ErrorState, PageHeader, StatCard } from "@/components/ui";
 import type { ContractStatus } from "@/lib/types";
 import {
   canViewContractsModule,
-  getContractWarnings,
   listContracts,
   summarizeContractsByStatus,
-  unwrapCustomer,
   type ContractListRow,
 } from "@/lib/contracts";
 
@@ -42,62 +39,7 @@ export default async function ContractsPage() {
 
       {!error && contracts.length === 0 ? <EmptyState title="No contracts on file" /> : null}
 
-      {!error && contracts.length > 0 ? (
-        <DataTable headers={["Contract", "Customer", "Status", "Type", "Term", "Monthly Fee", "Warnings", ""]}>
-          {contracts.map((contract) => {
-            const customer = unwrapCustomer(contract);
-            const warnings = getContractWarnings(contract);
-
-            return (
-              <tr key={contract.id}>
-                <td>
-                  <Link href={`/contracts/${contract.id}`} className="link link-hover font-medium">
-                    {contract.name}
-                  </Link>
-                  <div className="text-xs opacity-60">{contract.contract_number}</div>
-                </td>
-                <td>
-                  {customer ? (
-                    <Link href={`/customers/${customer.id}`} className="link link-hover">
-                      {customer.name}
-                    </Link>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td>
-                  <StatusBadge status={contract.status} />
-                </td>
-                <td className="text-xs">{contract.contract_type}</td>
-                <td className="text-xs">
-                  {formatDate(contract.start_date)} – {formatDate(contract.end_date)}
-                </td>
-                <td>
-                  <Money value={Number(contract.monthly_recurring_fee ?? 0)} />
-                </td>
-                <td>
-                  {warnings.length > 0 ? (
-                    <div className="flex flex-col gap-1">
-                      {warnings.map((warning) => (
-                        <span key={warning.code} className="badge badge-warning badge-sm">
-                          {warning.label}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-xs opacity-50">None</span>
-                  )}
-                </td>
-                <td className="text-right">
-                  <Link href={`/contracts/${contract.id}`} className="btn btn-ghost btn-xs">
-                    View
-                  </Link>
-                </td>
-              </tr>
-            );
-          })}
-        </DataTable>
-      ) : null}
+      {!error && contracts.length > 0 ? <ContractsListClient contracts={contracts} /> : null}
     </div>
   );
 }
