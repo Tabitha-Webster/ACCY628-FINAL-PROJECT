@@ -27,6 +27,7 @@ import {
   getContractWarnings,
   getLifecycleActions,
   isOperationalStatus,
+  listContractChanges,
   listContractDocuments,
   listContractModifications,
   listContractServices,
@@ -37,6 +38,8 @@ import {
   type ContractCustomerJoin,
   type ContractDetailRow,
 } from "@/lib/contracts";
+import { ContractDocumentsPanel } from "@/components/ContractDocumentsPanel";
+import { ContractChangesPanel } from "@/components/ContractChangesPanel";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -117,19 +120,21 @@ export default async function ContractDetailPage({
   const renewalDate = getContractRenewalDate(contract);
   const autoRenew = (contract.renewal_type ?? "").toLowerCase() === "auto";
 
-  const [related, servicesResult, modificationsResult, documentsResult, versionsResult] =
+  const [related, servicesResult, modificationsResult, documentsResult, versionsResult, changesResult] =
     await Promise.all([
       getContractRelatedWork(supabase, id),
       listContractServices(supabase, [id]),
       listContractModifications(supabase, id),
       listContractDocuments(supabase, id),
       listContractVersions(supabase, id),
+      listContractChanges(supabase, id),
     ]);
 
   const services = servicesResult.data ?? [];
   const modifications = modificationsResult.data ?? [];
   const documents = documentsResult.data ?? [];
   const versions = versionsResult.data ?? [];
+  const changes = changesResult.data ?? [];
   const { tickets, projects, invoices, monthEntries } = related;
 
   const includedHours = Number(contract.included_hours_per_month ?? 0);
@@ -146,6 +151,11 @@ export default async function ContractDetailPage({
         <Link href="/contracts" className="btn btn-ghost btn-sm">
           ← Back to contracts
         </Link>
+        {managerCanEdit ? (
+          <Link href={`/contracts/${id}/edit`} className="btn btn-primary btn-sm">
+            Edit contract
+          </Link>
+        ) : null}
       </div>
 
       <PageHeader
@@ -423,38 +433,18 @@ export default async function ContractDetailPage({
       </Section>
 
       <Section title="Contract Documents">
-        {documents.length > 0 ? (
-          <DataTable headers={["Document", "Type", "Uploaded", "By", "Notes"]}>
-            {documents.map((doc) => {
-              const uploader = unwrapProfile(
-                (doc as { uploaded_by_profile?: { full_name: string } | { full_name: string }[] | null })
-                  .uploaded_by_profile
-              );
-              return (
-                <tr key={doc.id}>
-                  <td className="font-medium">
-                    {doc.file_url ? (
-                      <a href={doc.file_url} className="link link-hover" target="_blank" rel="noreferrer">
-                        {doc.document_name}
-                      </a>
-                    ) : (
-                      doc.document_name
-                    )}
-                  </td>
-                  <td className="text-xs">{doc.document_type ?? "—"}</td>
-                  <td className="text-xs">{formatDateTime(doc.uploaded_at)}</td>
-                  <td className="text-xs">{uploader?.full_name ?? "—"}</td>
-                  <td className="text-sm opacity-70">{doc.notes ?? "—"}</td>
-                </tr>
-              );
-            })}
-          </DataTable>
-        ) : (
-          <EmptyState
-            title="No documents attached"
-            description="Signed PDFs and exhibits will appear here once uploaded."
-          />
-        )}
+        <ContractDocumentsPanel
+          contractId={id}
+          profileId={profile.id}
+          canManage={managerCanEdit}
+          documents={documents as Parameters<typeof ContractDocumentsPanel>[0]["documents"]}
+        />
+      </Section>
+
+      <Section title="Contract Changes">
+        <ContractChangesPanel
+          changes={changes as Parameters<typeof ContractChangesPanel>[0]["changes"]}
+        />
       </Section>
 
       <Section title="Version History">

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
@@ -6,6 +7,7 @@ import { ContractsListClient } from "@/components/ContractsListClient";
 import { EmptyState, ErrorState, PageHeader, StatCard } from "@/components/ui";
 import type { ContractStatus } from "@/lib/types";
 import {
+  canManageContracts,
   canViewContractsModule,
   listContracts,
   summarizeContractsByStatus,
@@ -18,6 +20,7 @@ export default async function ContractsPage() {
   if (!canViewContractsModule(profile.role)) redirect("/dashboard");
 
   const copy = CONTRACTS_NAV_COPY[profile.role];
+  const canManage = canManageContracts(profile.role);
   const supabase = await createClient();
   const { data, error } = await listContracts(supabase);
   const contracts = (data ?? []) as ContractListRow[];
@@ -25,7 +28,17 @@ export default async function ContractsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader
+        title={copy.title}
+        description={copy.description}
+        actions={
+          canManage ? (
+            <Link href="/contracts/new" className="btn btn-primary">
+              New contract
+            </Link>
+          ) : null
+        }
+      />
 
       {error ? <ErrorState message={error.message} /> : null}
 
@@ -37,7 +50,12 @@ export default async function ContractsPage() {
         </div>
       ) : null}
 
-      {!error && contracts.length === 0 ? <EmptyState title="No contracts on file" /> : null}
+      {!error && contracts.length === 0 ? (
+        <EmptyState
+          title="No contracts on file"
+          description={canManage ? "Create the first service agreement to get started." : undefined}
+        />
+      ) : null}
 
       {!error && contracts.length > 0 ? <ContractsListClient contracts={contracts} /> : null}
     </div>

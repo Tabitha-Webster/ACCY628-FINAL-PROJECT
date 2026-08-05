@@ -162,6 +162,13 @@ export type ContractDocument = {
   uploaded_by: string | null;
   uploaded_at: string;
   notes: string | null;
+  document_group_id: string;
+  version_number: number;
+  is_current: boolean;
+  file_size: number | null;
+  mime_type: string | null;
+  replace_reason: string | null;
+  replaced_at: string | null;
 };
 
 export type ContractVersion = {
@@ -172,6 +179,18 @@ export type ContractVersion = {
   snapshot: Record<string, unknown> | null;
   created_by: string | null;
   created_at: string;
+};
+
+export type ContractChange = {
+  id: string;
+  contract_id: string;
+  field_name: string;
+  previous_value: string | null;
+  new_value: string | null;
+  change_reason: string;
+  changed_by: string | null;
+  changed_at: string;
+  source: string;
 };
 
 export type SupportTicket = {

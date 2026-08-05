@@ -18,6 +18,7 @@ export type {
   ContractService,
   ContractDocument,
   ContractVersion,
+  ContractChange,
   ContractStatus,
   ContractType,
   RenewalType,
@@ -30,4 +31,8 @@ export * from "./dates";
 export * from "./lifecycle";
 export * from "./warnings";
 export * from "./queries";
+export * from "./validation";
+export * from "./audit";
+
+
 

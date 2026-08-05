@@ -139,10 +139,33 @@ export async function listContractDocuments(supabase: SupabaseClient, contractId
   return supabase
     .from("contract_documents")
     .select(
-      "id, contract_id, document_name, document_type, storage_path, file_url, uploaded_by, uploaded_at, notes, uploaded_by_profile:profiles!contract_documents_uploaded_by_fkey(full_name)"
+      "id, contract_id, document_name, document_type, storage_path, file_url, uploaded_by, uploaded_at, notes, document_group_id, version_number, is_current, file_size, mime_type, replace_reason, replaced_at, uploaded_by_profile:profiles!contract_documents_uploaded_by_fkey(full_name)"
     )
     .eq("contract_id", contractId)
     .order("uploaded_at", { ascending: false });
+}
+
+export async function listContractDocumentHistory(
+  supabase: SupabaseClient,
+  documentGroupId: string
+) {
+  return supabase
+    .from("contract_documents")
+    .select(
+      "id, contract_id, document_name, document_type, storage_path, file_url, uploaded_by, uploaded_at, notes, document_group_id, version_number, is_current, file_size, mime_type, replace_reason, replaced_at, uploaded_by_profile:profiles!contract_documents_uploaded_by_fkey(full_name)"
+    )
+    .eq("document_group_id", documentGroupId)
+    .order("version_number", { ascending: false });
+}
+
+export async function listContractChanges(supabase: SupabaseClient, contractId: string) {
+  return supabase
+    .from("contract_changes")
+    .select(
+      "id, contract_id, field_name, previous_value, new_value, change_reason, changed_by, changed_at, source, changed_by_profile:profiles!contract_changes_changed_by_fkey(full_name)"
+    )
+    .eq("contract_id", contractId)
+    .order("changed_at", { ascending: false });
 }
 
 export async function listContractVersions(supabase: SupabaseClient, contractId: string) {
