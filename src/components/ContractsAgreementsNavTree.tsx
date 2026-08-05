@@ -8,6 +8,13 @@ import { useState } from "react";
 type NavLink = { href: string; label: string };
 
 function pathActive(pathname: string, href: string) {
+  if (href === "/contracts") {
+    // Avoid treating submenu routes as Manage Contracts.
+    return (
+      pathname === "/contracts" ||
+      /^\/contracts\/(?!reports(?:\/|$)|renewals(?:\/|$)|customers(?:\/|$)|new(?:\/|$)).+/.test(pathname)
+    );
+  }
   return pathname === href || pathname.startsWith(href + "/");
 }
 
@@ -26,6 +33,7 @@ export function ContractsAgreementsNavTree({
 }) {
   const pathname = usePathname();
   const links: NavLink[] = [
+    { href: "/contracts", label: "Manage Contracts" },
     ...(showReports ? [{ href: "/contracts/reports", label: "Contracts Dashboard" }] : []),
     { href: "/contracts/renewals", label: "Renewal & Expiration" },
     { href: "/contracts/customers", label: "Customer" },

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Search, X } from "lucide-react";
 import { EmptyState, Money, StatusBadge } from "@/components/ui";
 import { formatDate, statusLabel } from "@/lib/format";
@@ -93,11 +93,19 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   );
 }
 
-export function ContractsListClient({ contracts }: { contracts: ContractsListItem[] }) {
+export function ContractsListClient({
+  contracts,
+  initialStatus = "",
+  canEdit = false,
+}: {
+  contracts: ContractsListItem[];
+  initialStatus?: string;
+  canEdit?: boolean;
+}) {
   const now = useMemo(() => new Date(), []);
   const [search, setSearch] = useState("");
   const [customerId, setCustomerId] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(initialStatus);
   const [contractType, setContractType] = useState("");
   const [managerId, setManagerId] = useState("");
   const [expirationPreset, setExpirationPreset] = useState<DatePreset>("");
@@ -108,6 +116,10 @@ export function ContractsListClient({ contracts }: { contracts: ContractsListIte
   const [renewalTo, setRenewalTo] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("end_date");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  useEffect(() => {
+    setStatus(initialStatus);
+  }, [initialStatus]);
 
   const customers = useMemo(() => {
     const map = new Map<string, string>();
@@ -643,9 +655,26 @@ export function ContractsListClient({ contracts }: { contracts: ContractsListIte
                     )}
                   </td>
                   <td className="text-right">
-                    <Link href={`/contracts/${row.id}`} className="btn btn-ghost btn-xs">
-                      View
-                    </Link>
+                    <div className="flex flex-wrap justify-end gap-1">
+                      <Link href={`/contracts/${row.id}`} className="btn btn-ghost btn-xs">
+                        View
+                      </Link>
+                      {canEdit ? (
+                        <Link href={`/contracts/${row.id}/edit`} className="btn btn-ghost btn-xs">
+                          Edit
+                        </Link>
+                      ) : null}
+                      {row.status === "pending_approval" ? (
+                        <Link href={`/contracts/${row.id}`} className="btn btn-primary btn-xs">
+                          Approve
+                        </Link>
+                      ) : null}
+                      {row.status === "active" || row.status === "expired" ? (
+                        <Link href={`/contracts/${row.id}`} className="btn btn-outline btn-xs">
+                          Renew / Cancel
+                        </Link>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -71,11 +71,7 @@ export function evaluateSlaClock(input: SlaClockInput): SlaCondition {
     const elapsedMs = now.getTime() - submitted.getTime();
     if (elapsedMs / windowMs >= AT_RISK_THRESHOLD) return "at_risk";
   } else {
-    // Fallback when submitted_at missing: last 20% of time-to-deadline
-    const msLeft = target.getTime() - now.getTime();
-    // Without a start, approximate using remaining vs an unknown window — use 20% of time left relative to a 1h floor
-    // Prefer: treat as at risk when less than 20% of a conventional window remains is impossible.
-    // Use: if we somehow lack submitted_at, keep not_yet_due until missed.
+    // Fallback when submitted_at missing: keep not_yet_due until missed.
   }
 
   return "not_yet_due";
@@ -242,6 +238,183 @@ export function computeSlaDeadlines(input: {
     target_resolution_at:
       resolutionHours != null && resolutionHours >= 0 ? addHours(submitted, resolutionHours) : null,
   };
+}
+
+/** Local calendar date key (YYYY-MM-DD) using the browser/server local timezone. */
+export function localDateKey(date: Date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/** Local calendar date of an ISO timestamp. */
+export function localDateKeyFromIso(iso: string | null | undefined) {
+  if (!iso) return null;
+  const d = parseDate(iso);
+  return d ? localDateKey(d) : null;
+}
+
+/** Human-readable duration for countdown / overdue displays. */
+export function formatDurationMs(ms: number) {
+  const abs = Math.abs(ms);
+  const totalMinutes = Math.max(0, Math.floor(abs / 60000));
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0 || days > 0) parts.push(`${hours}h`);
+  parts.push(`${minutes}m`);
+  return parts.join(" ");
+}
+
+export type SlaCountdownView = {
+  condition: SlaCondition;
+  /** True when the requirement is already satisfied (countdown stopped). */
+  stopped: boolean;
+  overdue: boolean;
+  /** Primary display text, e.g. "2h 15m remaining" or "Overdue by 45m". */
+  text: string;
+  /** Short icon/label prefix for accessibility (not color-only). */
+  icon: string;
+};
+
+/**
+ * Live countdown / overdue text for one SLA clock.
+ * Stops after satisfaction; preserves Met vs Missed from evaluateSlaClock.
+ */
+export function slaCountdownView(input: {
+  submittedAt?: string | null;
+  targetAt: string | null | undefined;
+  satisfiedAt: string | null | undefined;
+  status?: string | null;
+  kind: "response" | "resolution";
+  now?: Date;
+}): SlaCountdownView {
+  const now = input.now ?? new Date();
+  const condition = evaluateSlaClock({
+    submittedAt: input.submittedAt,
+    targetAt: input.targetAt,
+    satisfiedAt: input.satisfiedAt,
+    status: input.status,
+    kind: input.kind,
+    now,
+  });
+
+  if (condition === "not_defined") {
+    return { condition, stopped: true, overdue: false, text: "SLA Not Defined", icon: "○" };
+  }
+
+  const target = parseDate(input.targetAt);
+  const satisfied = parseDate(input.satisfiedAt);
+  const requirementMet =
+    input.kind === "resolution"
+      ? isResolutionSatisfied(input.status, satisfied)
+      : Boolean(satisfied);
+
+  if (requirementMet) {
+    const label = condition === "met" ? "Met" : condition === "missed" ? "Missed" : slaConditionLabel(condition);
+    return {
+      condition,
+      stopped: true,
+      overdue: condition === "missed",
+      text: `${label} · clock stopped`,
+      icon: condition === "met" ? "✓" : "⚠",
+    };
+  }
+
+  if (!target) {
+    return { condition: "not_defined", stopped: true, overdue: false, text: "SLA Not Defined", icon: "○" };
+  }
+
+  const delta = target.getTime() - now.getTime();
+  if (delta < 0) {
+    return {
+      condition: "missed",
+      stopped: false,
+      overdue: true,
+      text: `Overdue by ${formatDurationMs(-delta)}`,
+      icon: "⚠",
+    };
+  }
+
+  return {
+    condition,
+    stopped: false,
+    overdue: false,
+    text: `${formatDurationMs(delta)} remaining`,
+    icon: condition === "at_risk" ? "⏱" : "·",
+  };
+}
+
+/**
+ * Urgency rank for technician open-queue sorting (lower = more urgent).
+ * 0 Critical+overdue, 1 Critical+at risk, 2 High+overdue,
+ * 3 response deadline approaching, 4 resolution approaching, 5 other open.
+ */
+export function technicianUrgencyRank(
+  ticket: {
+    priority?: string | null;
+    submitted_at?: string | null;
+    target_response_at?: string | null;
+    target_resolution_at?: string | null;
+    actual_response_at?: string | null;
+    completed_at?: string | null;
+    status?: string | null;
+  },
+  now: Date = new Date()
+) {
+  const sla = evaluateTicketSla(ticket, now);
+  const priority = (ticket.priority ?? "").toLowerCase();
+  const isCritical = priority === "critical";
+  const isHigh = priority === "high";
+
+  if (isCritical && sla.overdue) return 0;
+  if (isCritical && (sla.overall === "at_risk" || sla.response === "at_risk" || sla.resolution === "at_risk"))
+    return 1;
+  if (isHigh && sla.overdue) return 2;
+
+  const responseApproaching =
+    !ticket.actual_response_at &&
+    (sla.response === "at_risk" ||
+      (ticket.target_response_at != null &&
+        new Date(ticket.target_response_at).getTime() - now.getTime() <= 4 * 60 * 60 * 1000 &&
+        new Date(ticket.target_response_at).getTime() >= now.getTime()));
+  if (responseApproaching) return 3;
+
+  const resolutionApproaching =
+    !ticket.completed_at &&
+    ticket.status !== "resolved" &&
+    ticket.status !== "closed" &&
+    (sla.resolution === "at_risk" ||
+      (ticket.target_resolution_at != null &&
+        new Date(ticket.target_resolution_at).getTime() - now.getTime() <= 4 * 60 * 60 * 1000 &&
+        new Date(ticket.target_resolution_at).getTime() >= now.getTime()));
+  if (resolutionApproaching) return 4;
+
+  return 5;
+}
+
+export function earliestRelevantDeadlineMs(ticket: {
+  actual_response_at?: string | null;
+  completed_at?: string | null;
+  status?: string | null;
+  target_response_at?: string | null;
+  target_resolution_at?: string | null;
+}) {
+  const candidates: number[] = [];
+  if (!ticket.actual_response_at && ticket.target_response_at) {
+    const t = parseDate(ticket.target_response_at);
+    if (t) candidates.push(t.getTime());
+  }
+  if (
+    !ticket.completed_at &&
+    ticket.status !== "resolved" &&
+    ticket.status !== "closed" &&
+    ticket.target_resolution_at
+  ) {
+    const t = parseDate(ticket.target_resolution_at);
+    if (t) candidates.push(t.getTime());
+  }
+  return candidates.length ? Math.min(...candidates) : Number.POSITIVE_INFINITY;
 }
 
 /**

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { isManagerRole } from "@/lib/constants";
 import { DataTable, EmptyState, ErrorState, Money, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import { AR_AGING_BUCKETS, arAgingBucket } from "@/lib/calculations";
@@ -10,7 +11,7 @@ import { withDerivedInvoiceStatus } from "@/lib/billing";
 export default async function BillingCollectionsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (profile.role !== "manager") redirect("/dashboard");
+  if (!isManagerRole(profile.role)) redirect("/dashboard");
 
   const supabase = await createClient();
 

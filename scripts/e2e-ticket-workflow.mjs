@@ -238,14 +238,13 @@ async function main() {
     await page.waitForSelector("text=Manager Actions", { timeout: 15000 });
     pass("Manager can view new ticket");
 
-    // Assign Taylor Nguyen
-    const techSelect = page.locator("select").filter({ hasText: /Taylor Nguyen|Riley Chen/ });
-    await techSelect.first().selectOption({ label: "Taylor Nguyen" });
+    // Assign Taylor Nguyen — use option values so React controlled state updates
+    const techSelect = page.locator("select").filter({ hasText: /Taylor Nguyen|Riley Chen/ }).first();
+    await techSelect.selectOption("11111111-1111-1111-1111-111111111102");
     await page.getByRole("button", { name: /save assignment/i }).click();
     await page.waitForTimeout(2000);
     await page.goto(`${URL}/tickets/${ticketId}`);
     await page.waitForSelector("text=Assign / reassign technician", { timeout: 30000 });
-    let mgrBody = await page.locator("body").innerText();
     const { data: assignedRow } = await mgrSb
       .from("support_tickets")
       .select("status, assigned_technician_id")
@@ -256,15 +255,18 @@ async function main() {
       assignedRow.assigned_technician_id === "11111111-1111-1111-1111-111111111102"
     )
       pass("Manager assignment saved / status Assigned");
-    else if (/Assigned|Taylor Nguyen/i.test(mgrBody))
-      pass("Manager assignment saved / status Assigned", "verified via UI");
     else fail("Manager assignment saved / status Assigned", JSON.stringify(assignedRow));
 
-    // Reassign to Riley — re-query select after navigation
-    const techSelect2 = page.locator("select").filter({ hasText: /Taylor Nguyen|Riley Chen/ });
-    await techSelect2.first().selectOption({ label: "Riley Chen" });
+    // Reassign to Riley
+    await page.goto(`${URL}/tickets/${ticketId}`);
+    await page.waitForSelector("text=Assign / reassign technician", { timeout: 30000 });
+    await page
+      .locator("select")
+      .filter({ hasText: /Taylor Nguyen|Riley Chen/ })
+      .first()
+      .selectOption("11111111-1111-1111-1111-111111111103");
     await page.getByRole("button", { name: /save assignment/i }).click();
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(2500);
     const { data: reass } = await mgrSb
       .from("support_tickets")
       .select("assigned_technician_id")
@@ -275,9 +277,15 @@ async function main() {
     else fail("Manager can reassign technician", reass?.assigned_technician_id);
 
     // Reassign back to Taylor for technician workflow
-    await techSelect2.first().selectOption({ label: "Taylor Nguyen" });
+    await page.goto(`${URL}/tickets/${ticketId}`);
+    await page.waitForSelector("text=Assign / reassign technician", { timeout: 30000 });
+    await page
+      .locator("select")
+      .filter({ hasText: /Taylor Nguyen|Riley Chen/ })
+      .first()
+      .selectOption("11111111-1111-1111-1111-111111111102");
     await page.getByRole("button", { name: /save assignment/i }).click();
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(2000);
 
     // Customer cannot assign — already checked UI; also RLS via customer client
     const { sb: custSb } = await signIn(ACCOUNTS.customer.email, ACCOUNTS.customer.password);
@@ -329,6 +337,8 @@ async function main() {
 
     await page.goto(`${URL}/tickets/${ticketId}`);
     await page.waitForSelector("text=Technician work", { timeout: 15000 });
+    // Expand work panel from My Assignments-style actions if collapsed is N/A on detail page
+    const updateBtn = page.getByRole("button", { name: /Update Status|Save status/i });
     pass("Technician can open ticket");
 
     const techBody = await page.locator("body").innerText();
@@ -338,11 +348,17 @@ async function main() {
 
     // Start work: set In Progress + save
     const statusSelect = page.locator("select").filter({ hasText: /In Progress|Waiting on Customer/ }).first();
+    await statusSelect.waitFor({ timeout: 15000 });
     await statusSelect.selectOption("in_progress");
-    await page.getByLabel(/work notes/i).or(page.locator("textarea").first()).fill("E2E: began triage of Outlook temporary profile.");
-    // Prefer dedicated work notes field
-    const workNotes = page.getByLabel(/work notes/i);
-    if (await workNotes.count()) await workNotes.fill("E2E: began triage of Outlook temporary profile.");
+    // Prefer dedicated work notes field (avoid matching customer-visible summary textarea)
+    const workNotes = page.getByRole("textbox", { name: /work notes/i });
+    if (await workNotes.count()) {
+      await workNotes.first().fill("E2E: began triage of Outlook temporary profile.");
+    } else {
+      await page.locator('textarea[placeholder*="find or do"]').first().fill(
+        "E2E: began triage of Outlook temporary profile."
+      );
+    }
 
     // Record time
     const hours = page.getByLabel(/hours worked/i);

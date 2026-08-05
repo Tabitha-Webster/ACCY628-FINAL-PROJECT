@@ -22,11 +22,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      data-theme="corporate"
+      data-theme="servicesync"
       className={`${sans.variable} ${serif.variable} h-full`}
       suppressHydrationWarning
     >
-      <body className="min-h-full bg-base-200 font-sans antialiased">
+      <body className="min-h-full bg-base-200 font-sans antialiased text-base-content">
         <ThemeInit />
         {children}
       </body>

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
+import { isManagerRole } from "@/lib/constants";
 import { PageHeader } from "@/components/ui";
 
 type Control = {
@@ -51,6 +52,11 @@ const CONTROLS: Control[] = [
   },
   {
     category: "Work",
+    risk: "an approved time entry, cost, project, milestone, ticket, or contract change could be edited afterward and billed under the old approval",
+    control: "changing an approved record clears its approval so it must be reviewed again; billed records cannot be edited and reviewed invoices return to draft if their charges change",
+  },
+  {
+    category: "Work",
     risk: "a customer could be missed or receive degraded service without management awareness",
     control: "service operations tracks every open ticket against its SLA target and highlights any ticket at risk of, or already past, its resolution deadline",
   },
@@ -87,7 +93,12 @@ const CONTROLS: Control[] = [
   {
     category: "Payment",
     risk: "a payment could be recorded for more than a customer actually owes, or applied to an invoice that was already canceled",
-    control: "the payment recording form validates that the payment amount does not exceed the invoice's remaining balance and blocks payments against canceled invoices",
+    control: "the payment recording form validates that the payment amount does not exceed the invoice's remaining balance",
+  },
+  {
+    category: "Payment",
+    risk: "cash could be applied to a canceled invoice, making the customer look paid when the invoice is no longer valid",
+    control: "canceled invoices are hidden from the payment screen, the payment API refuses them, and the database blocks any payment application against a canceled invoice",
   },
   {
     category: "Payment",
@@ -116,7 +127,7 @@ const CATEGORY_ORDER = ["Access", "Contract", "Work", "Billing", "Payment", "Dat
 export default async function ControlsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (profile.role !== "manager") redirect("/dashboard");
+  if (!isManagerRole(profile.role)) redirect("/dashboard");
 
   return (
     <div className="space-y-6">

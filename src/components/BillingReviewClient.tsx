@@ -563,7 +563,7 @@ export function BillingReviewClient({
 
                     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-base-300 pt-3">
                       <p className="text-sm">
-                        <span className="opacity-60">{groupSelectedItems.length} selected · Total: </span>
+                        <span className="opacity-60">{groupSelectedItems.length} selected Â· Total: </span>
                         <span className="font-semibold">{formatCurrency(total)}</span>
                       </p>
                       <button

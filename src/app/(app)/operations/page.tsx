@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { isManagerRole } from "@/lib/constants";
 import { DataTable, EmptyState, ErrorState, Hours, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import { formatDate, statusLabel } from "@/lib/format";
 import { slaStatus, usagePercentage, usageStatus } from "@/lib/calculations";
@@ -18,7 +19,7 @@ function slaBadgeClass(status: "met" | "at_risk" | "missed" | "pending") {
 export default async function OperationsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (profile.role !== "manager") redirect("/dashboard");
+  if (!isManagerRole(profile.role)) redirect("/dashboard");
 
   const supabase = await createClient();
 

@@ -2,7 +2,7 @@
 // Mirrors the public schema in Supabase; kept hand-written since no generated
 // Database types exist yet in this project.
 
-export type ApprovalStatus = "not_required" | "pending" | "approved" | "rejected";
+export type ApprovalStatus = "not_required" | "pending" | "awaiting_billing" | "approved" | "rejected";
 export type BillingStatus = "unbilled" | "ready" | "billed" | "excluded";
 export type WorkClassification = "included" | "billable" | "out_of_scope";
 export type TicketPriority = "low" | "medium" | "high" | "critical";
@@ -59,7 +59,13 @@ export type RevenueType =
   | "software_equipment"
   | "reimbursable";
 export type DisputeResolutionStatus = "open" | "under_review" | "resolved" | "rejected";
-export type CustomerStatus = "active" | "inactive" | "prospect" | "on_hold";
+export type CustomerStatus =
+  | "active"
+  | "inactive"
+  | "prospect"
+  | "on_hold"
+  | "pending_approval"
+  | "rejected";
 
 export type Customer = {
   id: string;
@@ -67,11 +73,15 @@ export type Customer = {
   industry: string | null;
   primary_contact: string | null;
   contact_email: string | null;
+  primary_contact_phone?: string | null;
   service_address: string | null;
   status: CustomerStatus;
   credit_terms: string | null;
   account_manager_id: string | null;
   notes: string | null;
+  approval_note?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
   created_at: string;
 };
 
@@ -271,6 +281,15 @@ export type SupportTicket = {
   reopened_at: string | null;
   reopened_by: string | null;
   reopen_reason: string | null;
+  summary_generated_at: string | null;
+  summary_generated_by: string | null;
+  summary_source: "ai" | "fallback" | "manual" | string | null;
+  summary_model: string | null;
+  scheduled_start_at: string | null;
+  scheduled_end_at: string | null;
+  service_mode: "remote" | "onsite" | string | null;
+  service_location: string | null;
+  schedule_notes: string | null;
   created_at: string;
   updated_at: string | null;
   created_by: string | null;
@@ -304,6 +323,7 @@ export type TimeEntry = {
   internal_cost_rate: number;
   billing_rate: number | null;
   labor_cost: number | null;
+  unusual_hours_flag?: boolean;
   approval_status: ApprovalStatus;
   billing_status: BillingStatus;
   approved_by: string | null;
@@ -330,7 +350,9 @@ export type DirectCost = {
   receipt_reference: string | null;
   description: string;
   entered_by: string | null;
+  late_entry_flag?: boolean;
   entered_after_invoice?: boolean;
+  approval_threshold_required?: boolean;
   approval_status: ApprovalStatus;
   billing_status: BillingStatus;
   approved_by: string | null;
@@ -376,6 +398,8 @@ export type Project = {
   software_budget: number | null;
   vendor_budget: number | null;
   customer_approval_status: ApprovalStatus | null;
+  customer_approved_by?: string | null;
+  customer_approved_at?: string | null;
   uses_milestone_billing: boolean | null;
   amount_billed: number | null;
   amount_collected: number | null;
@@ -393,6 +417,8 @@ export type ProjectMilestone = {
   completed: boolean;
   completed_at: string | null;
   approval_status: ApprovalStatus | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
   billing_status: BillingStatus | null;
   created_at: string;
 };

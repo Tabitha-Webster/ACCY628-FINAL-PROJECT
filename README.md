@@ -38,6 +38,7 @@ Password for all demo users: `1234`
 
 | Role | Email |
 |------|-------|
+| Admin | admin@servicesync.demo |
 | Manager | manager@servicesync.demo |
 | Technician | tech@servicesync.demo |
 | Billing | billing@servicesync.demo |

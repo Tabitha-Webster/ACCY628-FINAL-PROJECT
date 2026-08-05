@@ -26,6 +26,11 @@ type Props = {
   noTimeExplanation: string | null;
   reopenedAt: string | null;
   reopenReason: string | null;
+  scheduledStartAt?: string | null;
+  scheduledEndAt?: string | null;
+  serviceMode?: string | null;
+  serviceLocation?: string | null;
+  scheduleNotes?: string | null;
   currentUserId: string;
   role: UserRole;
   internalCostRate: number;
@@ -34,6 +39,20 @@ type Props = {
   hasTimeEntryDescriptions: boolean;
   technicians?: TechnicianOption[];
 };
+
+function toLocalInputValue(iso: string | null | undefined) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromLocalInputValue(value: string) {
+  if (!value.trim()) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
 
 export function TicketActions({
   ticketId,
@@ -52,6 +71,11 @@ export function TicketActions({
   noTimeExplanation,
   reopenedAt,
   reopenReason,
+  scheduledStartAt = null,
+  scheduledEndAt = null,
+  serviceMode = null,
+  serviceLocation = null,
+  scheduleNotes = null,
   currentUserId,
   role,
   internalCostRate,
@@ -62,6 +86,11 @@ export function TicketActions({
 }: Props) {
   const router = useRouter();
   const [assigneeId, setAssigneeId] = useState(assignedTechnicianId ?? "");
+  const [scheduleStart, setScheduleStart] = useState(toLocalInputValue(scheduledStartAt));
+  const [scheduleEnd, setScheduleEnd] = useState(toLocalInputValue(scheduledEndAt));
+  const [mode, setMode] = useState(serviceMode ?? "");
+  const [location, setLocation] = useState(serviceLocation ?? "");
+  const [schedNotes, setSchedNotes] = useState(scheduleNotes ?? "");
   const [reopenReasonInput, setReopenReasonInput] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -69,28 +98,93 @@ export function TicketActions({
 
   const isCompleted = status === "resolved" || status === "closed";
 
-  async function assignTechnician(e: React.FormEvent) {
+  async function assignTechnician(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!assigneeId) {
+    const formData = new FormData(e.currentTarget);
+    const selectedAssignee = String(formData.get("assignee") || assigneeId).trim();
+    if (!selectedAssignee) {
       setError("Select a technician to assign.");
+      return;
+    }
+    const startIso = fromLocalInputValue(String(formData.get("schedule_start") || scheduleStart));
+    const endIso = fromLocalInputValue(String(formData.get("schedule_end") || scheduleEnd));
+    const selectedMode = String(formData.get("service_mode") || mode);
+    const selectedLocation = String(formData.get("service_location") || location);
+    const selectedNotes = String(formData.get("schedule_notes") || schedNotes);
+    if (startIso && endIso && new Date(endIso) < new Date(startIso)) {
+      setError("Scheduled end must be after the start time.");
       return;
     }
     setError(null);
     setMessage(null);
     setLoading("assign");
     const supabase = createClient();
-    const { error: updateError } = await supabase
-      .from("support_tickets")
-      .update({
-        assigned_technician_id: assigneeId,
-        status: status === "new" ? "assigned" : status,
-      })
-      .eq("id", ticketId);
-    setLoading(null);
+    // Prefer assigned_at when the column exists; fall back if schema cache lacks it.
+    let updateError = (
+      await supabase
+        .from("support_tickets")
+        .update({
+          assigned_technician_id: selectedAssignee,
+          status: status === "new" ? "assigned" : status,
+          assigned_at: new Date().toISOString(),
+        })
+        .eq("id", ticketId)
+    ).error;
+
+    if (updateError?.message?.includes("assigned_at")) {
+      updateError = (
+        await supabase
+          .from("support_tickets")
+          .update({
+            assigned_technician_id: selectedAssignee,
+            status: status === "new" ? "assigned" : status,
+          })
+          .eq("id", ticketId)
+      ).error;
+    }
+
     if (updateError) {
+      setLoading(null);
       setError(updateError.message);
       return;
     }
+
+    setAssigneeId(selectedAssignee);
+
+    // Optional schedule — ignore if migration not applied yet.
+    if (startIso || endIso || selectedMode || selectedLocation.trim() || selectedNotes.trim()) {
+      const { error: scheduleError } = await supabase
+        .from("support_tickets")
+        .update({
+          scheduled_start_at: startIso,
+          scheduled_end_at: endIso,
+          service_mode: selectedMode || null,
+          service_location: selectedLocation.trim() || null,
+          schedule_notes: selectedNotes.trim() || null,
+        })
+        .eq("id", ticketId);
+      setLoading(null);
+      if (
+        scheduleError?.message?.includes("scheduled_start_at") ||
+        scheduleError?.message?.includes("schedule_notes") ||
+        scheduleError?.message?.includes("service_mode") ||
+        scheduleError?.message?.includes("schema cache")
+      ) {
+        setMessage("Technician assignment saved. Apply the schedule migration to store visit times.");
+        router.refresh();
+        return;
+      }
+      if (scheduleError) {
+        setError(`Assigned, but schedule was not saved: ${scheduleError.message}`);
+        router.refresh();
+        return;
+      }
+      setMessage("Technician assignment and schedule saved.");
+      router.refresh();
+      return;
+    }
+
+    setLoading(null);
     setMessage("Technician assignment saved.");
     router.refresh();
   }
@@ -180,6 +274,7 @@ export function TicketActions({
           <label className="form-control">
             <span className="label-text mb-1 text-sm font-medium">Assign / reassign technician</span>
             <select
+              name="assignee"
               className="select select-bordered select-sm"
               value={assigneeId}
               onChange={(e) => setAssigneeId(e.target.value)}
@@ -192,6 +287,77 @@ export function TicketActions({
               ))}
             </select>
           </label>
+
+          {!isCompleted ? (
+            <div className="space-y-2 border-t border-base-300 pt-3">
+              <p className="text-sm font-medium">Schedule visit (optional)</p>
+              <p className="text-xs opacity-70">
+                Sets appointment times for the technician calendar. Do not use SLA deadlines as visit
+                times.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="form-control">
+                  <span className="label-text mb-1 text-xs">Start</span>
+                  <input
+                    type="datetime-local"
+                    name="schedule_start"
+                    className="input input-bordered input-sm"
+                    value={scheduleStart}
+                    onChange={(e) => setScheduleStart(e.target.value)}
+                    disabled={loading === "assign"}
+                  />
+                </label>
+                <label className="form-control">
+                  <span className="label-text mb-1 text-xs">End</span>
+                  <input
+                    type="datetime-local"
+                    name="schedule_end"
+                    className="input input-bordered input-sm"
+                    value={scheduleEnd}
+                    onChange={(e) => setScheduleEnd(e.target.value)}
+                    disabled={loading === "assign"}
+                  />
+                </label>
+                <label className="form-control">
+                  <span className="label-text mb-1 text-xs">Mode</span>
+                  <select
+                    name="service_mode"
+                    className="select select-bordered select-sm"
+                    value={mode}
+                    onChange={(e) => setMode(e.target.value)}
+                    disabled={loading === "assign"}
+                  >
+                    <option value="">Not set</option>
+                    <option value="remote">Remote</option>
+                    <option value="onsite">Onsite</option>
+                  </select>
+                </label>
+                <label className="form-control">
+                  <span className="label-text mb-1 text-xs">Location</span>
+                  <input
+                    name="service_location"
+                    className="input input-bordered input-sm"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="Address or remote note"
+                    disabled={loading === "assign"}
+                  />
+                </label>
+              </div>
+              <label className="form-control">
+                <span className="label-text mb-1 text-xs">Schedule notes</span>
+                <textarea
+                  name="schedule_notes"
+                  className="textarea textarea-bordered textarea-sm w-full"
+                  rows={2}
+                  value={schedNotes}
+                  onChange={(e) => setSchedNotes(e.target.value)}
+                  disabled={loading === "assign"}
+                />
+              </label>
+            </div>
+          ) : null}
+
           <button className="btn btn-primary btn-sm" disabled={loading === "assign" || isCompleted}>
             {loading === "assign" ? "Saving…" : "Save Assignment"}
           </button>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/auth";
+import { getCurrentProfile, requireApprovedCustomer } from "@/lib/auth";
 import { PageHeader, DataTable, EmptyState, StatusBadge, Money, DateText, ErrorState, StatCard } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
 import { withDerivedInvoiceStatus } from "@/lib/billing";
@@ -10,6 +10,7 @@ export default async function MyInvoicesPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
   if (profile.role !== "customer" || !profile.customer_id) redirect("/invoices");
+  await requireApprovedCustomer(profile);
 
   const supabase = await createClient();
   const customerId = profile.customer_id;

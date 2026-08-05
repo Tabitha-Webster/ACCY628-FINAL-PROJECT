@@ -66,7 +66,17 @@ export function DemoRoleSwitcher({ currentRole }: { currentRole: UserRole }) {
       return;
     }
 
-    window.location.assign("/dashboard");
+    // Stay on the same customer/list URL when possible so each role sees the same live record.
+    const path = window.location.pathname;
+    const stayOnSharedCustomerView =
+      path === "/customers" || path.startsWith("/customers/");
+    if (stayOnSharedCustomerView) {
+      window.location.assign(path);
+      return;
+    }
+    window.location.assign(
+      pending.role === "admin" ? "/admin" : pending.role === "technician" ? "/dashboard" : "/dashboard"
+    );
   }
 
   const selectedRole = pending?.role ?? currentRole;

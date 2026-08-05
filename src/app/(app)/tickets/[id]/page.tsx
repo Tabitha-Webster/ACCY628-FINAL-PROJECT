@@ -657,6 +657,11 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
             noTimeExplanation={t.no_time_explanation ?? null}
             reopenedAt={t.reopened_at ?? null}
             reopenReason={t.reopen_reason ?? null}
+            scheduledStartAt={(t as SupportTicket).scheduled_start_at ?? null}
+            scheduledEndAt={(t as SupportTicket).scheduled_end_at ?? null}
+            serviceMode={(t as SupportTicket).service_mode ?? null}
+            serviceLocation={(t as SupportTicket).service_location ?? null}
+            scheduleNotes={(t as SupportTicket).schedule_notes ?? null}
             currentUserId={profile.id}
             role={role}
             internalCostRate={Number(profile.internal_cost_rate ?? 65)}

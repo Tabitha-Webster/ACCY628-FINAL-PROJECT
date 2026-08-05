@@ -1,9 +1,32 @@
 @import "tailwindcss";
 @plugin "daisyui" {
-  themes: corporate --default, business, nord, emerald, cupcake, dim;
+  themes: servicesync --default, corporate, business, nord, emerald, cupcake, dim;
 }
 
-/* Keep emerald structure; shift brand green → blue */
+/* Dark blue-forward console theme (default) */
+@plugin "daisyui/theme" {
+  name: "servicesync";
+  default: true;
+  color-scheme: dark;
+  --color-base-100: oklch(22% 0.025 250);
+  --color-base-200: oklch(17% 0.022 250);
+  --color-base-300: oklch(28% 0.03 250);
+  --color-base-content: oklch(94% 0.01 250);
+  --color-primary: oklch(68% 0.15 250);
+  --color-primary-content: oklch(14% 0.03 250);
+  --color-secondary: oklch(62% 0.08 220);
+  --color-secondary-content: oklch(98% 0.01 220);
+  --color-accent: oklch(70% 0.12 200);
+  --color-accent-content: oklch(14% 0.03 200);
+  --color-neutral: oklch(26% 0.02 250);
+  --color-neutral-content: oklch(92% 0.01 250);
+  --color-info: oklch(70% 0.12 230);
+  --color-success: oklch(72% 0.14 155);
+  --color-warning: oklch(80% 0.14 85);
+  --color-error: oklch(68% 0.18 25);
+}
+
+/* Keep emerald available for the theme switcher with blue primary */
 @plugin "daisyui/theme" {
   name: "emerald";
   --color-primary: oklch(55% 0.18 250);
@@ -17,6 +40,59 @@ body {
 
 body {
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Application layout tokens — reuse across authenticated pages */
+:root {
+  --app-space-1: 0.5rem;
+  --app-space-2: 0.75rem;
+  --app-space-3: 1rem;
+  --app-space-4: 1.5rem;
+  --app-space-5: 2rem;
+  --app-content-gap: var(--app-space-4);
+}
+
+.app-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-content-gap);
+}
+
+.app-page-header {
+  padding-bottom: var(--app-space-2);
+  border-bottom: 1px solid color-mix(in oklab, var(--color-base-300) 80%, transparent);
+}
+
+/* PageHeader keeps mb-6 when used alone; nested under PageLayout the margin is cleared. */
+.app-page-header .app-page-header-row {
+  margin-bottom: 0;
+}
+
+.app-page-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-4);
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --app-content-gap: var(--app-space-5);
+  }
+}
+
+/* Login page — light geometric SaaS background (scoped) */
+.login-page-geo {
+  background-color: transparent;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    linear-gradient(135deg, rgba(56, 189, 248, 0.07) 1px, transparent 1px);
+  background-size:
+    48px 48px,
+    48px 48px,
+    24px 24px;
+  mask-image: radial-gradient(ellipse at center, black 40%, transparent 88%);
 }
 
 .tabular-nums {

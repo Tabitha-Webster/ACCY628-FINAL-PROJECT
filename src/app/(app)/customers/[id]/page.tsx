@@ -1,22 +1,59 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { ButtonLink } from "@/components/Button";
+import { Card } from "@/components/Card";
+import { DeleteCustomerButton } from "@/components/DeleteCustomerButton";
+import { PageLayout } from "@/components/PageLayout";
 import {
   AccountingExplainer,
   DataTable,
   EmptyState,
   ErrorState,
   Money,
-  PageHeader,
   StatCard,
   StatusBadge,
 } from "@/components/ui";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, statusBadgeClass, statusLabel } from "@/lib/format";
 import { grossMarginPct, grossProfit } from "@/lib/calculations";
 import { todayDateString, withDerivedInvoiceStatus } from "@/lib/billing";
+import {
+  canEditCustomers,
+  canViewCustomers,
+  getCustomerDetailForInternalRoles,
+} from "@/lib/customers/queries";
+
+export const dynamic = "force-dynamic";
 
 const OPEN_TICKET_STATUSES = ["new", "assigned", "in_progress", "waiting_on_customer", "waiting_on_approval"];
+
+function display(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : "—";
+}
+
+function customerStatusBadgeClass(status: string) {
+  const s = status.toLowerCase();
+  if (s === "active") return "badge-success";
+  if (s === "inactive") return "badge-error";
+  if (s === "on_hold") return "badge-warning";
+  return statusBadgeClass(s);
+}
+
+function CustomerStatusBadge({ status }: { status: string }) {
+  return <span className={`badge ${customerStatusBadgeClass(status)}`}>{statusLabel(status)}</span>;
+}
+
+function DetailField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs font-medium uppercase tracking-wide opacity-60">{label}</dt>
+      <dd className="mt-1 text-sm">{children}</dd>
+    </div>
+  );
+}
 
 export default async function CustomerDetailPage({
   params,
@@ -25,18 +62,61 @@ export default async function CustomerDetailPage({
 }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!["manager", "billing", "technician"].includes(profile.role)) redirect("/dashboard");
+  if (!canViewCustomers(profile.role)) redirect("/dashboard");
 
-  const { id } = await params;
+  const { id: rawId } = await params;
+  const id = decodeURIComponent(rawId ?? "").trim();
+
+  if (!id) {
+    return (
+      <PageLayout
+        title="Customer not found"
+        description="Customer details"
+        actions={
+          <ButtonLink href="/customers" variant="secondary" size="sm">
+            Back to list
+          </ButtonLink>
+        }
+      >
+        <ErrorState message="No customer ID was provided in the link. Return to the customer list and select a customer again." />
+      </PageLayout>
+    );
+  }
+
   const supabase = await createClient();
+  const { customer, error } = await getCustomerDetailForInternalRoles(supabase, id);
 
-  const { data: customer, error: customerError } = await supabase
-    .from("customers")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  if (error) {
+    return (
+      <PageLayout
+        title="Customer"
+        description="Customer details"
+        actions={
+          <ButtonLink href="/customers" variant="secondary" size="sm">
+            Back to list
+          </ButtonLink>
+        }
+      >
+        <ErrorState message={`Unable to load this customer. ${error.message}`} />
+      </PageLayout>
+    );
+  }
 
-  if (!customerError && !customer) notFound();
+  if (!customer) {
+    return (
+      <PageLayout
+        title="Customer not found"
+        description="Customer details"
+        actions={
+          <ButtonLink href="/customers" variant="secondary" size="sm">
+            Back to list
+          </ButtonLink>
+        }
+      >
+        <ErrorState message="That customer does not exist, or you do not have access to it. Return to the customer list and try another record." />
+      </PageLayout>
+    );
+  }
 
   const yearStart = `${new Date().getFullYear()}-01-01`;
 
@@ -49,7 +129,7 @@ export default async function CustomerDetailPage({
   ] = await Promise.all([
     supabase
       .from("contracts")
-      .select("id, contract_number, name, status, contract_type, start_date, end_date, monthly_recurring_fee")
+      .select("id, contract_number, name, status, contract_type, start_date, end_date")
       .eq("customer_id", id)
       .order("start_date", { ascending: false }),
     supabase
@@ -90,17 +170,78 @@ export default async function CustomerDetailPage({
   const ytdProfit = grossProfit(ytdRevenue, ytdCost);
   const ytdMargin = grossMarginPct(ytdRevenue, ytdCost);
 
-  if (customerError || !customer) {
-    return <ErrorState message={customerError?.message ?? "Customer not found."} />;
-  }
+  const row = customer;
+  const identifier = display(row.customer_identifier) !== "—" ? row.customer_identifier : row.id;
+  const canEdit = canEditCustomers(profile.role);
+  const lastUpdated =
+    row.updated_at && !Number.isNaN(Date.parse(row.updated_at))
+      ? ` Last updated ${formatDate(row.updated_at)}.`
+      : "";
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={customer.name}
-        description={customer.industry ? `${customer.industry} · ${customer.credit_terms ?? "Net 30"}` : undefined}
-        actions={<StatusBadge status={customer.status} />}
-      />
+    <PageLayout
+      title={display(row.name)}
+      description={
+        canEdit
+          ? `Shared customer profile. Manager and HR can edit; Technician and Billing view the same live data.${lastUpdated}`
+          : `View-only shared profile — same live data Manager and HR maintain.${lastUpdated}`
+      }
+      actions={
+        <>
+          <ButtonLink href="/customers" variant="secondary" size="sm">
+            Back to list
+          </ButtonLink>
+          {canEdit ? (
+            <ButtonLink href={`/customers/${row.id}/edit`} variant="primary" size="sm">
+              Edit Customer
+            </ButtonLink>
+          ) : null}
+        </>
+      }
+    >
+      {canEdit ? (
+        <div className="mb-2">
+          <DeleteCustomerButton
+            customerId={row.id}
+            customerName={row.name?.trim() || "this customer"}
+            currentStatus={row.status}
+          />
+        </div>
+      ) : null}
+
+      <Card title="Customer details">
+        <dl className="grid gap-4 sm:grid-cols-2">
+          <DetailField label="Customer identifier">
+            <span className="font-mono text-xs tabular-nums">{display(identifier)}</span>
+          </DetailField>
+          <DetailField label="Customer name">{display(row.name)}</DetailField>
+          <DetailField label="Customer status">
+            {row.status ? <CustomerStatusBadge status={row.status} /> : "—"}
+          </DetailField>
+          <DetailField label="Industry">{display(row.industry)}</DetailField>
+          <DetailField label="Service address">{display(row.service_address)}</DetailField>
+          <DetailField label="Credit terms">{display(row.credit_terms)}</DetailField>
+        </dl>
+      </Card>
+
+      <Card title="Primary contact">
+        <dl className="grid gap-4 sm:grid-cols-2">
+          <DetailField label="Primary contact name">{display(row.primary_contact)}</DetailField>
+          <DetailField label="Primary contact email">{display(row.contact_email)}</DetailField>
+          <DetailField label="Primary contact phone">{display(row.primary_contact_phone)}</DetailField>
+        </dl>
+      </Card>
+
+      <Card title="Billing information">
+        <dl className="grid gap-4 sm:grid-cols-2">
+          <DetailField label="Billing contact name">{display(row.billing_contact_name)}</DetailField>
+          <DetailField label="Billing contact email">{display(row.billing_contact_email)}</DetailField>
+          <DetailField label="Billing address">{display(row.billing_address)}</DetailField>
+          <DetailField label="City">{display(row.city)}</DetailField>
+          <DetailField label="State">{display(row.state)}</DetailField>
+          <DetailField label="Postal code">{display(row.postal_code)}</DetailField>
+        </dl>
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
@@ -193,30 +334,30 @@ export default async function CustomerDetailPage({
             <h2 className="text-lg font-semibold">Contracts</h2>
           </div>
           {contracts && contracts.length > 0 ? (
-            <DataTable headers={["Contract", "Status", "Type", "Term", "Monthly Fee"]}>
+            <DataTable headers={["Contract name", "Contract type", "Status", "Start date", "End date"]}>
               {contracts.map((contract) => (
                 <tr key={contract.id}>
                   <td>
                     <Link href={`/contracts/${contract.id}`} className="link link-hover font-medium">
                       {contract.name}
                     </Link>
-                    <div className="text-xs opacity-60">{contract.contract_number}</div>
+                  </td>
+                  <td className="text-xs capitalize">
+                    {(contract.contract_type ?? "—").toString().replace(/_/g, " ")}
                   </td>
                   <td>
                     <StatusBadge status={contract.status} />
                   </td>
-                  <td className="text-xs">{contract.contract_type}</td>
-                  <td className="text-xs">
-                    {formatDate(contract.start_date)} – {formatDate(contract.end_date)}
-                  </td>
-                  <td>
-                    <Money value={Number(contract.monthly_recurring_fee ?? 0)} />
-                  </td>
+                  <td className="text-xs">{formatDate(contract.start_date)}</td>
+                  <td className="text-xs">{formatDate(contract.end_date)}</td>
                 </tr>
               ))}
             </DataTable>
           ) : (
-            <EmptyState title="No contracts on file" />
+            <EmptyState
+              title="No contracts for this customer"
+              description="There are no contracts linked to this customer yet. When a contract is created for this account, it will appear here."
+            />
           )}
         </div>
 
@@ -278,6 +419,6 @@ export default async function CustomerDetailPage({
       </div>
 
       <AccountingExplainer />
-    </div>
+    </PageLayout>
   );
 }

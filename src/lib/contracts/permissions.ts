@@ -144,14 +144,40 @@ export const CONTRACT_PERMISSION_LABELS: Record<ContractPermission, string> = {
   report: "Reporting & Dashboard",
 };
 
+/** Destination for each contract-module action button. */
+export function hrefForContractPermission(permission: ContractPermission): string {
+  switch (permission) {
+    case "view":
+      return "/contracts";
+    case "create":
+      return "/contracts/new";
+    case "edit":
+      return "/contracts?status=draft";
+    case "delete":
+      return "/contracts?status=draft";
+    case "approve":
+      return "/contracts?status=pending_approval";
+    case "renew":
+      return "/contracts/renewals";
+    case "cancel":
+      return "/contracts?status=active";
+    case "report":
+      return "/contracts/reports";
+    default:
+      return "/contracts";
+  }
+}
+
 export function describeContractPermissions(role: UserRole): Array<{
   permission: ContractPermission;
   label: string;
   allowed: boolean;
+  href: string;
 }> {
   return (Object.keys(CONTRACT_PERMISSION_LABELS) as ContractPermission[]).map((permission) => ({
     permission,
     label: CONTRACT_PERMISSION_LABELS[permission],
     allowed: hasContractPermission(role, permission),
+    href: hrefForContractPermission(permission),
   }));
 }

@@ -1,4 +1,4 @@
-export type UserRole = "manager" | "technician" | "billing" | "customer" | "hr";
+export type UserRole = "admin" | "manager" | "technician" | "billing" | "customer" | "hr";
 
 export type Profile = {
   id: string;
@@ -11,7 +11,109 @@ export type Profile = {
   is_active: boolean;
 };
 
+/** Roles an admin can assign in User Access. */
+export const ASSIGNABLE_ROLES: UserRole[] = [
+  "admin",
+  "manager",
+  "technician",
+  "billing",
+  "customer",
+  "hr",
+];
+
+export function isAdminRole(role: UserRole | string) {
+  return role === "admin";
+}
+
+/** Manager and Admin share executive / operations permissions. */
+export function isManagerRole(role: UserRole | string) {
+  return role === "manager" || role === "admin";
+}
+
+/** Roles that can use billing and collections tools. */
+export function canUseBillingTools(role: UserRole | string) {
+  return role === "manager" || role === "billing" || role === "admin";
+}
+
+/** Roles that can view internal customer and contract records. */
+export function canViewCustomerRecords(role: UserRole | string) {
+  return role === "manager" || role === "billing" || role === "technician" || role === "admin";
+}
+
+/** Static access matrix for Admin security review. */
+export const ROLE_ACCESS_MATRIX: {
+  area: string;
+  description: string;
+  roles: UserRole[];
+  financial: boolean;
+  customerData: boolean;
+}[] = [
+  {
+    area: "Executive Dashboard",
+    description: "Company-wide KPIs and exception highlights",
+    roles: ["admin", "manager"],
+    financial: true,
+    customerData: true,
+  },
+  {
+    area: "Customers & Contracts",
+    description: "Customer master data and contract terms",
+    roles: ["admin", "manager", "billing", "technician"],
+    financial: true,
+    customerData: true,
+  },
+  {
+    area: "Service Operations",
+    description: "SLA monitoring, open work, hour usage",
+    roles: ["admin", "manager"],
+    financial: false,
+    customerData: true,
+  },
+  {
+    area: "Technician Assignments",
+    description: "Assigned tickets, time, materials, ad hoc work",
+    roles: ["admin", "technician"],
+    financial: false,
+    customerData: true,
+  },
+  {
+    area: "Billing & Collections",
+    description: "Ready-to-bill, invoices, payments, AR",
+    roles: ["admin", "manager", "billing"],
+    financial: true,
+    customerData: true,
+  },
+  {
+    area: "Accounting / Profitability",
+    description: "Revenue recognition and margin analysis",
+    roles: ["admin", "manager", "billing"],
+    financial: true,
+    customerData: true,
+  },
+  {
+    area: "Admin Console",
+    description: "User access, audit, demo settings, HR directory",
+    roles: ["admin"],
+    financial: true,
+    customerData: true,
+  },
+  {
+    area: "Customer Portal",
+    description: "Own contracts, tickets, invoices only",
+    roles: ["customer"],
+    financial: true,
+    customerData: true,
+  },
+];
+
 export const DEMO_ACCOUNTS = [
+  {
+    role: "admin" as UserRole,
+    label: "Admin",
+    email: "admin@servicesync.demo",
+    password: "1234",
+    name: "Alex Rivera",
+  },
   {
     role: "manager" as UserRole,
     label: "Manager",
@@ -52,23 +154,49 @@ export const DEMO_ACCOUNTS = [
 export type NavItem = {
   href: string;
   label: string;
+  disabled?: boolean;
   children?: NavItem[];
 };
 
+const MANAGER_NAV: NavItem[] = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/customers", label: "Customers" },
+  { href: "/customer-approvals", label: "Approvals" },
+  // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
+  { href: "/projects", label: "Projects" },
+  { href: "/operations", label: "Service Operations" },
+  { href: "/time-cost-approvals", label: "Approve Time & Costs" },
+  { href: "/profitability", label: "Profitability" },
+  { href: "/billing-collections", label: "Billing and Collections" },
+  { href: "/payments", label: "Payment History" },
+  { href: "/hr-analytics", label: "HR Analytics" },
+  { href: "/controls", label: "Controls and Exceptions" },
+];
+
 export const ROLE_NAV: Record<UserRole, NavItem[]> = {
-  manager: [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/customers", label: "Customers" },
-    // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
-    { href: "/operations", label: "Service Operations" },
-    { href: "/profitability", label: "Profitability" },
-    { href: "/billing-collections", label: "Billing and Collections" },
-    { href: "/payments", label: "Payment History" },
-    { href: "/hr-analytics", label: "HR Analytics" },
-    { href: "/controls", label: "Controls and Exceptions" },
+  admin: [
+    { href: "/admin", label: "Admin Console" },
+    { href: "/admin/alerts", label: "Alerts" },
+    { href: "/admin/approvals", label: "Approvals Inbox" },
+    { href: "/admin/search", label: "Admin Search" },
+    { href: "/admin/users", label: "User Access" },
+    { href: "/admin/assignments-board", label: "Assignment Board" },
+    { href: "/admin/renewals", label: "Contract Renewals" },
+    { href: "/admin/billing-center", label: "Billing Center" },
+    { href: "/admin/exports", label: "CSV Exports" },
+    { href: "/admin/exceptions", label: "Exceptions" },
+    { href: "/admin/system", label: "System Health" },
+    ...MANAGER_NAV,
+    { href: "/ready-to-bill", label: "Ready to Bill" },
+    { href: "/invoices", label: "Invoices" },
+    { href: "/accounts-receivable", label: "Accounts Receivable" },
+    { href: "/accounting", label: "Accounting Review" },
   ],
+  manager: MANAGER_NAV,
   technician: [
     { href: "/dashboard", label: "My Assignments" },
+    { href: "/assignments", label: "Assignments Workbench" },
+    { href: "/customers", label: "Customers" },
     // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
     { href: "/tickets", label: "Support Tickets" },
     { href: "/projects", label: "Project Tasks" },
@@ -77,15 +205,20 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   ],
   billing: [
     { href: "/dashboard", label: "Dashboard" },
+    { href: "/customers", label: "Customers" },
     // Contracts & Agreements + Billing/Collections/Accounting trees render in AppShell
   ],
   hr: [
     { href: "/dashboard", label: "HR Home" },
+    { href: "/customers", label: "Customers" },
+    { href: "/customer-approvals", label: "Approvals" },
     { href: "/hr-analytics", label: "HR Analytics" },
     { href: "/hr-positions", label: "Positions" },
+    { href: "/admin/hr", label: "HR Directory" },
   ],
   customer: [
     { href: "/dashboard", label: "Customer Home" },
+    { href: "/pending-approval", label: "Pending Approval" },
     { href: "/my-contracts", label: "My Contracts & Agreements" },
     { href: "/my-projects", label: "Projects" },
     { href: "/service-usage", label: "Service Usage" },
@@ -98,6 +231,12 @@ export const CONTRACTS_NAV_COPY: Record<
   UserRole,
   { href: string; title: string; description: string }
 > = {
+  admin: {
+    href: "/contracts",
+    title: "Manage Contracts",
+    description:
+      "Oversee the full agreement lifecycle across customers — draft, approval, active service, holds, renewals, and cancellations.",
+  },
   manager: {
     href: "/contracts",
     title: "Manage Contracts",
@@ -129,33 +268,51 @@ export const CONTRACTS_NAV_COPY: Record<
   },
 };
 
-export function roleHomePath(_role: UserRole) {
+export function roleHomePath(role: UserRole) {
+  if (role === "admin") return "/admin";
+  if (role === "technician") return "/dashboard";
+  if (role === "hr") return "/dashboard";
   return "/dashboard";
 }
 
 export function canAccessPath(role: UserRole, pathname: string): boolean {
   if (pathname === "/dashboard" || pathname.startsWith("/profile")) return true;
   const allowed = ROLE_NAV[role].some(
-    (item) => pathname === item.href || pathname.startsWith(item.href + "/")
+    (item) =>
+      !item.disabled &&
+      (pathname === item.href || pathname.startsWith(item.href + "/"))
   );
   if (allowed) return true;
 
   // Shared detail routes used by multiple roles
+  const managerShared = [
+    "/tickets",
+    "/projects",
+    "/additional-work",
+    "/invoices",
+    "/payments",
+    "/ready-to-bill",
+    "/billing-review",
+    "/accounting",
+    "/accounts-receivable",
+    "/time-costs",
+    "/contracts",
+    "/billing-cost-approvals",
+    "/customer-approvals",
+    "/operations",
+    "/controls",
+    "/hr-analytics",
+  ];
   const shared: Partial<Record<UserRole, string[]>> = {
-    manager: [
-      "/tickets",
-      "/projects",
-      "/additional-work",
-      "/invoices",
-      "/payments",
-      "/ready-to-bill",
-      "/billing-review",
-      "/accounting",
-      "/accounts-receivable",
-      "/time-costs",
-      "/contracts",
+    admin: [
+      ...managerShared,
+      "/admin",
+      "/assignments",
+      "/support-requests",
+      "/billing-collections",
     ],
-    technician: ["/contracts", "/customers"],
+    manager: managerShared,
+    technician: ["/contracts", "/customers", "/assignments"],
     billing: [
       "/customers",
       "/contracts",
@@ -163,13 +320,15 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/tickets",
       "/ready-to-bill",
       "/billing-review",
+      "/billing-cost-approvals",
       "/invoices",
       "/payments",
       "/accounts-receivable",
       "/accounting",
       "/hr-analytics",
     ],
-    customer: ["/my-invoices", "/make-payment", "/tickets"],
+    hr: ["/contracts", "/customers", "/customer-approvals", "/admin/hr"],
+    customer: ["/projects", "/my-invoices", "/make-payment", "/tickets", "/pending-approval"],
   };
 
   return (shared[role] ?? []).some(

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/auth";
+import { getCurrentProfile, requireApprovedCustomer } from "@/lib/auth";
 import { PageHeader, EmptyState, StatusBadge, Hours, ErrorState } from "@/components/ui";
 import { hoursRemaining, usagePercentage, usageStatus } from "@/lib/calculations";
 import type { Contract } from "@/lib/types";
@@ -15,6 +15,7 @@ export default async function ServiceUsagePage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
   if (profile.role !== "customer" || !profile.customer_id) redirect("/dashboard");
+  await requireApprovedCustomer(profile);
 
   const supabase = await createClient();
   const customerId = profile.customer_id;
