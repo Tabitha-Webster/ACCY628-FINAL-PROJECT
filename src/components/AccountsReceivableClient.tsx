@@ -15,20 +15,17 @@ export type ArAgingRow = {
   remainingBalance: number;
   bucket: string;
   daysPastDue: number;
-  warning: string;
 };
 
-type SortKey = "dueDate" | "daysPastDue" | "status" | "bucket" | "warning" | "balance";
+type SortKey = "dueDate" | "daysPastDue" | "status" | "bucket" | "balance";
 type SortDir = "asc" | "desc";
 
 const AGING_ORDER = ["Current", "1-30 Days", "31-60 Days", "61-90 Days", ">90 Days"];
 
-const WARNING_ORDER = ["Current", "Overdue", "Follow Up", "Escalate", "Critical"];
-
-function bucketTone(label: string): "default" | "warning" | "error" {
-  if (label === "Current") return "default";
-  if (label === "61-90 Days" || label === ">90 Days") return "error";
-  return "warning";
+function agingBadgeClass(daysPastDue: number): string {
+  if (daysPastDue > 60) return "badge-error";
+  if (daysPastDue > 0) return "badge-warning";
+  return "badge-success";
 }
 
 function matchesDaysPastDueFilter(days: number, filter: string): boolean {
@@ -51,8 +48,6 @@ function compareRows(a: ArAgingRow, b: ArAgingRow, key: SortKey): number {
       return a.status.localeCompare(b.status);
     case "bucket":
       return AGING_ORDER.indexOf(a.bucket) - AGING_ORDER.indexOf(b.bucket);
-    case "warning":
-      return WARNING_ORDER.indexOf(a.warning) - WARNING_ORDER.indexOf(b.warning);
     case "balance":
       return a.remainingBalance - b.remainingBalance;
     default:
@@ -103,7 +98,6 @@ export function AccountsReceivableClient({ rows }: { rows: ArAgingRow[] }) {
   const [daysPastDueFilter, setDaysPastDueFilter] = useState("all");
   const [status, setStatus] = useState("all");
   const [agingBucket, setAgingBucket] = useState("all");
-  const [warning, setWarning] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -119,10 +113,6 @@ export function AccountsReceivableClient({ rows }: { rows: ArAgingRow[] }) {
     () => AGING_ORDER.filter((label) => rows.some((row) => row.bucket === label)),
     [rows]
   );
-  const warnings = useMemo(
-    () => WARNING_ORDER.filter((label) => rows.some((row) => row.warning === label)),
-    [rows]
-  );
 
   const filtered = useMemo(() => {
     const next = rows.filter((row) => {
@@ -131,7 +121,6 @@ export function AccountsReceivableClient({ rows }: { rows: ArAgingRow[] }) {
       if (!matchesDaysPastDueFilter(row.daysPastDue, daysPastDueFilter)) return false;
       if (status !== "all" && row.status !== status) return false;
       if (agingBucket !== "all" && row.bucket !== agingBucket) return false;
-      if (warning !== "all" && row.warning !== warning) return false;
       return true;
     });
 
@@ -141,7 +130,7 @@ export function AccountsReceivableClient({ rows }: { rows: ArAgingRow[] }) {
       const result = compareRows(a, b, sortKey);
       return sortDir === "asc" ? result : -result;
     });
-  }, [rows, customer, dueDate, daysPastDueFilter, status, agingBucket, warning, sortKey, sortDir]);
+  }, [rows, customer, dueDate, daysPastDueFilter, status, agingBucket, sortKey, sortDir]);
 
   function onSort(key: SortKey) {
     if (sortKey === key) {
@@ -214,30 +203,14 @@ export function AccountsReceivableClient({ rows }: { rows: ArAgingRow[] }) {
         </label>
 
         <label className="form-control">
-          <span className="label-text mb-1">Aging Bucket</span>
+          <span className="label-text mb-1">Aging</span>
           <select
             className="select select-bordered select-sm w-full"
             value={agingBucket}
             onChange={(e) => setAgingBucket(e.target.value)}
           >
-            <option value="all">All buckets</option>
+            <option value="all">All aging</option>
             {buckets.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="form-control">
-          <span className="label-text mb-1">Warning</span>
-          <select
-            className="select select-bordered select-sm w-full"
-            value={warning}
-            onChange={(e) => setWarning(e.target.value)}
-          >
-            <option value="all">All warnings</option>
-            {warnings.map((value) => (
               <option key={value} value={value}>
                 {value}
               </option>
@@ -267,14 +240,7 @@ export function AccountsReceivableClient({ rows }: { rows: ArAgingRow[] }) {
                   onSort={onSort}
                 />
                 <SortHeader label="Status" column="status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-                <SortHeader
-                  label="Aging Bucket"
-                  column="bucket"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={onSort}
-                />
-                <SortHeader label="Warning" column="warning" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <SortHeader label="Aging" column="bucket" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
                 <SortHeader label="Balance" column="balance" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               </tr>
             </thead>
@@ -296,30 +262,9 @@ export function AccountsReceivableClient({ rows }: { rows: ArAgingRow[] }) {
                   <td>
                     <StatusBadge status={row.status} />
                   </td>
-                  <td>
-                    <span
-                      className={`badge ${
-                        bucketTone(row.bucket) === "error"
-                          ? "badge-error"
-                          : bucketTone(row.bucket) === "warning"
-                            ? "badge-warning"
-                            : "badge-ghost"
-                      }`}
-                    >
+                  <td className="whitespace-nowrap">
+                    <span className={`badge whitespace-nowrap ${agingBadgeClass(row.daysPastDue)}`}>
                       {row.bucket}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      className={`badge ${
-                        row.daysPastDue > 60
-                          ? "badge-error"
-                          : row.daysPastDue > 0
-                            ? "badge-warning"
-                            : "badge-success"
-                      }`}
-                    >
-                      {row.warning}
                     </span>
                   </td>
                   <td className="font-medium">

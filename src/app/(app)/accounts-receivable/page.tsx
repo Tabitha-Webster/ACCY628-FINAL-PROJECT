@@ -20,14 +20,6 @@ function daysPastDue(dueDate: string, asOf: Date = new Date()): number {
   return Math.max(0, Math.floor((asOf.getTime() - due.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
-function warningLabel(days: number): string {
-  if (days === 0) return "Current";
-  if (days <= 30) return "Overdue";
-  if (days <= 60) return "Follow Up";
-  if (days <= 90) return "Escalate";
-  return "Critical";
-}
-
 export default async function AccountsReceivablePage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
@@ -54,7 +46,6 @@ export default async function AccountsReceivablePage() {
       remainingBalance: Number(inv.remaining_balance ?? 0),
       bucket: arAgingBucket(inv.due_date),
       daysPastDue: days,
-      warning: warningLabel(days),
     };
   });
 
