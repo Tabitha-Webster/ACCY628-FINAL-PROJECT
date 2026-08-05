@@ -53,21 +53,8 @@ export function arAgingBucket(dueDate: string | Date, asOf: Date = new Date()) {
   return "More Than 90 Days Past Due";
 }
 
-export function slaStatus(
-  targetAt: string | null | undefined,
-  actualAt: string | null | undefined,
-  now: Date = new Date()
-): "met" | "at_risk" | "missed" | "pending" {
-  if (!targetAt) return "pending";
-  const target = new Date(targetAt);
-  if (actualAt) {
-    return new Date(actualAt) <= target ? "met" : "missed";
-  }
-  const hoursLeft = (target.getTime() - now.getTime()) / (1000 * 60 * 60);
-  if (hoursLeft < 0) return "missed";
-  if (hoursLeft <= 4) return "at_risk";
-  return "pending";
-}
+/** @deprecated Prefer evaluateSlaClock / evaluateTicketSla from '@/lib/sla' (80% At Risk rule). */
+export { slaStatus, evaluateTicketSla, evaluateSlaClock } from "@/lib/sla";
 
 export function marginBand(marginPct: number): "profitable" | "low_margin" | "unprofitable" {
   if (marginPct < 0) return "unprofitable";

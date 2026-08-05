@@ -42,7 +42,7 @@ const CONTROLS: Control[] = [
   {
     category: "Billing",
     risk: "completed work could be forgotten and never invoiced, or the same work could be billed twice",
-    control: "the ready-to-bill workflow only surfaces approved, unbilled work, and once a time entry, cost, or project is placed on an invoice it is marked billed so it cannot be selected again",
+    control: "Ready to Bill uses ticket eligibility views so only billable, approved, unbilled work with completion notes, valid contracts, and clear ticket/customer/technician links can be selected; once placed on an invoice the source row is marked billed with invoice_id and billed_at so it cannot be selected again",
   },
   {
     category: "Billing",
