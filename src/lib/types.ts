@@ -40,6 +40,16 @@ export type ContractStatus =
   | "expired"
   | "canceled"
   | "renewed";
+export type ContractType =
+  | "managed_support"
+  | "included_hours"
+  | "unlimited_remote"
+  | "project_only"
+  | "managed_plus_project"
+  | "pass_through";
+export type RenewalType = "auto" | "manual" | "none";
+export type BillingFrequency = "monthly" | "quarterly" | "annual" | "one_time";
+export type BillingTiming = "in_advance" | "in_arrears";
 export type RevenueRecognition = "earned" | "deferred" | "unbilled";
 export type RevenueType =
   | "recurring"
@@ -70,19 +80,64 @@ export type Contract = {
   contract_number: string;
   name: string;
   status: ContractStatus;
-  contract_type: string;
+  contract_type: ContractType | string;
   start_date: string;
   end_date: string | null;
+  renewal_type: RenewalType | string | null;
+  cancellation_notice_days: number | null;
   assigned_manager_id: string | null;
   description: string | null;
+  scope: string | null;
   monthly_recurring_fee: number;
   included_hours_per_month: number;
   additional_hourly_rate: number;
   sla_response_hours: number | null;
   sla_resolution_hours: number | null;
-  billing_frequency: string | null;
+  supported_locations: string | null;
+  supported_users_devices: string | null;
+  remote_support: boolean | null;
+  onsite_support: boolean | null;
+  after_hours_terms: string | null;
+  included_services: string | null;
+  excluded_services: string | null;
+  billing_frequency: BillingFrequency | string | null;
+  billing_timing: BillingTiming | string | null;
   payment_terms: string | null;
+  deposit_amount: number | null;
+  late_fee_terms: string | null;
+  reimbursable_cost_policy: string | null;
+  software_markup_pct: number | null;
+  equipment_markup_pct: number | null;
+  tax_status: string | null;
+  billing_contact: string | null;
+  change_request_procedure: string | null;
+  requires_customer_approval: boolean | null;
+  requires_manager_approval: boolean | null;
   created_at: string;
+  updated_at?: string;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type ContractService = {
+  id: string;
+  contract_id: string;
+  service_name: string;
+  service_description: string | null;
+  is_included: boolean;
+  created_at: string;
+};
+
+export type ContractModification = {
+  id: string;
+  contract_id: string;
+  modification_summary: string;
+  effective_date: string;
+  approval_status: ApprovalStatus;
+  approved_by: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at?: string;
 };
 
 export type SupportTicket = {

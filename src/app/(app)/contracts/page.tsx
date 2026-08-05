@@ -2,55 +2,51 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { DataTable, EmptyState, ErrorState, Money, PageHeader, StatusBadge } from "@/components/ui";
+import { CONTRACTS_NAV_COPY } from "@/lib/constants";
+import { DataTable, EmptyState, ErrorState, Money, PageHeader, StatusBadge, StatCard } from "@/components/ui";
 import { formatDate } from "@/lib/format";
-
-const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
+import type { ContractStatus } from "@/lib/types";
+import {
+  canViewContractsModule,
+  getContractWarnings,
+  listContracts,
+  summarizeContractsByStatus,
+  unwrapCustomer,
+  type ContractListRow,
+} from "@/lib/contracts";
 
 export default async function ContractsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!["manager", "billing", "technician"].includes(profile.role)) redirect("/dashboard");
+  if (!canViewContractsModule(profile.role)) redirect("/dashboard");
 
+  const copy = CONTRACTS_NAV_COPY[profile.role];
   const supabase = await createClient();
-  const { data: contracts, error } = await supabase
-    .from("contracts")
-    .select(
-      "id, contract_number, name, status, contract_type, start_date, end_date, payment_terms, billing_frequency, monthly_recurring_fee, customers(id, name)"
-    )
-    .order("start_date", { ascending: false });
-
-  const now = new Date().getTime();
+  const { data, error } = await listContracts(supabase);
+  const contracts = (data ?? []) as ContractListRow[];
+  const statusCounts = summarizeContractsByStatus(contracts);
 
   return (
-    <div>
-      <PageHeader
-        title="Contracts"
-        description="Every service agreement, its term, and the billing terms it runs on."
-      />
+    <div className="space-y-6">
+      <PageHeader title={copy.title} description={copy.description} />
 
       {error ? <ErrorState message={error.message} /> : null}
 
-      {!error && contracts && contracts.length === 0 ? (
-        <EmptyState title="No contracts on file" />
+      {!error ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+          {(Object.entries(statusCounts) as [ContractStatus, number][]).map(([status, count]) => (
+            <StatCard key={status} label={status.replace(/_/g, " ")} value={String(count)} />
+          ))}
+        </div>
       ) : null}
 
-      {!error && contracts && contracts.length > 0 ? (
+      {!error && contracts.length === 0 ? <EmptyState title="No contracts on file" /> : null}
+
+      {!error && contracts.length > 0 ? (
         <DataTable headers={["Contract", "Customer", "Status", "Type", "Term", "Monthly Fee", "Warnings", ""]}>
           {contracts.map((contract) => {
-            const customer = Array.isArray(contract.customers) ? contract.customers[0] : contract.customers;
-            const warnings: string[] = [];
-
-            if (contract.status === "active" && contract.end_date) {
-              const endMs = new Date(contract.end_date).getTime();
-              if (!Number.isNaN(endMs) && endMs - now <= SIXTY_DAYS_MS && endMs - now >= 0) {
-                warnings.push("Ends within 60 days");
-              } else if (!Number.isNaN(endMs) && endMs < now) {
-                warnings.push("Past end date");
-              }
-            }
-            if (!contract.payment_terms) warnings.push("Missing payment terms");
-            if (!contract.billing_frequency) warnings.push("Missing billing frequency");
+            const customer = unwrapCustomer(contract);
+            const warnings = getContractWarnings(contract);
 
             return (
               <tr key={contract.id}>
@@ -83,8 +79,8 @@ export default async function ContractsPage() {
                   {warnings.length > 0 ? (
                     <div className="flex flex-col gap-1">
                       {warnings.map((warning) => (
-                        <span key={warning} className="badge badge-warning badge-sm">
-                          {warning}
+                        <span key={warning.code} className="badge badge-warning badge-sm">
+                          {warning.label}
                         </span>
                       ))}
                     </div>
