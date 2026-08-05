@@ -9,12 +9,19 @@ export const CUSTOMER_VIEW_ROLES: UserRole[] = ["manager", "billing", "technicia
 /** Roles that can add and edit customer master data (same capabilities). */
 export const CUSTOMER_MANAGE_ROLES: UserRole[] = ["manager", "hr"];
 
+/** Roles allowed to export the customer list to Excel (read-only reporting). */
+export const CUSTOMER_EXPORT_ROLES: UserRole[] = ["manager", "billing"];
+
 export function canViewCustomers(role: UserRole) {
   return CUSTOMER_VIEW_ROLES.includes(role);
 }
 
 export function canEditCustomers(role: UserRole) {
   return CUSTOMER_MANAGE_ROLES.includes(role);
+}
+
+export function canExportCustomers(role: UserRole) {
+  return CUSTOMER_EXPORT_ROLES.includes(role);
 }
 
 export type CustomerListRow = {
