@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Menu } from "lucide-react";
 import { ThemeSelector } from "@/components/ThemeSelector";
+import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
 import { ROLE_NAV, type Profile, type UserRole } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
@@ -44,15 +45,23 @@ export function AppShell({
               <Menu className="h-5 w-5" />
             </label>
           </div>
-          <div className="flex-1">
+          <div className="navbar-start min-w-0 flex-1">
             <div>
               <p className="text-sm font-semibold leading-tight">ServiceSync MSP</p>
-              <p className="text-xs opacity-60">From service agreement to support, billing, and collection.</p>
+              <p className="hidden text-xs opacity-60 sm:block">
+                From service agreement to support, billing, and collection.
+              </p>
             </div>
           </div>
-          <div className="flex flex-none items-center gap-2">
+          <div className="navbar-center hidden px-2 md:flex">
+            <DemoRoleSwitcher currentRole={profile.role as UserRole} />
+          </div>
+          <div className="navbar-end flex min-w-0 flex-1 items-center justify-end gap-2">
+            <div className="md:hidden">
+              <DemoRoleSwitcher currentRole={profile.role as UserRole} />
+            </div>
             <ThemeSelector compact />
-            <div className="hidden text-right sm:block">
+            <div className="hidden text-right lg:block">
               <p className="text-sm font-medium">{profile.full_name}</p>
               <p className="text-xs opacity-60">
                 {statusLabel(profile.role)} · {profile.email}
@@ -93,11 +102,9 @@ export function AppShell({
               );
             })}
           </nav>
-          {profile.is_demo_user ? (
-            <div className="border-t border-base-300 p-4 text-xs opacity-70">
-              Demo account active. Use the Demo Login Selector on the login page to switch roles.
-            </div>
-          ) : null}
+          <div className="border-t border-base-300 p-4 text-xs opacity-70">
+            Use the Demo Role Switcher in the top bar to change perspectives. Log out still ends the session completely.
+          </div>
         </aside>
       </div>
     </div>
