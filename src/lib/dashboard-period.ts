@@ -1,4 +1,4 @@
-import {
+﻿import {
   addMonths,
   addQuarters,
   addYears,
@@ -34,7 +34,7 @@ const ALL_TIME_END = "9999-12-31";
 const ALL_TIME_KEY = "all";
 const ALL_TIME_LABEL = "All time";
 
-/** Earliest active demo contract start — used as company inception for year/month lists. */
+/** Earliest active demo contract start ΓÇö used as company inception for year/month lists. */
 export const COMPANY_START_DATE = new Date(2023, 0, 1);
 
 function toDateString(date: Date) {

@@ -1,4 +1,4 @@
-import { computeMonthlyUsage, currentBillingPeriod, round2 } from "@/lib/billing";
+﻿import { computeMonthlyUsage, currentBillingPeriod, round2 } from "@/lib/billing";
 import { projectBillingBlockReason } from "@/lib/billing-eligibility";
 import type { MonthlyPackage, ReviewException, ReviewItem } from "@/components/BillingReviewClient";
 import type { createClient } from "@/lib/supabase/server";
@@ -251,7 +251,7 @@ export async function loadBillingReviewData(
       packages.push({
         contractId: contract.id,
         periodStart: monthStart,
-        contractName: multiMonth ? `${contract.name} · ${monthLabel}` : contract.name,
+        contractName: multiMonth ? `${contract.name} ┬╖ ${monthLabel}` : contract.name,
         customerId: contract.customer_id,
         customerName: unwrapName(contract.customers),
         alreadyInvoiced,
@@ -288,7 +288,7 @@ export async function loadBillingReviewData(
       contractName: unwrapOptionalName(cost.contracts),
       categoryLabel: label,
       description: cost.description,
-      detail: `${category}${cost.vendor ? ` · ${cost.vendor}` : ""} · ${cost.cost_date}`,
+      detail: `${category}${cost.vendor ? ` ┬╖ ${cost.vendor}` : ""} ┬╖ ${cost.cost_date}`,
       amount: Number(cost.billable_amount ?? 0),
     });
   }
@@ -300,7 +300,7 @@ export async function loadBillingReviewData(
       kind: "time_entry" as const,
       customerName: unwrapName(row.customers),
       reason: "Unapproved additional hours",
-      detail: `${row.description} · ${Number(row.hours_worked ?? 0).toFixed(1)} hrs on ${row.work_date}`,
+      detail: `${row.description} ┬╖ ${Number(row.hours_worked ?? 0).toFixed(1)} hrs on ${row.work_date}`,
     })),
     ...(pendingCosts ?? []).map((row) => ({
       id: `cost-${row.id}`,
@@ -308,7 +308,7 @@ export async function loadBillingReviewData(
       kind: "direct_cost" as const,
       customerName: unwrapName(row.customers),
       reason: "Unapproved direct cost",
-      detail: `${row.description} · ${row.cost_date}`,
+      detail: `${row.description} ┬╖ ${row.cost_date}`,
     })),
     ...(pendingWork ?? []).map((row) => ({
       id: `awr-${row.id}`,

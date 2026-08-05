@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
@@ -83,9 +83,6 @@ export function BillingReviewClient({
   const [packageQuery, setPackageQuery] = useState("");
   const [expandedContractId, setExpandedContractId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [selectedContracts, setSelectedContracts] = useState<Set<string>>(
-    () => new Set(packages.filter((pkg) => !pkg.alreadyInvoiced && pkg.estimatedTotal > 0).map(packageSelectKey))
-  );
   const [submittingCustomerId, setSubmittingCustomerId] = useState<string | null>(null);
   const [generatingMonthly, setGeneratingMonthly] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -112,35 +109,8 @@ export function BillingReviewClient({
     );
   }, [packages, packageQuery]);
 
-  const selectableFiltered = filteredPackages.filter((pkg) => !pkg.alreadyInvoiced && pkg.estimatedTotal > 0);
-  const allSelectableFilteredChecked =
-    selectableFiltered.length > 0 &&
-    selectableFiltered.every((pkg) => selectedContracts.has(packageSelectKey(pkg)));
-
-  const packageTotal = packages
-    .filter((pkg) => selectedContracts.has(packageSelectKey(pkg)))
-    .reduce((sum, pkg) => sum + pkg.estimatedTotal, 0);
-
-  function toggleContract(selectKey: string) {
-    setSelectedContracts((prev) => {
-      const next = new Set(prev);
-      if (next.has(selectKey)) next.delete(selectKey);
-      else next.add(selectKey);
-      return next;
-    });
-  }
-
-  function toggleFilteredContracts() {
-    setSelectedContracts((prev) => {
-      const next = new Set(prev);
-      if (allSelectableFilteredChecked) {
-        selectableFiltered.forEach((pkg) => next.delete(packageSelectKey(pkg)));
-      } else {
-        selectableFiltered.forEach((pkg) => next.add(packageSelectKey(pkg)));
-      }
-      return next;
-    });
-  }
+  const readyPackages = packages.filter((pkg) => !pkg.alreadyInvoiced && pkg.estimatedTotal > 0);
+  const packageTotal = readyPackages.reduce((sum, pkg) => sum + pkg.estimatedTotal, 0);
 
   function toggleExpanded(selectKey: string) {
     setExpandedContractId((prev) => (prev === selectKey ? null : selectKey));
@@ -173,9 +143,7 @@ export function BillingReviewClient({
   }
 
   async function generateMonthly() {
-    const contractIds = Array.from(
-      new Set(Array.from(selectedContracts).map((key) => key.split(":")[0]))
-    );
+    const contractIds = Array.from(new Set(readyPackages.map((pkg) => pkg.contractId)));
     if (contractIds.length === 0) return;
 
     setGeneratingMonthly(true);
@@ -264,7 +232,7 @@ export function BillingReviewClient({
           <p className="mt-1 text-lg font-semibold tabular-nums">{packages.length}</p>
         </div>
         <div className="rounded-box border border-base-300 bg-base-100 p-4">
-          <p className="text-xs uppercase tracking-wide opacity-60">Selected package total</p>
+          <p className="text-xs uppercase tracking-wide opacity-60">Ready to bill total</p>
           <p className="mt-1 text-lg font-semibold tabular-nums">{formatCurrency(packageTotal)}</p>
         </div>
       </div>
@@ -320,11 +288,11 @@ export function BillingReviewClient({
               <button
                 type="button"
                 className="btn btn-primary btn-sm"
-                disabled={!canGenerateMonthly || selectedContracts.size === 0 || generatingMonthly}
+                disabled={!canGenerateMonthly || readyPackages.length === 0 || generatingMonthly}
                 onClick={generateMonthly}
                 title={canGenerateMonthly ? undefined : "Switch to monthly view to generate invoices."}
               >
-                {generatingMonthly ? "Generating..." : "Generate selected monthly invoices"}
+                {generatingMonthly ? "Generating..." : `Generate ${readyPackages.length} monthly invoice(s)`}
               </button>
               {!canGenerateMonthly ? (
                 <p className="mt-1 text-xs opacity-60">Switch to monthly view to generate invoices.</p>
@@ -349,16 +317,6 @@ export function BillingReviewClient({
               <table className="table table-sm">
                 <thead>
                   <tr>
-                    <th className="w-10">
-                      <input
-                        type="checkbox"
-                        className="checkbox checkbox-sm"
-                        checked={allSelectableFilteredChecked}
-                        onChange={toggleFilteredContracts}
-                        aria-label="Select all filtered packages"
-                        disabled={selectableFiltered.length === 0}
-                      />
-                    </th>
                     <th className="w-8" />
                     <th>Customer</th>
                     <th>Contract</th>
@@ -375,16 +333,6 @@ export function BillingReviewClient({
                     return (
                       <Fragment key={selectKey}>
                         <tr className="hover">
-                          <td>
-                            <input
-                              type="checkbox"
-                              className="checkbox checkbox-sm"
-                              checked={selectedContracts.has(selectKey)}
-                              onChange={() => toggleContract(selectKey)}
-                              disabled={pkg.alreadyInvoiced || pkg.estimatedTotal <= 0}
-                              aria-label={`Select ${pkg.contractName}`}
-                            />
-                          </td>
                           <td>
                             <button
                               type="button"
@@ -417,7 +365,7 @@ export function BillingReviewClient({
                         </tr>
                         {expanded ? (
                           <tr>
-                            <td colSpan={8} className="bg-base-200/40 p-4">
+                            <td colSpan={7} className="bg-base-200/40 p-4">
                               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                                 <div>
                                   <p className="text-xs opacity-60">Monthly contract charge</p>
@@ -563,7 +511,7 @@ export function BillingReviewClient({
 
                     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-base-300 pt-3">
                       <p className="text-sm">
-                        <span className="opacity-60">{groupSelectedItems.length} selected · Total: </span>
+                        <span className="opacity-60">{groupSelectedItems.length} selected ? Total: </span>
                         <span className="font-semibold">{formatCurrency(total)}</span>
                       </p>
                       <button

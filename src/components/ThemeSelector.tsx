@@ -2,41 +2,81 @@
 
 import { useEffect, useState } from "react";
 
-export const DEFAULT_THEME = "servicesync";
 export const THEME_STORAGE_KEY = "servicesync-theme";
+export const DEFAULT_APPEARANCE = "system" as const;
 
-const THEMES = [
-  { id: "servicesync", label: "ServiceSync", hint: "Default dark blue console" },
-  { id: "corporate", label: "Corporate", hint: "Light business look" },
-  { id: "business", label: "Business", hint: "Dark professional look" },
-  { id: "nord", label: "Nord", hint: "Cool muted palette" },
-  { id: "emerald", label: "Emerald", hint: "Blue-accent emerald" },
-  { id: "cupcake", label: "Cupcake", hint: "Soft light theme" },
-  { id: "dim", label: "Dim", hint: "Low-contrast dark theme" },
-] as const;
+export type AppearancePreference = "light" | "dark" | "system";
+
+const LIGHT_THEME = "servicesync";
+const DARK_THEME = "servicesync-dark";
+
+const OPTIONS: { id: AppearancePreference; label: string; hint: string }[] = [
+  { id: "light", label: "Light", hint: "Always use the light theme" },
+  { id: "dark", label: "Dark", hint: "Always use the dark theme" },
+  { id: "system", label: "Match system", hint: "Follow this computer's light or dark setting" },
+];
+
+/** @deprecated Use DEFAULT_APPEARANCE — kept for existing ThemeInit imports during migration. */
+export const DEFAULT_THEME = DEFAULT_APPEARANCE;
+
+function prefersDark(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+export function normalizeAppearance(raw: string | null): AppearancePreference {
+  if (raw === "light" || raw === "dark" || raw === "system") return raw;
+  // Migrate older DaisyUI theme ids
+  if (raw === "business" || raw === "dim" || raw === "nord" || raw === "servicesync-dark") return "dark";
+  if (raw === "corporate" || raw === "emerald" || raw === "cupcake" || raw === "servicesync") return "light";
+  return DEFAULT_APPEARANCE;
+}
+
+export function resolveTheme(preference: AppearancePreference): string {
+  if (preference === "light") return LIGHT_THEME;
+  if (preference === "dark") return DARK_THEME;
+  return prefersDark() ? DARK_THEME : LIGHT_THEME;
+}
+
+export function applyAppearance(preference: AppearancePreference) {
+  if (typeof document === "undefined") return;
+  document.documentElement.setAttribute("data-theme", resolveTheme(preference));
+}
+
+export function readAppearance(): AppearancePreference {
+  if (typeof window === "undefined") return DEFAULT_APPEARANCE;
+  return normalizeAppearance(window.localStorage.getItem(THEME_STORAGE_KEY));
+}
 
 export function ThemeSelector() {
-  const [theme, setTheme] = useState(DEFAULT_THEME);
+  const [appearance, setAppearance] = useState<AppearancePreference>(() =>
+    typeof window === "undefined" ? DEFAULT_APPEARANCE : readAppearance()
+  );
 
   useEffect(() => {
-    const saved = localStorage.getItem(THEME_STORAGE_KEY) || DEFAULT_THEME;
-    setTheme(saved);
-    document.documentElement.setAttribute("data-theme", saved);
-  }, []);
+    applyAppearance(appearance);
 
-  function onChange(next: string) {
-    setTheme(next);
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    function onSystemChange() {
+      if (readAppearance() === "system") applyAppearance("system");
+    }
+    media.addEventListener("change", onSystemChange);
+    return () => media.removeEventListener("change", onSystemChange);
+  }, [appearance]);
+
+  function onChange(next: AppearancePreference) {
+    setAppearance(next);
     localStorage.setItem(THEME_STORAGE_KEY, next);
-    document.documentElement.setAttribute("data-theme", next);
+    applyAppearance(next);
   }
 
   return (
     <fieldset className="space-y-2">
       <legend className="text-sm font-medium">Theme</legend>
-      <p className="text-xs opacity-70">ServiceSync dark is the default. Your choice is saved on this device.</p>
+      <p className="text-xs opacity-70">Your choice is saved on this device.</p>
       <div className="space-y-2">
-        {THEMES.map((item) => {
-          const selected = theme === item.id;
+        {OPTIONS.map((item) => {
+          const selected = appearance === item.id;
           return (
             <label
               key={item.id}
@@ -53,10 +93,7 @@ export function ThemeSelector() {
                 onChange={() => onChange(item.id)}
               />
               <span className="min-w-0">
-                <span className="flex items-center gap-2">
-                  <span className="font-medium">{item.label}</span>
-                  {item.id === DEFAULT_THEME ? <span className="badge badge-ghost badge-sm">Default</span> : null}
-                </span>
+                <span className="block font-medium">{item.label}</span>
                 <span className="block text-xs opacity-60">{item.hint}</span>
               </span>
             </label>

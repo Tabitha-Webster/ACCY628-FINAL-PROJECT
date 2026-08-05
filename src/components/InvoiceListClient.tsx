@@ -182,7 +182,7 @@ export function InvoiceListClient({ invoices }: { invoices: InvoiceListRow[] }) 
       {invoices.length === 0 ? (
         <EmptyState
           title="No invoices match this view"
-          description="Generate monthly contract invoices or create one from Billing Review."
+          description="Generate monthly contract invoices or create one from the billing Overview."
         />
       ) : (
         <StickyFilterTable tableRef={tableRef}>

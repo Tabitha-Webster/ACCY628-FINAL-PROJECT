@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -53,10 +53,12 @@ export function PeriodViewControls({
   }
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative flex items-center gap-2">
+      <span className="text-xs font-semibold uppercase tracking-wide opacity-60">View</span>
       <button
         type="button"
         className="btn btn-xs btn-outline h-6 min-h-6 gap-1 px-2"
+        aria-label="View period"
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={() => setOpen((current) => !current)}

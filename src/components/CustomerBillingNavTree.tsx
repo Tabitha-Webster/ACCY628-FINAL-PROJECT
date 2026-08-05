@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import { useState } from "react";
 
 export function CustomerBillingNavTree({ onNavigate }: { onNavigate?: () => void }) {
@@ -18,12 +18,12 @@ export function CustomerBillingNavTree({ onNavigate }: { onNavigate?: () => void
     <div className="ml-2 space-y-1 border-l border-base-300 pl-2">
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium hover:bg-base-200"
+        className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium hover:bg-base-200"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
         <span>Invoices</span>
-        {open ? <ChevronDown className="h-4 w-4 opacity-70" /> : <ChevronRight className="h-4 w-4 opacity-70" />}
+        {open ? <Minus className="h-4 w-4 shrink-0 opacity-70" aria-hidden /> : <Plus className="h-4 w-4 shrink-0 opacity-70" aria-hidden />}
       </button>
 
       {open ? (
