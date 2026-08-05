@@ -77,8 +77,53 @@ export default async function DashboardPage() {
   if (profile.role === "manager") return <ManagerDashboard profile={profile} />;
   if (profile.role === "technician") return <TechnicianDashboard profile={profile} />;
   if (profile.role === "billing") return <BillingDashboard profile={profile} />;
+  if (profile.role === "hr") return <HrDashboard profile={profile} />;
   if (profile.role === "customer") return <CustomerDashboard profile={profile} />;
   redirect("/login");
+}
+
+// ---------------------------------------------------------------------------
+// HR
+// ---------------------------------------------------------------------------
+
+async function HrDashboard({ profile }: { profile: Profile }) {
+  const supabase = await createClient();
+  const [{ data: contractors }, { data: positions }] = await Promise.all([
+    supabase.from("hr_contractors").select("id, status"),
+    supabase.from("hr_positions").select("id, status"),
+  ]);
+
+  const activeCount = (contractors ?? []).filter((c) => c.status === "active").length;
+  const openCount = (positions ?? []).filter((p) => p.status === "open").length;
+  const filledCount = (positions ?? []).filter((p) => p.status === "filled").length;
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="HR Home"
+        description={`Welcome, ${profile.full_name}. Manage contractor roles and workforce analytics.`}
+      />
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Active contractors" value={String(activeCount)} />
+        <StatCard
+          label="Open positions"
+          value={String(openCount)}
+          tone={openCount > 0 ? "warning" : "default"}
+        />
+        <StatCard label="Filled positions" value={String(filledCount)} />
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <Link href="/hr-analytics" className="btn btn-primary">
+          HR Analytics
+        </Link>
+        <Link href="/hr-positions" className="btn btn-outline">
+          Positions
+        </Link>
+      </div>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------

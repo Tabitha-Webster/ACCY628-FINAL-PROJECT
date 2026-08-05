@@ -21,7 +21,7 @@ export function AppShell({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState<"menu" | "settings">("menu");
-  const nav = ROLE_NAV[profile.role as UserRole];
+  const nav = ROLE_NAV[profile.role as UserRole] ?? [];
 
   async function logout() {
     const supabase = createClient();

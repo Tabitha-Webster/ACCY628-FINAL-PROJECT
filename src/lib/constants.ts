@@ -1,4 +1,4 @@
-export type UserRole = "manager" | "technician" | "billing" | "customer";
+export type UserRole = "manager" | "technician" | "billing" | "customer" | "hr";
 
 export type Profile = {
   id: string;
@@ -34,6 +34,13 @@ export const DEMO_ACCOUNTS = [
     name: "Jordan Blake",
   },
   {
+    role: "hr" as UserRole,
+    label: "HR",
+    email: "hr@servicesync.demo",
+    password: "1234",
+    name: "Harper Wells",
+  },
+  {
     role: "customer" as UserRole,
     label: "Customer (Apex Legal)",
     email: "customer@apexlegal.demo",
@@ -55,6 +62,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/operations", label: "Service Operations" },
     { href: "/profitability", label: "Profitability" },
     { href: "/billing-collections", label: "Billing and Collections" },
+    { href: "/hr-analytics", label: "HR Analytics" },
     { href: "/controls", label: "Controls and Exceptions" },
   ],
   technician: [
@@ -71,6 +79,12 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/payments", label: "Payments" },
     { href: "/accounts-receivable", label: "Accounts Receivable" },
     { href: "/accounting", label: "Accounting Review" },
+    { href: "/hr-analytics", label: "HR Cost Analytics" },
+  ],
+  hr: [
+    { href: "/dashboard", label: "HR Home" },
+    { href: "/hr-analytics", label: "HR Analytics" },
+    { href: "/hr-positions", label: "Positions" },
   ],
   customer: [
     { href: "/dashboard", label: "Customer Home" },
