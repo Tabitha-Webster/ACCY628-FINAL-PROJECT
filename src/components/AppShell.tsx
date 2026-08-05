@@ -8,7 +8,7 @@ import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
 import { BillingStaffNavTree } from "@/components/BillingStaffNavTree";
 import { ContractsAgreementsNavTree } from "@/components/ContractsAgreementsNavTree";
 import { CustomerBillingNavTree } from "@/components/CustomerBillingNavTree";
-import { ROLE_NAV, type Profile, type UserRole } from "@/lib/constants";
+import { ROLE_NAV, isManagerRole, type Profile, type UserRole } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
 import type { CustomerStatus } from "@/lib/types";
@@ -53,7 +53,7 @@ function SideNav({
     : (ROLE_NAV[profile.role as UserRole] ?? []);
   const isCustomer = profile.role === "customer";
   const isBilling = profile.role === "billing";
-  const isManager = profile.role === "manager";
+  const isManager = isManagerRole(profile.role);
   const isTechnician = profile.role === "technician";
 
   return (
@@ -83,7 +83,12 @@ function SideNav({
                 <CustomerBillingNavTree onNavigate={onNavigate} />
               ) : null}
               {isManager && item.href === "/customers" ? (
-                <ContractsAgreementsNavTree showReports showNewContract onNavigate={onNavigate} />
+                <ContractsAgreementsNavTree
+                  showReports
+                  showNewContract
+                  showCustomerContractData
+                  onNavigate={onNavigate}
+                />
               ) : null}
               {isTechnician && item.href === "/dashboard" ? (
                 <ContractsAgreementsNavTree showReports={false} onNavigate={onNavigate} />

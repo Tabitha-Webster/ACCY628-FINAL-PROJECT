@@ -25,10 +25,12 @@ function sectionActive(pathname: string, links: NavLink[]) {
 export function ContractsAgreementsNavTree({
   showReports = true,
   showNewContract = false,
+  showCustomerContractData = false,
   onNavigate,
 }: {
   showReports?: boolean;
   showNewContract?: boolean;
+  showCustomerContractData?: boolean;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -36,7 +38,9 @@ export function ContractsAgreementsNavTree({
     { href: "/contracts", label: "Manage Contracts" },
     ...(showReports ? [{ href: "/contracts/reports", label: "Contracts Dashboard" }] : []),
     { href: "/contracts/renewals", label: "Renewal & Expiration" },
-    { href: "/contracts/customers", label: "Customer" },
+    ...(showCustomerContractData
+      ? [{ href: "/contracts/customers", label: "Customer Contract Data" }]
+      : []),
     ...(showNewContract ? [{ href: "/contracts/new", label: "New Contract" }] : []),
   ];
   const [open, setOpen] = useState(() => sectionActive(pathname, links) || pathname.startsWith("/contracts"));

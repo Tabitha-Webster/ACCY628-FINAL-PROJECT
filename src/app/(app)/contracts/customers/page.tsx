@@ -12,7 +12,7 @@ import {
 } from "@/components/ui";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import {
-  canViewContractsModule,
+  canViewCustomerContractData,
   buildCustomerContractMetrics,
   formatTenureMonths,
   loyaltyLabel,
@@ -21,7 +21,7 @@ import {
 export default async function ContractCustomersPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!canViewContractsModule(profile.role)) redirect("/dashboard");
+  if (!canViewCustomerContractData(profile.role)) redirect("/dashboard");
 
   const supabase = await createClient();
 
@@ -82,7 +82,7 @@ export default async function ContractCustomersPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Customer"
+        title="Customer Contract Data"
         description="Customer relationship view for contracts — active agreements, payment reliability, loyalty, and outstanding balances."
       />
 
