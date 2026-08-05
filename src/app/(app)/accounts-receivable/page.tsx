@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { EmptyState, ErrorState, PageHeader } from "@/components/ui";
+import { ErrorState, PageHeader } from "@/components/ui";
 import { AR_AGING_BUCKETS, arAgingBucket } from "@/lib/calculations";
 import { AccountsReceivableClient, type ArAgingRow } from "@/components/AccountsReceivableClient";
 import { ArAgingChart, type ArAgingBucketTotal } from "@/components/ArAgingChart";
@@ -93,7 +93,11 @@ export default async function AccountsReceivablePage({
     <div className="space-y-6">
       <PageHeader
         title="Accounts Receivable"
-        description={`Unpaid invoices from ${period.label}, grouped by how far past the due date they are.`}
+        description={
+          period.view === "all"
+            ? "Unpaid invoices across the life of the company, grouped by how far past the due date they are."
+            : `Unpaid invoices from ${period.label}, grouped by how far past the due date they are.`
+        }
         actions={<PeriodViewControls {...periodViewControlProps(period)} />}
       />
 
@@ -112,14 +116,7 @@ export default async function AccountsReceivablePage({
         <ArAgingChart data={agingChartData} />
       </div>
 
-      <div>
-        <h2 className="mb-2 text-lg font-semibold">Open Invoices</h2>
-        {rows.length > 0 ? (
-          <AccountsReceivableClient rows={rows} />
-        ) : (
-          <EmptyState title="No open receivables" description="Every issued invoice has been paid in full." />
-        )}
-      </div>
+      <AccountsReceivableClient rows={rows} />
     </div>
   );
 }

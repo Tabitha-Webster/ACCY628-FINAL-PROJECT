@@ -995,7 +995,7 @@ async function BillingDashboard({
   const [review, invoicesRes, paymentsRes, revenueRes, customersRes, contractReportRes] = await Promise.all([
     loadBillingReviewData(
       supabase,
-      { start: period.start, end: period.end, label: period.label },
+      { start: period.start, end: period.end, label: period.label, unbounded: period.unbounded },
       { includeOpenOneTime }
     ),
     supabase
@@ -1059,7 +1059,11 @@ async function BillingDashboard({
     <div>
       <PageHeader
         title="Billing Dashboard"
-        description={`Welcome back, ${profile.full_name}. Showing ${period.label} in ${period.view} view.`}
+        description={
+          period.view === "all"
+            ? `Welcome back, ${profile.full_name}. Showing data for the life of the company.`
+            : `Welcome back, ${profile.full_name}. Showing ${period.label} in ${period.view} view.`
+        }
         actions={<PeriodViewControls {...periodViewControlProps(period)} />}
       />
 
