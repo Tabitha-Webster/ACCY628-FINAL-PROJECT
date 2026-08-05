@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
@@ -52,7 +53,17 @@ export default async function MyInvoicesPage() {
 
   return (
     <div>
-      <PageHeader title="Invoices and Payments" description="Your billing history and current balance." />
+      <PageHeader
+        title="Invoices and Payments"
+        description="Your billing history and current balance."
+        actions={
+          balanceDue > 0 ? (
+            <Link href="/make-payment" className="btn btn-primary btn-sm">
+              Make a Payment
+            </Link>
+          ) : null
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Balance Due" value={formatCurrency(balanceDue)} tone={balanceDue > 0 ? "warning" : "success"} />
@@ -65,7 +76,7 @@ export default async function MyInvoicesPage() {
         {invoices.length === 0 ? (
           <EmptyState title="No invoices yet" description="Invoices for your account will appear here once issued." />
         ) : (
-          <DataTable headers={["Invoice", "Period", "Total", "Paid", "Balance", "Due", "Status"]}>
+          <DataTable headers={["Invoice", "Period", "Total", "Paid", "Balance", "Due", "Status", ""]}>
             {invoices.map((i) => (
               <tr key={i.id}>
                 <td>{i.invoice_number}</td>
@@ -92,6 +103,13 @@ export default async function MyInvoicesPage() {
                 </td>
                 <td>
                   <StatusBadge status={i.status} />
+                </td>
+                <td className="text-right">
+                  {Number(i.remaining_balance) > 0 && !["draft", "canceled"].includes(i.status) ? (
+                    <Link href={`/make-payment?invoiceId=${i.id}`} className="btn btn-primary btn-xs">
+                      Pay
+                    </Link>
+                  ) : null}
                 </td>
               </tr>
             ))}

@@ -5,10 +5,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Menu, Settings2, X } from "lucide-react";
 import { ThemeSelector } from "@/components/ThemeSelector";
 import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
+import { CustomerBillingNavTree } from "@/components/CustomerBillingNavTree";
 import { ROLE_NAV, type Profile, type UserRole } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 export function AppShell({
   profile,
@@ -22,6 +23,7 @@ export function AppShell({
   const [open, setOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState<"menu" | "settings">("menu");
   const nav = ROLE_NAV[profile.role as UserRole];
+  const isCustomer = profile.role === "customer";
 
   async function logout() {
     const supabase = createClient();
@@ -79,7 +81,7 @@ export function AppShell({
           <div className="hidden text-right lg:block">
             <p className="text-sm font-medium">{profile.full_name}</p>
             <p className="text-xs opacity-60">
-              {statusLabel(profile.role)} ┬╖ {profile.email}
+              {statusLabel(profile.role)} · {profile.email}
             </p>
           </div>
           <button className="btn btn-ghost btn-sm" onClick={logout} title="Log out">
@@ -139,11 +141,16 @@ export function AppShell({
                   {nav.map((item) => {
                     const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                     return (
-                      <li key={item.href}>
-                        <Link href={item.href} className={active ? "active" : ""} onClick={closeMenu}>
-                          {item.label}
-                        </Link>
-                      </li>
+                      <Fragment key={item.href}>
+                        <li>
+                          <Link href={item.href} className={active ? "active" : ""} onClick={closeMenu}>
+                            {item.label}
+                          </Link>
+                        </li>
+                        {isCustomer && item.href === "/my-contracts" ? (
+                          <CustomerBillingNavTree onNavigate={closeMenu} />
+                        ) : null}
+                      </Fragment>
                     );
                   })}
                 </nav>

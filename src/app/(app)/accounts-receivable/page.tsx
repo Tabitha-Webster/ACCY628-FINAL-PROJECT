@@ -1,10 +1,11 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { DataTable, EmptyState, ErrorState, Money, PageHeader, StatCard, StatusBadge } from "@/components/ui";
-import { formatDate } from "@/lib/format";
+import { EmptyState, ErrorState, PageHeader, StatCard } from "@/components/ui";
+import { formatCurrency } from "@/lib/format";
 import { arAgingBucket } from "@/lib/calculations";
+import { AccountsReceivableClient, type ArAgingRow } from "@/components/AccountsReceivableClient";
+import { ArSummaryHeader } from "@/components/ArSummaryHeader";
 
 const AGING_ORDER = [
   "Current",
@@ -18,6 +19,19 @@ function bucketTone(label: string): "default" | "warning" | "error" {
   if (label === "Current") return "default";
   if (label === "61–90 Days Past Due" || label === "More Than 90 Days Past Due") return "error";
   return "warning";
+}
+
+function daysPastDue(dueDate: string, asOf: Date = new Date()): number {
+  const due = new Date(dueDate);
+  return Math.max(0, Math.floor((asOf.getTime() - due.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+function warningLabel(days: number): string {
+  if (days === 0) return "Current";
+  if (days <= 30) return "Overdue";
+  if (days <= 60) return "Follow Up";
+  if (days <= 90) return "Escalate";
+  return "Critical";
 }
 
 export default async function AccountsReceivablePage() {
@@ -34,24 +48,37 @@ export default async function AccountsReceivablePage() {
     .neq("status", "draft")
     .order("due_date", { ascending: true });
 
-  const rows = (invoices ?? []).map((inv) => ({
-    ...inv,
-    bucket: arAgingBucket(inv.due_date),
-  }));
+  const rows: ArAgingRow[] = (invoices ?? []).map((inv) => {
+    const customer = Array.isArray(inv.customers) ? inv.customers[0] : inv.customers;
+    const days = daysPastDue(inv.due_date);
+    return {
+      id: inv.id,
+      invoiceNumber: inv.invoice_number,
+      customerName: customer?.name ?? "Unknown customer",
+      dueDate: inv.due_date,
+      status: inv.status,
+      remainingBalance: Number(inv.remaining_balance ?? 0),
+      bucket: arAgingBucket(inv.due_date),
+      daysPastDue: days,
+      warning: warningLabel(days),
+    };
+  });
 
   const totalsByBucket = new Map<string, { count: number; amount: number }>();
   for (const label of AGING_ORDER) totalsByBucket.set(label, { count: 0, amount: 0 });
   for (const row of rows) {
     const bucket = totalsByBucket.get(row.bucket) ?? { count: 0, amount: 0 };
     bucket.count += 1;
-    bucket.amount += Number(row.remaining_balance ?? 0);
+    bucket.amount += row.remainingBalance;
     totalsByBucket.set(row.bucket, bucket);
   }
 
-  const totalAr = rows.reduce((sum, row) => sum + Number(row.remaining_balance ?? 0), 0);
+  const totalAr = rows.reduce((sum, row) => sum + row.remainingBalance, 0);
   const pastDueAr = rows
     .filter((row) => row.bucket !== "Current")
-    .reduce((sum, row) => sum + Number(row.remaining_balance ?? 0), 0);
+    .reduce((sum, row) => sum + row.remainingBalance, 0);
+  const pastDueRows = rows.filter((row) => row.daysPastDue > 0);
+  const escalatedRows = rows.filter((row) => row.daysPastDue > 60);
 
   return (
     <div className="space-y-6">
@@ -62,11 +89,13 @@ export default async function AccountsReceivablePage() {
 
       {error ? <ErrorState message={error.message} /> : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Total Outstanding" value={`$${totalAr.toFixed(2)}`} />
-        <StatCard label="Past Due" value={`$${pastDueAr.toFixed(2)}`} tone={pastDueAr > 0 ? "warning" : "default"} />
-        <StatCard label="Open Invoices" value={String(rows.length)} />
-      </div>
+      <ArSummaryHeader
+        openInvoiceCount={rows.length}
+        totalOutstanding={totalAr}
+        pastDueAmount={pastDueAr}
+        pastDueCount={pastDueRows.length}
+        escalatedCount={escalatedRows.length}
+      />
 
       <div>
         <h2 className="mb-2 text-lg font-semibold">Aging Summary</h2>
@@ -77,7 +106,7 @@ export default async function AccountsReceivablePage() {
               <StatCard
                 key={label}
                 label={label}
-                value={`$${bucket.amount.toFixed(2)}`}
+                value={formatCurrency(bucket.amount)}
                 hint={`${bucket.count} invoice${bucket.count === 1 ? "" : "s"}`}
                 tone={bucketTone(label)}
               />
@@ -89,33 +118,7 @@ export default async function AccountsReceivablePage() {
       <div>
         <h2 className="mb-2 text-lg font-semibold">Open Invoices</h2>
         {rows.length > 0 ? (
-          <DataTable headers={["Invoice", "Customer", "Due Date", "Status", "Aging Bucket", "Balance"]}>
-            {rows.map((row) => {
-              const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers;
-              return (
-                <tr key={row.id}>
-                  <td>
-                    <Link href={`/invoices/${row.id}`} className="link link-hover font-medium">
-                      {row.invoice_number}
-                    </Link>
-                  </td>
-                  <td>{customer?.name ?? "—"}</td>
-                  <td className="text-xs">{formatDate(row.due_date)}</td>
-                  <td>
-                    <StatusBadge status={row.status} />
-                  </td>
-                  <td>
-                    <span className={`badge ${bucketTone(row.bucket) === "error" ? "badge-error" : bucketTone(row.bucket) === "warning" ? "badge-warning" : "badge-ghost"}`}>
-                      {row.bucket}
-                    </span>
-                  </td>
-                  <td className="font-medium">
-                    <Money value={Number(row.remaining_balance ?? 0)} />
-                  </td>
-                </tr>
-              );
-            })}
-          </DataTable>
+          <AccountsReceivableClient rows={rows} />
         ) : (
           <EmptyState title="No open receivables" description="Every issued invoice has been paid in full." />
         )}

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, statusLabel } from "@/lib/format";
 
 export type PayableInvoice = {
   id: string;
@@ -24,9 +24,11 @@ const PAYMENT_METHODS: { value: string; label: string }[] = [
 export function PaymentForm({
   invoices,
   initialInvoiceId,
+  mode = "staff",
 }: {
   invoices: PayableInvoice[];
   initialInvoiceId?: string;
+  mode?: "staff" | "customer";
 }) {
   const router = useRouter();
   const [invoiceId, setInvoiceId] = useState(() =>
@@ -47,6 +49,21 @@ export function PaymentForm({
     () => invoices.find((inv) => inv.id === effectiveInvoiceId),
     [invoices, effectiveInvoiceId]
   );
+  const paymentMethods =
+    mode === "customer"
+      ? PAYMENT_METHODS.filter((method) => ["ach", "credit_card"].includes(method.value))
+      : PAYMENT_METHODS;
+  const enteredAmount = Number(amount);
+  const enteredCents = Math.round(enteredAmount * 100);
+  const balanceCents = Math.round((selectedInvoice?.remainingBalance ?? 0) * 100);
+  const hasValidProjection =
+    amount.trim() !== "" &&
+    Number.isFinite(enteredAmount) &&
+    enteredCents > 0 &&
+    enteredCents <= balanceCents;
+  const projectedRemainingBalance = hasValidProjection ? Math.max(0, balanceCents - enteredCents) / 100 : null;
+  const projectedStatus =
+    projectedRemainingBalance == null ? null : projectedRemainingBalance === 0 ? "paid" : "partially_paid";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -93,7 +110,10 @@ export function PaymentForm({
       }
       setMessage({
         type: "success",
-        text: `Payment ${body.payment.paymentNumber} recorded for ${formatCurrency(body.payment.amount)}.`,
+        text:
+          mode === "customer"
+            ? `Demo payment ${body.payment.paymentNumber} submitted for ${formatCurrency(body.payment.amount)}. Remaining balance: ${formatCurrency(body.invoice.remainingBalance)}. Status: ${statusLabel(body.invoice.status)}.`
+            : `Payment ${body.payment.paymentNumber} recorded for ${formatCurrency(body.payment.amount)}. Remaining balance: ${formatCurrency(body.invoice.remainingBalance)}. Status: ${statusLabel(body.invoice.status)}.`,
       });
       setAmount("");
       setReferenceNumber("");
@@ -118,11 +138,21 @@ export function PaymentForm({
     <form onSubmit={onSubmit} className="card border border-base-300 bg-base-100 shadow-sm">
       <div className="card-body gap-4">
         <div>
-          <h2 className="card-title text-base">Record a Payment</h2>
+          <h2 className="card-title text-base">{mode === "customer" ? "Make a Payment" : "Record a Payment"}</h2>
           <p className="mt-1 text-sm opacity-70">
-            Apply received cash to one open customer invoice. Partial payments are supported.
+            {mode === "customer"
+              ? "Choose an open invoice and submit a full or partial demo payment."
+              : "Apply received cash to one open customer invoice. Partial payments are supported."}
           </p>
         </div>
+
+        {mode === "customer" ? (
+          <div className="alert alert-info text-sm">
+            <span>
+              Class demo only: no bank or card details are collected, and no real funds will be transferred.
+            </span>
+          </div>
+        ) : null}
 
         {message ? (
           <div className={`alert ${message.type === "success" ? "alert-success" : "alert-error"} text-sm`}>
@@ -136,15 +166,31 @@ export function PaymentForm({
             <select
               className="select select-bordered w-full"
               value={effectiveInvoiceId}
-              onChange={(e) => setInvoiceId(e.target.value)}
+              onChange={(e) => {
+                setInvoiceId(e.target.value);
+                setAmount("");
+              }}
               required
             >
               {invoices.map((inv) => (
                 <option key={inv.id} value={inv.id}>
-                  {inv.invoiceNumber} · {inv.customerName} · Balance {formatCurrency(inv.remainingBalance)}
+                  {inv.invoiceNumber}
+                  {mode === "staff" ? ` · ${inv.customerName}` : ""} · Due {inv.dueDate}
                 </option>
               ))}
             </select>
+          </label>
+
+          <label className="form-control w-full">
+            <span className="label-text mb-1">Balance</span>
+            <input
+              type="text"
+              className="input input-bordered w-full bg-base-200"
+              value={selectedInvoice ? formatCurrency(selectedInvoice.remainingBalance) : ""}
+              readOnly
+              tabIndex={-1}
+              aria-readonly="true"
+            />
           </label>
 
           <label className="form-control w-full">
@@ -161,10 +207,7 @@ export function PaymentForm({
               required
             />
             {selectedInvoice ? (
-              <div className="mt-1 flex items-center justify-between gap-2 text-xs">
-                <span className="opacity-60">
-                  Remaining balance: {formatCurrency(selectedInvoice.remainingBalance)}
-                </span>
+              <div className="mt-1 flex justify-end text-xs">
                 <button
                   type="button"
                   className="link link-primary"
@@ -176,16 +219,18 @@ export function PaymentForm({
             ) : null}
           </label>
 
-          <label className="form-control w-full">
-            <span className="label-text mb-1">Payment Date</span>
-            <input
-              type="date"
-              className="input input-bordered w-full"
-              value={paymentDate}
-              onChange={(e) => setPaymentDate(e.target.value)}
-              required
-            />
-          </label>
+          {mode === "staff" ? (
+            <label className="form-control w-full">
+              <span className="label-text mb-1">Payment Date</span>
+              <input
+                type="date"
+                className="input input-bordered w-full"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                required
+              />
+            </label>
+          ) : null}
 
           <label className="form-control w-full">
             <span className="label-text mb-1">Payment Method</span>
@@ -194,7 +239,7 @@ export function PaymentForm({
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value)}
             >
-              {PAYMENT_METHODS.map((method) => (
+              {paymentMethods.map((method) => (
                 <option key={method.value} value={method.value}>
                   {method.label}
                 </option>
@@ -202,39 +247,74 @@ export function PaymentForm({
             </select>
           </label>
 
-          <label className="form-control w-full">
-            <span className="label-text mb-1">Reference Number</span>
-            <input
-              className="input input-bordered w-full"
-              value={referenceNumber}
-              onChange={(e) => setReferenceNumber(e.target.value)}
-              placeholder="Check #, transaction ID, etc."
-            />
-          </label>
+          {mode === "staff" ? (
+            <>
+              <label className="form-control w-full">
+                <span className="label-text mb-1">Reference Number</span>
+                <input
+                  className="input input-bordered w-full"
+                  value={referenceNumber}
+                  onChange={(e) => setReferenceNumber(e.target.value)}
+                  placeholder="Check #, transaction ID, etc."
+                />
+              </label>
 
-          <label className="form-control w-full sm:col-span-2">
-            <span className="label-text mb-1">Notes</span>
-            <textarea
-              className="textarea textarea-bordered w-full"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-            />
-          </label>
+              <label className="form-control w-full sm:col-span-2">
+                <span className="label-text mb-1">Notes</span>
+                <textarea
+                  className="textarea textarea-bordered w-full"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                />
+              </label>
+            </>
+          ) : null}
         </div>
 
         {selectedInvoice ? (
-          <div className="rounded-box bg-base-200 p-3 text-sm">
-            <span className="font-medium">{selectedInvoice.invoiceNumber}</span>
-            <span className="opacity-70"> · {selectedInvoice.customerName}</span>
-            <span className="opacity-70"> · Due {selectedInvoice.dueDate}</span>
-            <span className="opacity-70"> · {selectedInvoice.status.replace(/_/g, " ")}</span>
+          <div className="rounded-box bg-base-200 p-4 text-sm">
+            <p>
+              <span className="font-medium">{selectedInvoice.invoiceNumber}</span>
+              <span className="opacity-70"> · {selectedInvoice.customerName}</span>
+              <span className="opacity-70"> · Due {selectedInvoice.dueDate}</span>
+            </p>
+            <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
+              <div>
+                <dt className="text-xs uppercase tracking-wide opacity-60">Current Balance</dt>
+                <dd className="font-medium">{formatCurrency(selectedInvoice.remainingBalance)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide opacity-60">Payment</dt>
+                <dd className="font-medium">
+                  {hasValidProjection ? formatCurrency(enteredAmount) : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide opacity-60">Balance After Payment</dt>
+                <dd className="font-medium">
+                  {projectedRemainingBalance == null ? "—" : formatCurrency(projectedRemainingBalance)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide opacity-60">Status After Payment</dt>
+                <dd className="font-medium">
+                  {projectedStatus ? statusLabel(projectedStatus) : statusLabel(selectedInvoice.status)}
+                </dd>
+              </div>
+            </dl>
           </div>
         ) : null}
 
         <div className="flex justify-end">
           <button type="submit" className="btn btn-primary" disabled={submitting}>
-            {submitting ? "Recording…" : "Record Payment"}
+            {submitting
+              ? mode === "customer"
+                ? "Submitting…"
+                : "Recording…"
+              : mode === "customer"
+                ? "Submit Demo Payment"
+                : "Record Payment"}
           </button>
         </div>
       </div>

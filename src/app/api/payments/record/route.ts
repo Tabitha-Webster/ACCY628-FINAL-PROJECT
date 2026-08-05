@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 
 const VALID_METHODS = ["ach", "check", "credit_card", "wire", "other"];
+const CUSTOMER_METHODS = ["ach", "credit_card"];
 
 function toCents(value: number): number {
   return Math.round(value * 100);
@@ -26,8 +27,11 @@ export async function POST(request: Request) {
   if (!profile) {
     return NextResponse.json({ error: "You must be signed in." }, { status: 401 });
   }
-  if (!["manager", "billing"].includes(profile.role)) {
-    return NextResponse.json({ error: "Only billing and manager roles can record payments." }, { status: 403 });
+  if (!["manager", "billing", "customer"].includes(profile.role)) {
+    return NextResponse.json({ error: "Your role cannot submit payments." }, { status: 403 });
+  }
+  if (profile.role === "customer" && !profile.customer_id) {
+    return NextResponse.json({ error: "Your account is not linked to a customer." }, { status: 403 });
   }
 
   let body: {
@@ -52,11 +56,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Enter a valid invoice and a payment amount greater than zero." }, { status: 400 });
   }
 
-  if (body.paymentMethod && !VALID_METHODS.includes(body.paymentMethod)) {
+  const allowedMethods = profile.role === "customer" ? CUSTOMER_METHODS : VALID_METHODS;
+  if (body.paymentMethod && !allowedMethods.includes(body.paymentMethod)) {
     return NextResponse.json({ error: "Select a valid payment method." }, { status: 400 });
   }
   const paymentMethod = body.paymentMethod || "ach";
-  const paymentDate = body.paymentDate || new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  const paymentDate = profile.role === "customer" ? today : body.paymentDate || today;
   if (!isValidDate(paymentDate)) {
     return NextResponse.json({ error: "Enter a valid payment date." }, { status: 400 });
   }
@@ -74,6 +80,9 @@ export async function POST(request: Request) {
   }
   if (!invoice) {
     return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
+  }
+  if (profile.role === "customer" && invoice.customer_id !== profile.customer_id) {
+    return NextResponse.json({ error: "You can only pay invoices for your own account." }, { status: 403 });
   }
   if (["draft", "canceled"].includes(invoice.status)) {
     return NextResponse.json({ error: "Only issued invoices can receive payments." }, { status: 400 });
@@ -99,8 +108,8 @@ export async function POST(request: Request) {
       payment_date: paymentDate,
       payment_amount: amount,
       payment_method: paymentMethod,
-      reference_number: body.referenceNumber || null,
-      notes: body.notes || null,
+      reference_number: profile.role === "customer" ? null : body.referenceNumber || null,
+      notes: profile.role === "customer" ? "Submitted through the customer demo payment screen." : body.notes || null,
       recorded_by: profile.id,
     })
     .select()
