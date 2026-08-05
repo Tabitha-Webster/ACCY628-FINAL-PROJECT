@@ -4,19 +4,35 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { UserRole } from "@/lib/constants";
+import { TechnicianWorkPanel } from "@/components/TechnicianWorkPanel";
+import { formatDateTime } from "@/lib/format";
+
+type TechnicianOption = { id: string; full_name: string };
 
 type Props = {
   ticketId: string;
   customerId: string;
   contractId: string | null;
   status: string;
+  priority: string;
   assignedTechnicianId: string | null;
+  actualResponseAt: string | null;
   technicianNotes: string | null;
+  completionNotes: string | null;
   customerResolutionSummary: string | null;
   customerConfirmed: boolean | null;
-  hasTimeLogged: boolean;
+  classification: string | null;
+  billableApprovalStatus: string | null;
+  noTimeExplanation: string | null;
+  reopenedAt: string | null;
+  reopenReason: string | null;
   currentUserId: string;
   role: UserRole;
+  internalCostRate: number;
+  contractHourlyRate: number | null;
+  recordedHours: number;
+  hasTimeEntryDescriptions: boolean;
+  technicians?: TechnicianOption[];
 };
 
 export function TicketActions({
@@ -24,104 +40,50 @@ export function TicketActions({
   customerId,
   contractId,
   status,
+  priority,
   assignedTechnicianId,
+  actualResponseAt,
   technicianNotes,
+  completionNotes,
   customerResolutionSummary,
   customerConfirmed,
-  hasTimeLogged,
+  classification,
+  billableApprovalStatus,
+  noTimeExplanation,
+  reopenedAt,
+  reopenReason,
   currentUserId,
   role,
+  internalCostRate,
+  contractHourlyRate,
+  recordedHours,
+  hasTimeEntryDescriptions,
+  technicians = [],
 }: Props) {
   const router = useRouter();
-  const [note, setNote] = useState("");
-  const [resolutionSummary, setResolutionSummary] = useState(customerResolutionSummary ?? "");
-  const [showFlagForm, setShowFlagForm] = useState(false);
-  const [flagTitle, setFlagTitle] = useState("");
-  const [flagDescription, setFlagDescription] = useState("");
-  const [flagHours, setFlagHours] = useState("");
-  const [flagAmount, setFlagAmount] = useState("");
+  const [assigneeId, setAssigneeId] = useState(assignedTechnicianId ?? "");
+  const [reopenReasonInput, setReopenReasonInput] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const isMyTicket = assignedTechnicianId === currentUserId;
-  const isTechnician = role === "technician";
-  const canWorkTicket = isTechnician && (isMyTicket || !assignedTechnicianId);
-  const isOpenStatus = !["resolved", "closed", "canceled"].includes(status);
+  const isCompleted = status === "resolved" || status === "closed";
 
-  async function startWork() {
-    setError(null);
-    setMessage(null);
-    setLoading("start");
-    const supabase = createClient();
-    const nowIso = new Date().toISOString();
-    const { error: updateError } = await supabase
-      .from("support_tickets")
-      .update({
-        status: "in_progress",
-        assigned_technician_id: assignedTechnicianId ?? currentUserId,
-      })
-      .eq("id", ticketId);
-    if (!updateError) {
-      await supabase
-        .from("support_tickets")
-        .update({ actual_response_at: nowIso })
-        .eq("id", ticketId)
-        .is("actual_response_at", null);
-    }
-    setLoading(null);
-    if (updateError) {
-      setError(updateError.message);
+  async function assignTechnician(e: React.FormEvent) {
+    e.preventDefault();
+    if (!assigneeId) {
+      setError("Select a technician to assign.");
       return;
     }
-    setMessage("Work started.");
-    router.refresh();
-  }
-
-  async function saveNote() {
-    if (!note.trim()) return;
     setError(null);
     setMessage(null);
-    setLoading("note");
-    const supabase = createClient();
-    const stamp = new Date().toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-    const nextNotes = technicianNotes ? `${technicianNotes}\n\n[${stamp}] ${note.trim()}` : `[${stamp}] ${note.trim()}`;
-    const { error: updateError } = await supabase
-      .from("support_tickets")
-      .update({ technician_notes: nextNotes })
-      .eq("id", ticketId);
-    setLoading(null);
-    if (updateError) {
-      setError(updateError.message);
-      return;
-    }
-    setNote("");
-    setMessage("Note added.");
-    router.refresh();
-  }
-
-  async function markComplete() {
-    setError(null);
-    setMessage(null);
-
-    const warnings: string[] = [];
-    if (!resolutionSummary.trim()) warnings.push("no resolution summary has been entered");
-    if (!hasTimeLogged) warnings.push("no time has been logged against this ticket");
-    if (warnings.length) {
-      const proceed = window.confirm(
-        `Heads up: ${warnings.join(" and ")}. Mark this ticket complete anyway?`
-      );
-      if (!proceed) return;
-    }
-
-    setLoading("complete");
+    setLoading("assign");
     const supabase = createClient();
     const { error: updateError } = await supabase
       .from("support_tickets")
       .update({
-        status: "resolved",
-        completed_at: new Date().toISOString(),
-        customer_resolution_summary: resolutionSummary.trim() || null,
+        assigned_technician_id: assigneeId,
+        status: status === "new" ? "assigned" : status,
       })
       .eq("id", ticketId);
     setLoading(null);
@@ -129,47 +91,32 @@ export function TicketActions({
       setError(updateError.message);
       return;
     }
-    setMessage("Ticket marked resolved.");
+    setMessage("Technician assignment saved.");
     router.refresh();
   }
 
-  async function submitFlag(e: React.FormEvent) {
+  async function reopenTicket(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setMessage(null);
-    if (!flagTitle.trim() || !flagDescription.trim()) {
-      setError("Please provide a title and description for the additional work request.");
+    if (reopenReasonInput.trim().length < 10) {
+      setError("Provide a clear reopen reason (at least a short sentence).");
       return;
     }
-    setLoading("flag");
-    const supabase = createClient();
-    const { error: insertError } = await supabase.from("additional_work_requests").insert({
-      customer_id: customerId,
-      contract_id: contractId,
-      support_ticket_id: ticketId,
-      requested_by: currentUserId,
-      title: flagTitle.trim(),
-      description: flagDescription.trim(),
-      estimated_hours: flagHours ? Number(flagHours) : null,
-      estimated_amount: flagAmount ? Number(flagAmount) : null,
+    setLoading("reopen");
+    const res = await fetch("/api/tickets/reopen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticketId, reason: reopenReasonInput }),
     });
-    if (!insertError) {
-      await supabase
-        .from("support_tickets")
-        .update({ classification: "out_of_scope", status: "waiting_on_approval", billable_approval_status: "pending" })
-        .eq("id", ticketId);
-    }
+    const payload = await res.json().catch(() => ({}));
     setLoading(null);
-    if (insertError) {
-      setError(insertError.message);
+    if (!res.ok) {
+      setError(payload.error ?? "Could not reopen this ticket.");
       return;
     }
-    setShowFlagForm(false);
-    setFlagTitle("");
-    setFlagDescription("");
-    setFlagHours("");
-    setFlagAmount("");
-    setMessage("Flagged as out of scope. An additional work request was created for manager review.");
+    setMessage(payload.message ?? "Ticket reopened.");
+    setReopenReasonInput("");
     router.refresh();
   }
 
@@ -198,118 +145,126 @@ export function TicketActions({
         <p className="text-sm font-semibold">Was this resolved to your satisfaction?</p>
         <p className="mt-1 text-xs opacity-70">Confirming will close this ticket.</p>
         {error ? <p className="mt-2 text-sm text-error">{error}</p> : null}
-        <button className="btn btn-success btn-sm mt-3" onClick={confirmResolved} disabled={loading === "confirm"}>
+        {message ? <p className="mt-2 text-sm text-success">{message}</p> : null}
+        <button
+          className="btn btn-success btn-sm mt-3"
+          onClick={confirmResolved}
+          disabled={loading === "confirm"}
+        >
           {loading === "confirm" ? "Confirming…" : "Confirm Resolved"}
         </button>
       </div>
     );
   }
 
-  if (!isTechnician) return null;
+  if (role === "billing") {
+    return (
+      <div className="rounded-box border border-base-300 bg-base-100 p-4 text-sm">
+        <p className="font-semibold">Billing view</p>
+        <p className="mt-1 opacity-70">
+          You can review billing classification and approval status. Work cannot be billed until the
+          ticket is completed or the work has received the required approval. Unapproved out-of-scope
+          work will not appear as ready to bill. Internal completion notes are read-only here.
+        </p>
+      </div>
+    );
+  }
 
-  return (
-    <div className="space-y-4 rounded-box border border-base-300 bg-base-100 p-4">
-      <p className="text-sm font-semibold">Technician Actions</p>
-
-      {error ? <div className="alert alert-error text-sm">{error}</div> : null}
-      {message ? <div className="alert alert-success text-sm">{message}</div> : null}
-
-      {!canWorkTicket ? (
-        <p className="text-sm opacity-60">This ticket is assigned to another technician.</p>
-      ) : (
-        <>
-          {isOpenStatus && status !== "in_progress" ? (
-            <button className="btn btn-primary btn-sm" onClick={startWork} disabled={loading === "start"}>
-              {loading === "start" ? "Starting…" : "Start Work"}
-            </button>
+  if (role === "manager") {
+    return (
+      <div className="space-y-4 rounded-box border border-base-300 bg-base-100 p-4">
+        <p className="text-sm font-semibold">Manager Actions</p>
+        {error ? <div className="alert alert-error text-sm">{error}</div> : null}
+        {message ? <div className="alert alert-success text-sm">{message}</div> : null}
+        <form className="space-y-2" onSubmit={assignTechnician}>
+          <label className="form-control">
+            <span className="label-text mb-1 text-sm font-medium">Assign / reassign technician</span>
+            <select
+              className="select select-bordered select-sm"
+              value={assigneeId}
+              onChange={(e) => setAssigneeId(e.target.value)}
+            >
+              <option value="">Select technician</option>
+              {technicians.map((tech) => (
+                <option key={tech.id} value={tech.id}>
+                  {tech.full_name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="btn btn-primary btn-sm" disabled={loading === "assign" || isCompleted}>
+            {loading === "assign" ? "Saving…" : "Save Assignment"}
+          </button>
+          {isCompleted ? (
+            <p className="text-xs opacity-60">Reopen the ticket before changing assignment.</p>
           ) : null}
+        </form>
 
-          <div className="form-control">
-            <label className="label-text mb-1 text-sm font-medium">Add a note</label>
-            <textarea
-              className="textarea textarea-bordered w-full"
-              rows={2}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="What did you find or do?"
-            />
-            <button className="btn btn-outline btn-sm mt-2 w-fit" onClick={saveNote} disabled={loading === "note" || !note.trim()}>
-              {loading === "note" ? "Saving…" : "Add Note"}
-            </button>
-          </div>
-
-          {isOpenStatus ? (
-            <div className="form-control border-t border-base-300 pt-3">
-              <label className="label-text mb-1 text-sm font-medium">Resolution summary (shown to customer)</label>
+        {isCompleted ? (
+          <form className="space-y-2 border-t border-base-300 pt-4" onSubmit={reopenTicket}>
+            <p className="text-sm font-medium">Deliberate reopen</p>
+            <p className="text-xs opacity-70">
+              Reopening is recorded with your user id, timestamp, and reason. This cannot be done
+              silently.
+            </p>
+            {reopenedAt ? (
+              <p className="text-xs opacity-60">
+                Last reopen: {formatDateTime(reopenedAt)}
+                {reopenReason ? ` — ${reopenReason}` : ""}
+              </p>
+            ) : null}
+            <label className="form-control">
+              <span className="label-text mb-1 text-sm">Reopen reason *</span>
               <textarea
                 className="textarea textarea-bordered w-full"
-                rows={2}
-                value={resolutionSummary}
-                onChange={(e) => setResolutionSummary(e.target.value)}
-                placeholder="Summarize what was resolved…"
+                rows={3}
+                value={reopenReasonInput}
+                onChange={(e) => setReopenReasonInput(e.target.value)}
+                placeholder="Explain why this completed ticket must be reopened"
+                required
               />
-              <button className="btn btn-success btn-sm mt-2 w-fit" onClick={markComplete} disabled={loading === "complete"}>
-                {loading === "complete" ? "Completing…" : "Mark Complete"}
-              </button>
-            </div>
-          ) : null}
+            </label>
+            <button className="btn btn-warning btn-sm" disabled={loading === "reopen"}>
+              {loading === "reopen" ? "Reopening…" : "Reopen completed ticket"}
+            </button>
+          </form>
+        ) : (
+          <p className="text-xs opacity-60">
+            Managers can review work in progress. Completing a ticket is reserved for the assigned
+            technician.
+          </p>
+        )}
 
-          <div className="border-t border-base-300 pt-3">
-            {!showFlagForm ? (
-              <button className="btn btn-warning btn-outline btn-sm" onClick={() => setShowFlagForm(true)}>
-                Flag as Out of Scope
-              </button>
-            ) : (
-              <form className="space-y-2" onSubmit={submitFlag}>
-                <p className="text-sm font-medium">Additional Work Request</p>
-                <input
-                  className="input input-bordered w-full input-sm"
-                  placeholder="Short title"
-                  value={flagTitle}
-                  onChange={(e) => setFlagTitle(e.target.value)}
-                  required
-                />
-                <textarea
-                  className="textarea textarea-bordered w-full"
-                  rows={2}
-                  placeholder="Why is this outside the contract's included scope?"
-                  value={flagDescription}
-                  onChange={(e) => setFlagDescription(e.target.value)}
-                  required
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    className="input input-bordered input-sm"
-                    type="number"
-                    min="0"
-                    step="0.25"
-                    placeholder="Est. hours"
-                    value={flagHours}
-                    onChange={(e) => setFlagHours(e.target.value)}
-                  />
-                  <input
-                    className="input input-bordered input-sm"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="Est. amount ($)"
-                    value={flagAmount}
-                    onChange={(e) => setFlagAmount(e.target.value)}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button className="btn btn-warning btn-sm" disabled={loading === "flag"}>
-                    {loading === "flag" ? "Submitting…" : "Submit Request"}
-                  </button>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowFlagForm(false)}>
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </>
-      )}
-    </div>
+        {noTimeExplanation ? (
+          <p className="text-xs opacity-70">
+            Zero-time explanation on file: {noTimeExplanation}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (role !== "technician") return null;
+
+  return (
+    <TechnicianWorkPanel
+      ticketId={ticketId}
+      customerId={customerId}
+      contractId={contractId}
+      status={status}
+      priority={priority}
+      assignedTechnicianId={assignedTechnicianId}
+      actualResponseAt={actualResponseAt}
+      technicianNotes={technicianNotes}
+      completionNotes={completionNotes}
+      customerResolutionSummary={customerResolutionSummary}
+      classification={classification}
+      billableApprovalStatus={billableApprovalStatus}
+      currentUserId={currentUserId}
+      internalCostRate={internalCostRate}
+      contractHourlyRate={contractHourlyRate}
+      recordedHours={recordedHours}
+      hasTimeEntryDescriptions={hasTimeEntryDescriptions}
+    />
   );
 }
