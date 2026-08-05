@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+
 export default function SignupPage() {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
