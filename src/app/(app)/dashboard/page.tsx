@@ -640,6 +640,12 @@ async function BillingDashboard({ profile }: { profile: Profile }) {
     <div>
       <PageHeader title="Billing Dashboard" description={`Welcome back, ${profile.full_name}. Here's the state of billing and collections.`} />
 
+      <p className="mb-4 text-sm">
+        <Link href="/billing-review" className="link link-primary">
+          Open Billing Review
+        </Link>
+      </p>
+
       <div className="mb-6">
         <ContractMetricsWidgets
           metrics={contractMetrics}

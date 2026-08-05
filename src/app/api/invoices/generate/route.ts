@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 
 type RequestedItem = {
-  type: "time_entry" | "direct_cost" | "project";
+  type: "time_entry" | "direct_cost" | "project" | "milestone" | "recurring";
   id: string;
 };
 
@@ -54,6 +54,8 @@ export async function POST(request: Request) {
   const timeEntryIds = items.filter((i) => i.type === "time_entry").map((i) => i.id);
   const directCostIds = items.filter((i) => i.type === "direct_cost").map((i) => i.id);
   const projectIds = items.filter((i) => i.type === "project").map((i) => i.id);
+  const milestoneIds = items.filter((i) => i.type === "milestone").map((i) => i.id);
+  const recurringIds = items.filter((i) => i.type === "recurring").map((i) => i.id);
 
   const supabase = await createClient();
 
@@ -70,7 +72,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Customer not found." }, { status: 404 });
   }
 
-  const [timeEntriesRes, directCostsRes, projectsRes] = await Promise.all([
+  const now = new Date();
+  const billingPeriodStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const billingPeriodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+
+  const [timeEntriesRes, directCostsRes, projectsRes, milestonesRes, contractsRes] = await Promise.all([
     timeEntryIds.length > 0
       ? supabase
           .from("time_entries")
@@ -89,21 +95,39 @@ export async function POST(request: Request) {
           .select("id, customer_id, contract_id, name, fixed_fee, estimated_billing_amount, status, billing_status, amount_billed")
           .in("id", projectIds)
       : Promise.resolve({ data: [], error: null }),
+    milestoneIds.length > 0
+      ? supabase
+          .from("project_milestones")
+          .select("id, name, amount, completed, approval_status, billing_status, project_id, projects(id, customer_id, contract_id, name)")
+          .in("id", milestoneIds)
+      : Promise.resolve({ data: [], error: null }),
+    recurringIds.length > 0
+      ? supabase
+          .from("contracts")
+          .select("id, customer_id, name, status, monthly_recurring_fee, billing_timing, payment_terms")
+          .in("id", recurringIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (timeEntriesRes.error) return NextResponse.json({ error: timeEntriesRes.error.message }, { status: 500 });
   if (directCostsRes.error) return NextResponse.json({ error: directCostsRes.error.message }, { status: 500 });
   if (projectsRes.error) return NextResponse.json({ error: projectsRes.error.message }, { status: 500 });
+  if (milestonesRes.error) return NextResponse.json({ error: milestonesRes.error.message }, { status: 500 });
+  if (contractsRes.error) return NextResponse.json({ error: contractsRes.error.message }, { status: 500 });
 
   const timeEntries = timeEntriesRes.data ?? [];
   const directCosts = directCostsRes.data ?? [];
   const projects = projectsRes.data ?? [];
+  const milestones = milestonesRes.data ?? [];
+  const recurringContracts = contractsRes.data ?? [];
 
   const conflicts: string[] = [];
 
   if (timeEntries.length !== timeEntryIds.length) conflicts.push("One or more time entries could not be found.");
   if (directCosts.length !== directCostIds.length) conflicts.push("One or more direct costs could not be found.");
   if (projects.length !== projectIds.length) conflicts.push("One or more projects could not be found.");
+  if (milestones.length !== milestoneIds.length) conflicts.push("One or more milestones could not be found.");
+  if (recurringContracts.length !== recurringIds.length) conflicts.push("One or more recurring fees could not be found.");
 
   for (const entry of timeEntries) {
     if (entry.customer_id !== customerId) conflicts.push(`Time entry ${entry.id} belongs to a different customer.`);
@@ -125,6 +149,47 @@ export async function POST(request: Request) {
       conflicts.push(`Project "${project.name}" is not completed or approved for billing.`);
     if (!["unbilled", "ready"].includes(project.billing_status ?? "unbilled"))
       conflicts.push(`Project "${project.name}" has already been billed.`);
+  }
+  for (const milestone of milestones) {
+    const project = Array.isArray(milestone.projects) ? milestone.projects[0] : milestone.projects;
+    if (!project || project.customer_id !== customerId)
+      conflicts.push(`Milestone "${milestone.name}" belongs to a different customer.`);
+    if (!milestone.completed) conflicts.push(`Milestone "${milestone.name}" is not completed.`);
+    if (!["approved", "not_required"].includes(milestone.approval_status))
+      conflicts.push(`Milestone "${milestone.name}" is not approved for billing.`);
+    if (!["unbilled", "ready"].includes(milestone.billing_status ?? "unbilled"))
+      conflicts.push(`Milestone "${milestone.name}" has already been billed.`);
+  }
+  for (const contract of recurringContracts) {
+    if (contract.customer_id !== customerId) conflicts.push(`Contract "${contract.name}" belongs to a different customer.`);
+    if (contract.status !== "active") conflicts.push(`Contract "${contract.name}" is not active.`);
+    if (Number(contract.monthly_recurring_fee ?? 0) <= 0)
+      conflicts.push(`Contract "${contract.name}" has no monthly fee to bill.`);
+  }
+
+  if (recurringIds.length > 0) {
+    const { data: existingRecurringLines } = await supabase
+      .from("invoice_line_items")
+      .select("source_id, invoice_id")
+      .eq("source_type", "recurring")
+      .in("source_id", recurringIds);
+    const invoiceIds = Array.from(new Set((existingRecurringLines ?? []).map((row) => row.invoice_id)));
+    if (invoiceIds.length > 0) {
+      const { data: existingInvoices } = await supabase
+        .from("invoices")
+        .select("id, status, billing_period_start")
+        .in("id", invoiceIds);
+      const billedThisPeriod = new Set(
+        (existingInvoices ?? [])
+          .filter((inv) => inv.status !== "canceled" && inv.billing_period_start === billingPeriodStart)
+          .map((inv) => inv.id)
+      );
+      for (const line of existingRecurringLines ?? []) {
+        if (billedThisPeriod.has(line.invoice_id)) {
+          conflicts.push("That monthly support fee was already billed for this period.");
+        }
+      }
+    }
   }
 
   if (conflicts.length > 0) {
@@ -180,8 +245,36 @@ export async function POST(request: Request) {
       contract_id: project.contract_id,
     });
   }
+  for (const milestone of milestones) {
+    const project = Array.isArray(milestone.projects) ? milestone.projects[0] : milestone.projects;
+    const amount = Number(milestone.amount ?? 0);
+    drafts.push({
+      description: `Milestone: ${project?.name ?? "Project"} — ${milestone.name}`,
+      quantity: 1,
+      rate: amount,
+      line_amount: amount,
+      source_type: "milestone",
+      source_id: milestone.id,
+      contract_id: project?.contract_id ?? null,
+    });
+  }
+  for (const contract of recurringContracts) {
+    const amount = Number(contract.monthly_recurring_fee ?? 0);
+    drafts.push({
+      description: `${contract.name} monthly support fee (${billingPeriodStart} to ${billingPeriodEnd})`,
+      quantity: 1,
+      rate: amount,
+      line_amount: amount,
+      source_type: "recurring",
+      source_id: contract.id,
+      contract_id: contract.id,
+    });
+  }
 
   const subtotal = drafts.reduce((sum, d) => sum + d.line_amount, 0);
+  if (subtotal <= 0) {
+    return NextResponse.json({ error: "An invoice must have a positive total." }, { status: 400 });
+  }
   const distinctContractIds = Array.from(new Set(drafts.map((d) => d.contract_id).filter((c): c is string => !!c)));
   const contractId = distinctContractIds.length === 1 ? distinctContractIds[0] : null;
 
@@ -209,6 +302,8 @@ export async function POST(request: Request) {
       invoice_date: invoiceDate,
       due_date: dueDate,
       status: "issued",
+      billing_period_start: billingPeriodStart,
+      billing_period_end: billingPeriodEnd,
       subtotal,
       tax_amount: 0,
       credits: 0,
@@ -279,6 +374,31 @@ export async function POST(request: Request) {
       })
       .eq("id", project.id)
       .neq("billing_status", "billed");
+    if (error) updateErrors.push(error.message);
+  }
+  for (const milestone of milestones) {
+    const lineItemId = lineItemBySource.get(`milestone:${milestone.id}`) ?? null;
+    const { error } = await supabase
+      .from("project_milestones")
+      .update({ billing_status: "billed", invoice_line_item_id: lineItemId })
+      .eq("id", milestone.id)
+      .neq("billing_status", "billed");
+    if (error) updateErrors.push(error.message);
+  }
+  for (const contract of recurringContracts) {
+    const amount = Number(contract.monthly_recurring_fee ?? 0);
+    const recognition = contract.billing_timing === "in_advance" ? "deferred" : "earned";
+    const { error } = await supabase.from("revenue_records").insert({
+      customer_id: customerId,
+      contract_id: contract.id,
+      period_month: billingPeriodStart,
+      revenue_type: "recurring",
+      recognition,
+      amount,
+      description: `${contract.name} monthly support invoiced for ${billingPeriodStart}`,
+      source_type: "invoice",
+      source_id: invoice.id,
+    });
     if (error) updateErrors.push(error.message);
   }
 

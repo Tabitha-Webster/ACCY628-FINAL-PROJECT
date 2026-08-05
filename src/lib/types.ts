@@ -307,6 +307,7 @@ export type DirectCost = {
   receipt_reference: string | null;
   description: string;
   entered_by: string | null;
+  entered_after_invoice?: boolean;
   approval_status: ApprovalStatus;
   billing_status: BillingStatus;
   created_at: string;

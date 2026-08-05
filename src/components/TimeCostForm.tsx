@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { laborCost, billableCost } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
+import { DAILY_HOUR_LIMIT } from "@/lib/time-cost-config";
+import {
+  excessiveDailyHoursWarning,
+  requireContract,
+  validateHoursWorked,
+} from "@/lib/time-cost-rules";
 
 type Option = { id: string; label: string; customerId: string };
 
@@ -81,27 +87,63 @@ export function TimeCostForm({ technicianId, internalCostRate, customers, contra
       setTimeError("Please select a customer.");
       return;
     }
+    if (!tContractId) {
+      setTimeError("Please select a contract.");
+      return;
+    }
+    if (!tTicketId) {
+      setTimeError("Please select a related ticket.");
+      return;
+    }
+    if (!tProjectId) {
+      setTimeError("Please select a related project.");
+      return;
+    }
     if (!description.trim()) {
       setTimeError("Please describe the work performed.");
       return;
     }
-    if (!hoursNum || hoursNum <= 0) {
-      setTimeError("Hours worked must be greater than 0.");
+
+    const hoursIssue = validateHoursWorked(hoursNum);
+    if (hoursIssue) {
+      setTimeError(hoursIssue.message);
       return;
-    }
-    if (hoursNum > 12) {
-      const proceed = window.confirm(`${hoursNum} hours is unusually high for a single entry. Continue anyway?`);
-      if (!proceed) return;
     }
 
     setTimeLoading(true);
     const supabase = createClient();
+
+    const { data: dayRows, error: dayError } = await supabase
+      .from("time_entries")
+      .select("hours_worked")
+      .eq("technician_id", technicianId)
+      .eq("work_date", workDate);
+
+    if (dayError) {
+      setTimeLoading(false);
+      setTimeError(`Could not check daily hours: ${dayError.message}`);
+      return;
+    }
+
+    const existingDailyHours = (dayRows ?? []).reduce(
+      (sum, row) => sum + Number(row.hours_worked ?? 0),
+      0
+    );
+    const dailyWarning = excessiveDailyHoursWarning(existingDailyHours, hoursNum, DAILY_HOUR_LIMIT);
+    if (dailyWarning) {
+      const proceed = window.confirm(dailyWarning.message);
+      if (!proceed) {
+        setTimeLoading(false);
+        return;
+      }
+    }
+
     const { error } = await supabase.from("time_entries").insert({
       technician_id: technicianId,
       customer_id: tCustomerId,
-      contract_id: tContractId || null,
-      support_ticket_id: tTicketId || null,
-      project_id: tProjectId || null,
+      contract_id: tContractId,
+      support_ticket_id: tTicketId,
+      project_id: tProjectId,
       work_date: workDate,
       hours_worked: hoursNum,
       work_category: workCategory || null,
@@ -134,6 +176,19 @@ export function TimeCostForm({ technicianId, internalCostRate, customers, contra
       setCostError("Please select a customer.");
       return;
     }
+    const contractIssue = requireContract(cContractId);
+    if (contractIssue) {
+      setCostError(contractIssue.message);
+      return;
+    }
+    if (!cTicketId) {
+      setCostError("Please select a related ticket.");
+      return;
+    }
+    if (!cProjectId) {
+      setCostError("Please select a related project.");
+      return;
+    }
     if (!costDescription.trim()) {
       setCostError("Please describe this cost.");
       return;
@@ -149,11 +204,34 @@ export function TimeCostForm({ technicianId, internalCostRate, customers, contra
 
     setCostLoading(true);
     const supabase = createClient();
+
+    // Technicians cannot read invoices via RLS; use a secure RPC existence check.
+    const { data: priorInvoice, error: priorError } = await supabase.rpc("has_prior_invoice_for_cost", {
+      p_contract_id: cContractId,
+      p_customer_id: cCustomerId,
+    });
+    if (priorError) {
+      setCostLoading(false);
+      setCostError(`Could not check existing invoices: ${priorError.message}`);
+      return;
+    }
+
+    const enteredAfterInvoice = Boolean(priorInvoice);
+    if (enteredAfterInvoice) {
+      const proceed = window.confirm(
+        "An invoice already exists for this contract/customer. This cost will be flagged as Entered After Invoice. Existing invoices will not be changed, and the cost will stay available for the next invoice. Continue?"
+      );
+      if (!proceed) {
+        setCostLoading(false);
+        return;
+      }
+    }
+
     const { error } = await supabase.from("direct_costs").insert({
       customer_id: cCustomerId,
-      contract_id: cContractId || null,
-      support_ticket_id: cTicketId || null,
-      project_id: cProjectId || null,
+      contract_id: cContractId,
+      support_ticket_id: cTicketId,
+      project_id: cProjectId,
       cost_category: costCategory,
       vendor: vendor || null,
       cost_date: costDate,
@@ -163,13 +241,19 @@ export function TimeCostForm({ technicianId, internalCostRate, customers, contra
       receipt_reference: receiptReference || null,
       description: costDescription.trim(),
       entered_by: technicianId,
+      entered_after_invoice: enteredAfterInvoice,
+      billing_status: "unbilled",
     });
     setCostLoading(false);
     if (error) {
       setCostError(error.message);
       return;
     }
-    setCostMessage("Direct cost saved.");
+    setCostMessage(
+      enteredAfterInvoice
+        ? "Direct cost saved and flagged as Entered After Invoice. Existing invoices were not changed; this cost is available for the next invoice or credit/debit workflow."
+        : "Direct cost saved."
+    );
     setInternalCost("");
     setCostDescription("");
     setVendor("");
@@ -216,9 +300,17 @@ export function TimeCostForm({ technicianId, internalCostRate, customers, contra
               </select>
             </label>
             <label className="form-control">
-              <span className="label-text mb-1">Contract (optional)</span>
-              <select className="select select-bordered" value={tContractId} onChange={(e) => setTContractId(e.target.value)} disabled={!tCustomerId}>
-                <option value="">None</option>
+              <span className="label-text mb-1">
+                Contract <span className="text-error">*</span>
+              </span>
+              <select
+                className="select select-bordered"
+                value={tContractId}
+                onChange={(e) => setTContractId(e.target.value)}
+                disabled={!tCustomerId}
+                required
+              >
+                <option value="">Select a contract…</option>
                 {contractsForCustomer(tCustomerId).map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.label}
@@ -227,9 +319,17 @@ export function TimeCostForm({ technicianId, internalCostRate, customers, contra
               </select>
             </label>
             <label className="form-control">
-              <span className="label-text mb-1">Related Ticket (optional)</span>
-              <select className="select select-bordered" value={tTicketId} onChange={(e) => setTTicketId(e.target.value)} disabled={!tCustomerId}>
-                <option value="">None</option>
+              <span className="label-text mb-1">
+                Related Ticket <span className="text-error">*</span>
+              </span>
+              <select
+                className="select select-bordered"
+                value={tTicketId}
+                onChange={(e) => setTTicketId(e.target.value)}
+                disabled={!tCustomerId}
+                required
+              >
+                <option value="">Select a ticket…</option>
                 {ticketsForCustomer(tCustomerId).map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.label}
@@ -238,9 +338,17 @@ export function TimeCostForm({ technicianId, internalCostRate, customers, contra
               </select>
             </label>
             <label className="form-control">
-              <span className="label-text mb-1">Related Project (optional)</span>
-              <select className="select select-bordered" value={tProjectId} onChange={(e) => setTProjectId(e.target.value)} disabled={!tCustomerId}>
-                <option value="">None</option>
+              <span className="label-text mb-1">
+                Related Project <span className="text-error">*</span>
+              </span>
+              <select
+                className="select select-bordered"
+                value={tProjectId}
+                onChange={(e) => setTProjectId(e.target.value)}
+                disabled={!tCustomerId}
+                required
+              >
+                <option value="">Select a project…</option>
                 {projectsForCustomer(tCustomerId).map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.label}
@@ -256,10 +364,12 @@ export function TimeCostForm({ technicianId, internalCostRate, customers, contra
               <input type="date" className="input input-bordered" value={workDate} onChange={(e) => setWorkDate(e.target.value)} required />
             </label>
             <label className="form-control">
-              <span className="label-text mb-1">Hours Worked</span>
+              <span className="label-text mb-1">
+                Hours Worked <span className="text-error">*</span>
+              </span>
               <input
                 type="number"
-                min="0"
+                min="0.25"
                 step="0.25"
                 className="input input-bordered"
                 value={hours}
@@ -350,9 +460,17 @@ export function TimeCostForm({ technicianId, internalCostRate, customers, contra
               </select>
             </label>
             <label className="form-control">
-              <span className="label-text mb-1">Contract (optional)</span>
-              <select className="select select-bordered" value={cContractId} onChange={(e) => setCContractId(e.target.value)} disabled={!cCustomerId}>
-                <option value="">None</option>
+              <span className="label-text mb-1">
+                Contract <span className="text-error">*</span>
+              </span>
+              <select
+                className="select select-bordered"
+                value={cContractId}
+                onChange={(e) => setCContractId(e.target.value)}
+                disabled={!cCustomerId}
+                required
+              >
+                <option value="">Select a contract…</option>
                 {contractsForCustomer(cCustomerId).map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.label}
@@ -361,9 +479,17 @@ export function TimeCostForm({ technicianId, internalCostRate, customers, contra
               </select>
             </label>
             <label className="form-control">
-              <span className="label-text mb-1">Related Ticket (optional)</span>
-              <select className="select select-bordered" value={cTicketId} onChange={(e) => setCTicketId(e.target.value)} disabled={!cCustomerId}>
-                <option value="">None</option>
+              <span className="label-text mb-1">
+                Related Ticket <span className="text-error">*</span>
+              </span>
+              <select
+                className="select select-bordered"
+                value={cTicketId}
+                onChange={(e) => setCTicketId(e.target.value)}
+                disabled={!cCustomerId}
+                required
+              >
+                <option value="">Select a ticket…</option>
                 {ticketsForCustomer(cCustomerId).map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.label}
@@ -372,9 +498,17 @@ export function TimeCostForm({ technicianId, internalCostRate, customers, contra
               </select>
             </label>
             <label className="form-control">
-              <span className="label-text mb-1">Related Project (optional)</span>
-              <select className="select select-bordered" value={cProjectId} onChange={(e) => setCProjectId(e.target.value)} disabled={!cCustomerId}>
-                <option value="">None</option>
+              <span className="label-text mb-1">
+                Related Project <span className="text-error">*</span>
+              </span>
+              <select
+                className="select select-bordered"
+                value={cProjectId}
+                onChange={(e) => setCProjectId(e.target.value)}
+                disabled={!cCustomerId}
+                required
+              >
+                <option value="">Select a project…</option>
                 {projectsForCustomer(cCustomerId).map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.label}

@@ -27,7 +27,9 @@ export default async function TimeCostsPage() {
       .limit(10),
     supabase
       .from("direct_costs")
-      .select("id, customer_id, cost_date, cost_category, internal_cost, billable_amount, approval_status, billing_status, description")
+      .select(
+        "id, customer_id, cost_date, cost_category, internal_cost, billable_amount, approval_status, billing_status, description, entered_after_invoice"
+      )
       .eq("entered_by", profile.id)
       .order("created_at", { ascending: false })
       .limit(10),
@@ -93,7 +95,7 @@ export default async function TimeCostsPage() {
           {(myCostsRes.data ?? []).length === 0 ? (
             <EmptyState title="No costs logged yet" description="Direct costs you submit will show up here." />
           ) : (
-            <DataTable headers={["Date", "Customer", "Category", "Cost", "Billable", "Approval"]}>
+            <DataTable headers={["Date", "Customer", "Category", "Cost", "Billable", "Flags", "Approval"]}>
               {(myCostsRes.data ?? []).map((c) => (
                 <tr key={c.id}>
                   <td>
@@ -108,6 +110,13 @@ export default async function TimeCostsPage() {
                   </td>
                   <td>
                     <Money value={Number(c.billable_amount)} />
+                  </td>
+                  <td>
+                    {c.entered_after_invoice ? (
+                      <span className="badge badge-info badge-sm">Entered After Invoice</span>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td>
                     <StatusBadge status={c.approval_status} />
