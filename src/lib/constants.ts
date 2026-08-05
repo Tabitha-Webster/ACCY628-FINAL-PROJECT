@@ -112,35 +112,35 @@ export const DEMO_ACCOUNTS = [
     label: "Admin",
     email: "admin@servicesync.demo",
     password: "1234",
-    name: "Alex Rivera",
+    name: "Tabitha Webster",
   },
   {
     role: "manager" as UserRole,
     label: "Manager",
     email: "manager@servicesync.demo",
     password: "1234",
-    name: "Morgan Hale",
+    name: "Emilie Pierson",
   },
   {
     role: "technician" as UserRole,
     label: "Technician",
     email: "tech@servicesync.demo",
     password: "1234",
-    name: "Taylor Nguyen",
+    name: "Jackson Pecunia",
   },
   {
     role: "billing" as UserRole,
     label: "Billing & Accounting",
     email: "billing@servicesync.demo",
     password: "1234",
-    name: "Jordan Blake",
+    name: "Lindsay-Kate Williams",
   },
   {
     role: "hr" as UserRole,
     label: "HR",
     email: "hr@servicesync.demo",
     password: "1234",
-    name: "Harper Wells",
+    name: "Lily Walker",
   },
   {
     role: "customer" as UserRole,
@@ -150,6 +150,92 @@ export const DEMO_ACCOUNTS = [
     name: "Casey Ortiz",
   },
 ] as const;
+
+export type CompanyEmployee = {
+  name: string;
+  title: string;
+  department: string;
+  hasLogin: boolean;
+  /** True when this person uses another teammate's role demo account. */
+  sharesRoleLogin: boolean;
+  email: string | null;
+  role: Exclude<UserRole, "customer">;
+};
+
+export const COMPANY_EMPLOYEES: CompanyEmployee[] = [
+  {
+    name: "Tabitha Webster",
+    title: "System Administrator",
+    department: "Finance & Administration",
+    hasLogin: true,
+    sharesRoleLogin: false,
+    email: "admin@servicesync.demo",
+    role: "admin",
+  },
+  {
+    name: "Emilie Pierson",
+    title: "Operations Manager",
+    department: "Service Delivery",
+    hasLogin: true,
+    sharesRoleLogin: false,
+    email: "manager@servicesync.demo",
+    role: "manager",
+  },
+  {
+    name: "Jackson Pecunia",
+    title: "Lead Technician",
+    department: "Service Delivery",
+    hasLogin: true,
+    sharesRoleLogin: false,
+    email: "tech@servicesync.demo",
+    role: "technician",
+  },
+  {
+    name: "Lindsay-Kate Williams",
+    title: "Billing Specialist",
+    department: "Finance & Administration",
+    hasLogin: true,
+    sharesRoleLogin: false,
+    email: "billing@servicesync.demo",
+    role: "billing",
+  },
+  {
+    name: "Lily Walker",
+    title: "HR Manager",
+    department: "Finance & Administration",
+    hasLogin: true,
+    sharesRoleLogin: false,
+    email: "hr@servicesync.demo",
+    role: "hr",
+  },
+  {
+    name: "Mark Ashe",
+    title: "Service Desk Technician",
+    department: "Help Desk",
+    hasLogin: true,
+    sharesRoleLogin: true,
+    email: "tech@servicesync.demo",
+    role: "technician",
+  },
+  {
+    name: "Carson Kimble",
+    title: "Staff Accountant / AR",
+    department: "Finance & Administration",
+    hasLogin: true,
+    sharesRoleLogin: true,
+    email: "billing@servicesync.demo",
+    role: "billing",
+  },
+  {
+    name: "Evan Bean",
+    title: "Account Manager",
+    department: "Project Delivery",
+    hasLogin: true,
+    sharesRoleLogin: true,
+    email: "manager@servicesync.demo",
+    role: "manager",
+  },
+];
 
 export type NavItem = {
   href: string;
@@ -176,6 +262,7 @@ const MANAGER_NAV: NavItem[] = [
 export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   admin: [
     { href: "/admin", label: "Admin Console" },
+    { href: "/admin/employees", label: "Employees" },
     { href: "/admin/alerts", label: "Alerts" },
     { href: "/admin/approvals", label: "Approvals Inbox" },
     { href: "/admin/search", label: "Admin Search" },
