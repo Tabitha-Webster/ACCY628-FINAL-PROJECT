@@ -160,7 +160,7 @@ export async function listContractModifications(supabase: SupabaseClient, contra
   return supabase
     .from("contract_modifications")
     .select(
-      "id, contract_id, modification_summary, effective_date, approval_status, approved_by, created_by, created_at, updated_at, created_by_profile:profiles!contract_modifications_created_by_fkey(full_name), approved_by_profile:profiles!contract_modifications_approved_by_fkey(full_name)"
+      "id, contract_id, modification_summary, effective_date, approval_status, approved_by, created_by, created_at, updated_at, proposed_changes, created_by_profile:profiles!contract_modifications_created_by_fkey(full_name), approved_by_profile:profiles!contract_modifications_approved_by_fkey(full_name)"
     )
     .eq("contract_id", contractId)
     .order("effective_date", { ascending: false });

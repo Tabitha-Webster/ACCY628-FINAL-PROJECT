@@ -132,7 +132,45 @@ export async function POST(request: Request) {
   if (milestones.length !== milestoneIds.length) conflicts.push("One or more milestones could not be found.");
   if (recurringContracts.length !== recurringIds.length) conflicts.push("One or more recurring fees could not be found.");
 
+  const relatedContractIds = Array.from(
+    new Set(
+      [
+        ...timeEntries.map((e) => e.contract_id),
+        ...directCosts.map((c) => c.contract_id),
+        ...projects.map((p) => p.contract_id),
+        ...milestones.map((m) => {
+          const project = Array.isArray(m.projects) ? m.projects[0] : m.projects;
+          return project?.contract_id ?? null;
+        }),
+      ].filter((id): id is string => Boolean(id))
+    )
+  );
+
+  if (relatedContractIds.length > 0) {
+    const { data: relatedContracts, error: relatedContractsError } = await supabase
+      .from("contracts")
+      .select("id, name, status")
+      .in("id", relatedContractIds);
+    if (relatedContractsError) {
+      return NextResponse.json({ error: relatedContractsError.message }, { status: 500 });
+    }
+    const byId = new Map((relatedContracts ?? []).map((c) => [c.id, c]));
+    for (const contractId of relatedContractIds) {
+      const contract = byId.get(contractId);
+      if (!contract) {
+        conflicts.push("A selected item references a missing contract.");
+        continue;
+      }
+      if (contract.status !== "active") {
+        conflicts.push(
+          `Cannot bill against contract "${contract.name}" because it is not active (${contract.status}).`
+        );
+      }
+    }
+  }
+
   for (const entry of timeEntries) {
+    if (!entry.contract_id) conflicts.push(`Time entry on ${entry.work_date} has no active contract link.`);
     if (entry.customer_id !== customerId) conflicts.push(`Time entry ${entry.id} belongs to a different customer.`);
     const reason = timeEntryBillingBlockReason(entry);
     if (reason) conflicts.push(reason);
@@ -145,11 +183,12 @@ export async function POST(request: Request) {
       if (eligError) conflicts.push(`Could not verify ticket billing eligibility for ${entry.work_date}: ${eligError.message}`);
       else if (!eligible)
         conflicts.push(
-          `Time entry on ${entry.work_date} is linked to a ticket but is not eligible to bill (incomplete ticket, missing notes, unapproved OOS, invalid contract date, or missing links).`
+          `Time entry on ${entry.work_date} is linked to a ticket but is not eligible to bill (incomplete ticket, missing notes, unapproved OOS, inactive/invalid contract, or missing links).`
         );
     }
   }
   for (const cost of directCosts) {
+    if (!cost.contract_id) conflicts.push(`Direct cost "${cost.description}" has no active contract link.`);
     if (cost.customer_id !== customerId) conflicts.push(`Direct cost ${cost.id} belongs to a different customer.`);
     const reason = directCostBillingBlockReason(cost);
     if (reason) conflicts.push(reason);
@@ -164,6 +203,7 @@ export async function POST(request: Request) {
     }
   }
   for (const project of projects) {
+    if (!project.contract_id) conflicts.push(`Project "${project.name}" has no active contract link.`);
     if (project.customer_id !== customerId) conflicts.push(`Project ${project.id} belongs to a different customer.`);
     const reason = projectBillingBlockReason(project);
     if (reason) conflicts.push(reason);
@@ -172,6 +212,7 @@ export async function POST(request: Request) {
     const project = Array.isArray(milestone.projects) ? milestone.projects[0] : milestone.projects;
     if (!project || project.customer_id !== customerId)
       conflicts.push(`Milestone "${milestone.name}" belongs to a different customer.`);
+    if (!project?.contract_id) conflicts.push(`Milestone "${milestone.name}" has no active contract link.`);
     const reason = milestoneBillingBlockReason(milestone);
     if (reason) conflicts.push(reason);
   }
