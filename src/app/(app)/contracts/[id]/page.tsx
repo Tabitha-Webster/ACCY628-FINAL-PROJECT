@@ -46,6 +46,8 @@ import { ContractDocumentsPanel } from "@/components/ContractDocumentsPanel";
 import { ContractChangesPanel } from "@/components/ContractChangesPanel";
 import { ContractRenewalsPanel } from "@/components/ContractRenewalsPanel";
 import { ContractLifecycleActions } from "@/components/ContractLifecycleActions";
+import { EditContractButton } from "@/components/EditContractButton";
+import { ContractModificationsPanel } from "@/components/ContractModificationsPanel";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -203,8 +205,8 @@ export default async function ContractDetailPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
-        <Link href="/contracts" className="btn btn-ghost btn-sm">
-          ← Back to contracts
+        <Link href="/contracts/reports" className="btn btn-ghost btn-sm">
+          ← Back to reports
         </Link>
         {permissions.report ? (
           <Link href="/contracts/reports" className="btn btn-ghost btn-sm">
@@ -215,9 +217,7 @@ export default async function ContractDetailPage({
           Renewal & Expiration
         </Link>
         {permissions.edit ? (
-          <Link href={`/contracts/${id}/edit`} className="btn btn-primary btn-sm">
-            Edit contract
-          </Link>
+          <EditContractButton href={`/contracts/${id}/edit`} isActive={status === "active"} />
         ) : null}
       </div>
 
@@ -608,32 +608,16 @@ export default async function ContractDetailPage({
         )}
       </Section>
 
-      <Section title="Modification History">
-        {modifications.length > 0 ? (
-          <DataTable headers={["Summary", "Effective", "Approval", "Requested By"]}>
-            {modifications.map((mod) => {
-              const requester = unwrapProfile(
-                (mod as { created_by_profile?: { full_name: string } | { full_name: string }[] | null })
-                  .created_by_profile
-              );
-              return (
-                <tr key={mod.id}>
-                  <td className="text-sm">{mod.modification_summary}</td>
-                  <td className="text-xs">{formatDate(mod.effective_date)}</td>
-                  <td>
-                    <StatusBadge status={mod.approval_status} />
-                  </td>
-                  <td className="text-xs">{requester?.full_name ?? "—"}</td>
-                </tr>
-              );
-            })}
-          </DataTable>
-        ) : (
-          <EmptyState
-            title="No modifications recorded"
-            description="Amendments and change orders will appear in this history."
-          />
-        )}
+      <Section title="Price Change Approvals">
+        <ContractModificationsPanel
+          contractId={id}
+          profileId={profile.id}
+          currentVersion={Number(contract.version_number ?? 1)}
+          canApprove={permissions.approve}
+          modifications={
+            modifications as Parameters<typeof ContractModificationsPanel>[0]["modifications"]
+          }
+        />
       </Section>
 
       <Section title="Audit Log">

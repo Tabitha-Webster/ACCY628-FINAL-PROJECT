@@ -52,6 +52,7 @@ export const DEMO_ACCOUNTS = [
 export type NavItem = {
   href: string;
   label: string;
+  children?: NavItem[];
 };
 
 export const ROLE_NAV: Record<UserRole, NavItem[]> = {
@@ -69,7 +70,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   ],
   technician: [
     { href: "/dashboard", label: "My Assignments" },
-    { href: "/contracts", label: "Contracts & Agreements" },
+    // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
     { href: "/tickets", label: "Support Tickets" },
     { href: "/projects", label: "Project Tasks" },
     { href: "/time-costs", label: "Submit Time and Costs" },
@@ -119,7 +120,8 @@ export const CONTRACTS_NAV_COPY: Record<
   hr: {
     href: "/contracts",
     title: "Contracts & Agreements",
-    description: "Review active agreements only as needed for workforce and contractor cost context.",  },
+    description: "Review active agreements only as needed for workforce and contractor cost context.",
+  },
   customer: {
     href: "/my-contracts",
     title: "My Contracts & Agreements",

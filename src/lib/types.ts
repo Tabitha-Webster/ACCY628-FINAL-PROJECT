@@ -156,6 +156,11 @@ export type ContractModification = {
   created_by: string | null;
   created_at: string;
   updated_at?: string;
+  proposed_changes?: Array<{
+    field_name: string;
+    previous_value: string;
+    new_value: string;
+  }> | null;
 };
 
 export type ContractDocument = {

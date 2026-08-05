@@ -49,6 +49,7 @@ function SideNav({
   const isCustomer = profile.role === "customer";
   const isBilling = profile.role === "billing";
   const isManager = profile.role === "manager";
+  const isTechnician = profile.role === "technician";
 
   return (
     <>
@@ -77,7 +78,10 @@ function SideNav({
                 <CustomerBillingNavTree onNavigate={onNavigate} />
               ) : null}
               {isManager && item.href === "/customers" ? (
-                <ContractsAgreementsNavTree showReports onNavigate={onNavigate} />
+                <ContractsAgreementsNavTree showReports showNewContract onNavigate={onNavigate} />
+              ) : null}
+              {isTechnician && item.href === "/dashboard" ? (
+                <ContractsAgreementsNavTree showReports={false} onNavigate={onNavigate} />
               ) : null}
               {isBilling && item.href === "/dashboard" ? (
                 <>
