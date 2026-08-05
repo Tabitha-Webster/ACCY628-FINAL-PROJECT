@@ -53,14 +53,14 @@ export default function LoginPage() {
     <div className="login-page-bg relative min-h-screen overflow-x-hidden bg-slate-50">
       <div className="login-page-geo pointer-events-none absolute inset-0" aria-hidden />
       <div className="relative mx-auto flex w-full max-w-xl flex-col items-center px-4 py-4 sm:py-5 md:py-6">
-        <h1 className="w-full max-w-[min(100%,24rem)] overflow-visible bg-transparent leading-none">
+        <h1 className="flex w-full justify-center overflow-visible bg-transparent leading-none">
           <Image
-            src="/images/servicesync-cloud-logo.png?v=full-y-2"
+            src="/images/servicesync-msp-logo.png?v=5"
             alt="ServiceSync MSP"
-            width={828}
-            height={433}
-            className="mx-auto block h-auto w-full bg-transparent object-contain object-top"
-            sizes="(max-width: 640px) 90vw, 24rem"
+            width={1160}
+            height={700}
+            className="login-brand-logo mx-auto block h-auto w-[min(100%,17.5rem)] bg-transparent object-contain object-top sm:w-[19rem]"
+            sizes="304px"
             priority
             unoptimized
           />
@@ -121,7 +121,7 @@ export default function LoginPage() {
 
               <div className="divider my-0 text-xs opacity-50">or</div>
 
-              <Link href="/customer-signup" className="btn btn-outline btn-primary w-full">
+              <Link href="/customer-signup" className="btn login-create-account-btn w-full">
                 New Customer? Create an Account
               </Link>
             </div>

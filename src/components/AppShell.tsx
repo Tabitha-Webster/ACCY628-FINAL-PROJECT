@@ -1,20 +1,23 @@
 ﻿"use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, PanelLeft, PanelLeftClose } from "lucide-react";
 import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
 import { BillingStaffNavTree } from "@/components/BillingStaffNavTree";
 import { ContractsAgreementsNavTree } from "@/components/ContractsAgreementsNavTree";
 import { CustomerBillingNavTree } from "@/components/CustomerBillingNavTree";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { UserSettingsPanel } from "@/components/UserSettingsPanel";
-import { ROLE_NAV, isManagerRole, type Profile, type UserRole } from "@/lib/constants";
+import { isManagerRole, ROLE_NAV, roleHomePath, type Profile, type UserRole } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
 import { applyPreferencesToDom, loadPreferences } from "@/lib/user-preferences";
 import type { CustomerStatus } from "@/lib/types";
 import { Fragment, useEffect, useState } from "react";
+
+const SIDEBAR_COLLAPSED_KEY = "servicesync-sidebar-collapsed";
 
 function SideNav({
   profile,
@@ -22,6 +25,7 @@ function SideNav({
   onNavigate,
   showSettings,
   onOpenSettings,
+  onCollapse,
   restrictedCustomer = false,
 }: {
   profile: Profile;
@@ -29,6 +33,7 @@ function SideNav({
   onNavigate?: () => void;
   showSettings?: boolean;
   onOpenSettings?: () => void;
+  onCollapse?: () => void;
   restrictedCustomer?: boolean;
 }) {
   const nav = restrictedCustomer
@@ -42,8 +47,39 @@ function SideNav({
   return (
     <>
       <div className="border-b border-base-300 p-4">
-        <p className="text-lg font-semibold">ServiceSync MSP</p>
-        <p className="text-xs opacity-60">Contract-to-cash workspace</p>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <Link
+              href={restrictedCustomer ? "/pending-approval" : roleHomePath(profile.role as UserRole)}
+              className="block outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+              onClick={onNavigate}
+              aria-label="ServiceSync MSP home"
+            >
+              <Image
+                src="/images/servicesync-msp-logo.png?v=5"
+                alt="ServiceSync MSP"
+                width={1160}
+                height={700}
+                className="sidebar-brand-logo h-auto w-full max-w-[11.5rem] object-contain object-left"
+                sizes="184px"
+                priority
+                unoptimized
+              />
+            </Link>
+            <p className="mt-2 text-xs opacity-60">Contract-to-cash workspace</p>
+          </div>
+          {onCollapse ? (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm btn-square shrink-0"
+              onClick={onCollapse}
+              aria-label="Collapse side menu"
+              title="Collapse side menu"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          ) : null}
+        </div>
         <div className="mt-3">
           <span className="badge badge-primary badge-outline">{statusLabel(profile.role)}</span>
         </div>
@@ -120,6 +156,8 @@ export function AppShell({
   const router = useRouter();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsPathname, setSettingsPathname] = useState(pathname);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarReady, setSidebarReady] = useState(false);
 
   // Dismiss the settings panel when the route changes.
   if (settingsPathname !== pathname) {
@@ -143,6 +181,15 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
+    try {
+      setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
+    } catch {
+      setSidebarCollapsed(false);
+    }
+    setSidebarReady(true);
+  }, []);
+
+  useEffect(() => {
     if (!settingsOpen) return;
 
     function onKeyDown(event: KeyboardEvent) {
@@ -157,6 +204,17 @@ export function AppShell({
     };
   }, [settingsOpen]);
 
+  function setCollapsed(next: boolean) {
+    setSidebarCollapsed(next);
+    try {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
+    } catch {
+      // Ignore storage failures in private browsing.
+    }
+  }
+
+  const showSidebar = !sidebarReady || !sidebarCollapsed;
+
   async function logout() {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -166,20 +224,37 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen bg-base-100">
-      {/* Docked sidebar — always visible in the layout flow. */}
-      <aside className="app-sidebar sticky top-0 flex h-screen w-72 shrink-0 flex-col border-r border-base-300">
-        <SideNav
-          profile={profile}
-          pathname={pathname}
-          restrictedCustomer={restrictedCustomer}
-          showSettings
-          onOpenSettings={() => setSettingsOpen(true)}
-        />
+      <aside
+        className={`app-sidebar sticky top-0 flex h-screen shrink-0 flex-col border-r border-base-300 overflow-hidden transition-[width] duration-200 ease-out ${
+          showSidebar ? "w-72" : "w-0 border-transparent"
+        }`}
+        aria-hidden={!showSidebar}
+      >
+        <div className={`flex h-full w-72 flex-col ${showSidebar ? "" : "pointer-events-none"}`}>
+          <SideNav
+            profile={profile}
+            pathname={pathname}
+            restrictedCustomer={restrictedCustomer}
+            showSettings
+            onOpenSettings={() => setSettingsOpen(true)}
+            onCollapse={() => setCollapsed(true)}
+          />
+        </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex flex-wrap items-center gap-3 border-b border-base-300 bg-base-100 px-4 py-2">
           <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm btn-square"
+              onClick={() => setCollapsed(showSidebar)}
+              aria-label={showSidebar ? "Collapse side menu" : "Expand side menu"}
+              aria-expanded={showSidebar}
+              title={showSidebar ? "Collapse side menu" : "Expand side menu"}
+            >
+              {showSidebar ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
+            </button>
             <div>
               <p className="text-sm font-semibold leading-tight">ServiceSync MSP</p>
               <p className="hidden text-xs opacity-60 sm:block">
