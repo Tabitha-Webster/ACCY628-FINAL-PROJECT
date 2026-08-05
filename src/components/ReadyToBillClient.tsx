@@ -15,6 +15,8 @@ export type ReadyItem = {
   description: string;
   detail: string;
   amount: number;
+  source?: "ticket" | "other";
+  ticketNumber?: string | null;
 };
 
 export type MonthlyFeeInfo = {
@@ -210,11 +212,19 @@ export function ReadyToBillClient({
                         />
                       </td>
                       <td>
-                        <span className="badge badge-ghost badge-sm">{TYPE_LABEL[item.type]}</span>
+                        <div className="flex flex-col gap-1">
+                          <span className="badge badge-ghost badge-sm">{TYPE_LABEL[item.type]}</span>
+                          {item.source === "ticket" ? (
+                            <span className="badge badge-info badge-sm">Ticket</span>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="max-w-xs">
                         <div className="font-medium">{item.description}</div>
                         {item.contractName ? <div className="text-xs opacity-60">{item.contractName}</div> : null}
+                        {item.ticketNumber ? (
+                          <div className="text-xs opacity-60">{item.ticketNumber}</div>
+                        ) : null}
                       </td>
                       <td className="text-xs opacity-70">{item.detail}</td>
                       <td>
