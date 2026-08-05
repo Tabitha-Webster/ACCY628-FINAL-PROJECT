@@ -1,0 +1,27 @@
+---
+description: Restrict Supabase MCP/work to ACCY628-FINAL-PROJECT only
+alwaysApply: true
+---
+
+# Supabase project lock
+
+This workspace is for **ACCY628-FINAL-PROJECT** only.
+
+## Allowed project
+
+- Name: `ACCY628-FINAL-PROJECT`
+- Project ID / ref: `icymsjpkfddfrbbazxss`
+- URL: `https://icymsjpkfddfrbbazxss.supabase.co`
+
+## Do not use
+
+- Any project named **Concert Costs** / **ConcertCosts**
+- Project ID / ref: `fjqlixqpjesgwpcpondi` (or any other Concert Costs ref)
+- Env vars, migrations, SQL, keys, or MCP calls aimed at Concert Costs
+
+## Agent behavior
+
+- When using Supabase MCP, always pass `project_id` / ref `icymsjpkfddfrbbazxss`.
+- If `list_projects` returns Concert Costs, ignore it.
+- Never pause, migrate, query, or configure Concert Costs from this workspace.
+- Keep `.env.local` pointed at the final-project URL and keys only.
