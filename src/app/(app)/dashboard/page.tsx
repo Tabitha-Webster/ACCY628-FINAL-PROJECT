@@ -14,8 +14,7 @@ import {
   DateText,
 } from "@/components/ui";
 import { ManagerCharts, type MonthlyFinancials, type TicketsByStatus } from "@/components/ManagerCharts";
-import { slaStatus, usagePercentage, usageStatus, hoursRemaining } from "@/lib/calculations";
-import { arAgingBucket } from "@/lib/calculations";
+import { AR_AGING_BUCKETS, arAgingBucket, slaStatus, usagePercentage, usageStatus, hoursRemaining } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
 import type {
   AdditionalWorkRequest,
@@ -609,7 +608,7 @@ async function BillingDashboard({ profile }: { profile: Profile }) {
     .filter((p) => monthKey(p.payment_date) === monthKeyNow)
     .reduce((sum, p) => sum + Number(p.payment_amount), 0);
 
-  const agingBuckets = ["Current", "1–30 Days Past Due", "31–60 Days Past Due", "61–90 Days Past Due", "More Than 90 Days Past Due"];
+  const agingBuckets = AR_AGING_BUCKETS;
   const agingSummary = agingBuckets.map((bucket) => ({
     bucket,
     total: invoices

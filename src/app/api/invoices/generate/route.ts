@@ -1,25 +1,20 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { makeInvoiceLine, summarizeInvoice } from "@/lib/billing";
+import {
+  ONE_TIME_BILLING_SOURCES,
+  directCostBillingBlockReason,
+  hasDuplicateIds,
+  milestoneBillingBlockReason,
+  projectBillingBlockReason,
+  timeEntryBillingBlockReason,
+} from "@/lib/billing-eligibility";
 
 type RequestedItem = {
   type: "time_entry" | "direct_cost" | "project" | "milestone" | "recurring";
   id: string;
 };
-
-function parsePaymentTermsDays(paymentTerms: string | null | undefined): number {
-  if (!paymentTerms) return 30;
-  const match = paymentTerms.match(/(\d+)/);
-  if (!match) return 30;
-  const days = Number(match[1]);
-  return Number.isFinite(days) && days > 0 ? days : 30;
-}
-
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 
 function generateInvoiceNumber(): string {
   const today = new Date();
@@ -92,7 +87,7 @@ export async function POST(request: Request) {
     projectIds.length > 0
       ? supabase
           .from("projects")
-          .select("id, customer_id, contract_id, name, fixed_fee, estimated_billing_amount, status, billing_status, amount_billed")
+          .select("id, customer_id, contract_id, name, fixed_fee, estimated_billing_amount, status, billing_status, amount_billed, customer_approval_status")
           .in("id", projectIds)
       : Promise.resolve({ data: [], error: null }),
     milestoneIds.length > 0
@@ -123,6 +118,10 @@ export async function POST(request: Request) {
 
   const conflicts: string[] = [];
 
+  if (hasDuplicateIds(timeEntryIds)) conflicts.push("The same time entry was selected more than once.");
+  if (hasDuplicateIds(directCostIds)) conflicts.push("The same direct cost was selected more than once.");
+  if (hasDuplicateIds(projectIds)) conflicts.push("The same project was selected more than once.");
+  if (hasDuplicateIds(milestoneIds)) conflicts.push("The same milestone was selected more than once.");
   if (timeEntries.length !== timeEntryIds.length) conflicts.push("One or more time entries could not be found.");
   if (directCosts.length !== directCostIds.length) conflicts.push("One or more direct costs could not be found.");
   if (projects.length !== projectIds.length) conflicts.push("One or more projects could not be found.");
@@ -131,40 +130,55 @@ export async function POST(request: Request) {
 
   for (const entry of timeEntries) {
     if (entry.customer_id !== customerId) conflicts.push(`Time entry ${entry.id} belongs to a different customer.`);
-    if (entry.classification !== "billable") conflicts.push(`Time entry on ${entry.work_date} is not classified as billable.`);
-    if (!["approved", "not_required"].includes(entry.approval_status))
-      conflicts.push(`Time entry on ${entry.work_date} is not approved for billing.`);
-    if (!["unbilled", "ready"].includes(entry.billing_status))
-      conflicts.push(`Time entry on ${entry.work_date} has already been billed.`);
+    const reason = timeEntryBillingBlockReason(entry);
+    if (reason) conflicts.push(reason);
   }
   for (const cost of directCosts) {
     if (cost.customer_id !== customerId) conflicts.push(`Direct cost ${cost.id} belongs to a different customer.`);
-    if (cost.approval_status !== "approved") conflicts.push(`Direct cost "${cost.description}" is not approved for billing.`);
-    if (!["unbilled", "ready"].includes(cost.billing_status))
-      conflicts.push(`Direct cost "${cost.description}" has already been billed.`);
+    const reason = directCostBillingBlockReason(cost);
+    if (reason) conflicts.push(reason);
   }
   for (const project of projects) {
     if (project.customer_id !== customerId) conflicts.push(`Project ${project.id} belongs to a different customer.`);
-    if (!["completed", "approved"].includes(project.status))
-      conflicts.push(`Project "${project.name}" is not completed or approved for billing.`);
-    if (!["unbilled", "ready"].includes(project.billing_status ?? "unbilled"))
-      conflicts.push(`Project "${project.name}" has already been billed.`);
+    const reason = projectBillingBlockReason(project);
+    if (reason) conflicts.push(reason);
   }
   for (const milestone of milestones) {
     const project = Array.isArray(milestone.projects) ? milestone.projects[0] : milestone.projects;
     if (!project || project.customer_id !== customerId)
       conflicts.push(`Milestone "${milestone.name}" belongs to a different customer.`);
-    if (!milestone.completed) conflicts.push(`Milestone "${milestone.name}" is not completed.`);
-    if (!["approved", "not_required"].includes(milestone.approval_status))
-      conflicts.push(`Milestone "${milestone.name}" is not approved for billing.`);
-    if (!["unbilled", "ready"].includes(milestone.billing_status ?? "unbilled"))
-      conflicts.push(`Milestone "${milestone.name}" has already been billed.`);
+    const reason = milestoneBillingBlockReason(milestone);
+    if (reason) conflicts.push(reason);
   }
   for (const contract of recurringContracts) {
     if (contract.customer_id !== customerId) conflicts.push(`Contract "${contract.name}" belongs to a different customer.`);
     if (contract.status !== "active") conflicts.push(`Contract "${contract.name}" is not active.`);
     if (Number(contract.monthly_recurring_fee ?? 0) <= 0)
       conflicts.push(`Contract "${contract.name}" has no monthly fee to bill.`);
+  }
+
+  const oneTimeSources = [
+    ...timeEntryIds.map((id) => ({ type: "time_entry", id })),
+    ...directCostIds.map((id) => ({ type: "direct_cost", id })),
+    ...projectIds.map((id) => ({ type: "project", id })),
+    ...milestoneIds.map((id) => ({ type: "milestone", id })),
+  ];
+  if (oneTimeSources.length > 0) {
+    const { data: existingSourceLines } = await supabase
+      .from("invoice_line_items")
+      .select("source_type, source_id, invoices(status)")
+      .in("source_type", [...ONE_TIME_BILLING_SOURCES])
+      .in(
+        "source_id",
+        oneTimeSources.map((source) => source.id)
+      );
+    for (const line of existingSourceLines ?? []) {
+      const invoice = Array.isArray(line.invoices) ? line.invoices[0] : line.invoices;
+      if (invoice && invoice.status !== "canceled") {
+        conflicts.push("One or more selected time or cost items were already billed on another invoice.");
+        break;
+      }
+    }
   }
 
   if (recurringIds.length > 0) {
@@ -196,52 +210,45 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Some selected items cannot be billed.", conflicts }, { status: 409 });
   }
 
-  type LineItemDraft = {
-    description: string;
-    quantity: number;
-    rate: number;
-    line_amount: number;
-    source_type: string;
-    source_id: string;
-    contract_id: string | null;
-  };
-
-  const drafts: LineItemDraft[] = [];
+  const drafts: Array<ReturnType<typeof makeInvoiceLine> & { contract_id: string | null }> = [];
 
   for (const entry of timeEntries) {
     const rate = Number(entry.billing_rate ?? 0);
     const hours = Number(entry.hours_worked ?? 0);
     drafts.push({
-      description: `${entry.description} (${hours.toFixed(1)} hrs on ${entry.work_date})`,
-      quantity: hours,
-      rate,
-      line_amount: hours * rate,
-      source_type: "time_entry",
-      source_id: entry.id,
+      ...makeInvoiceLine({
+        description: `${entry.description} (${hours.toFixed(1)} hrs on ${entry.work_date})`,
+        quantity: hours,
+        rate,
+        source_type: "time_entry",
+        source_id: entry.id,
+      }),
       contract_id: entry.contract_id,
     });
   }
   for (const cost of directCosts) {
     const amount = Number(cost.billable_amount ?? 0);
     drafts.push({
-      description: `${cost.description}`,
-      quantity: 1,
-      rate: amount,
-      line_amount: amount,
-      source_type: "direct_cost",
-      source_id: cost.id,
+      ...makeInvoiceLine({
+        description: `${cost.description}`,
+        quantity: 1,
+        rate: amount,
+        source_type: "direct_cost",
+        source_id: cost.id,
+      }),
       contract_id: cost.contract_id,
     });
   }
   for (const project of projects) {
     const amount = Number(project.fixed_fee || project.estimated_billing_amount || 0);
     drafts.push({
-      description: `Project: ${project.name}`,
-      quantity: 1,
-      rate: amount,
-      line_amount: amount,
-      source_type: "project",
-      source_id: project.id,
+      ...makeInvoiceLine({
+        description: `Project: ${project.name}`,
+        quantity: 1,
+        rate: amount,
+        source_type: "project",
+        source_id: project.id,
+      }),
       contract_id: project.contract_id,
     });
   }
@@ -249,43 +256,54 @@ export async function POST(request: Request) {
     const project = Array.isArray(milestone.projects) ? milestone.projects[0] : milestone.projects;
     const amount = Number(milestone.amount ?? 0);
     drafts.push({
-      description: `Milestone: ${project?.name ?? "Project"} — ${milestone.name}`,
-      quantity: 1,
-      rate: amount,
-      line_amount: amount,
-      source_type: "milestone",
-      source_id: milestone.id,
+      ...makeInvoiceLine({
+        description: `Milestone: ${project?.name ?? "Project"} — ${milestone.name}`,
+        quantity: 1,
+        rate: amount,
+        source_type: "milestone",
+        source_id: milestone.id,
+      }),
       contract_id: project?.contract_id ?? null,
     });
   }
   for (const contract of recurringContracts) {
     const amount = Number(contract.monthly_recurring_fee ?? 0);
     drafts.push({
-      description: `${contract.name} monthly support fee (${billingPeriodStart} to ${billingPeriodEnd})`,
-      quantity: 1,
-      rate: amount,
-      line_amount: amount,
-      source_type: "recurring",
-      source_id: contract.id,
+      ...makeInvoiceLine({
+        description: `${contract.name} monthly support fee (${billingPeriodStart} to ${billingPeriodEnd})`,
+        quantity: 1,
+        rate: amount,
+        source_type: "recurring",
+        source_id: contract.id,
+      }),
       contract_id: contract.id,
     });
   }
 
-  const subtotal = drafts.reduce((sum, d) => sum + d.line_amount, 0);
-  if (subtotal <= 0) {
-    return NextResponse.json({ error: "An invoice must have a positive total." }, { status: 400 });
-  }
   const distinctContractIds = Array.from(new Set(drafts.map((d) => d.contract_id).filter((c): c is string => !!c)));
   const contractId = distinctContractIds.length === 1 ? distinctContractIds[0] : null;
 
   let paymentTerms: string | null = null;
+  let taxStatus: string | null = "taxable";
   if (contractId) {
-    const { data: contract } = await supabase.from("contracts").select("payment_terms").eq("id", contractId).maybeSingle();
+    const { data: contract } = await supabase
+      .from("contracts")
+      .select("payment_terms, tax_status")
+      .eq("id", contractId)
+      .maybeSingle();
     paymentTerms = contract?.payment_terms ?? null;
+    taxStatus = contract?.tax_status ?? "taxable";
   }
 
-  const invoiceDate = new Date().toISOString().slice(0, 10);
-  const dueDate = addDays(invoiceDate, parsePaymentTermsDays(paymentTerms));
+  const totals = summarizeInvoice(drafts, {
+    taxStatus,
+    paymentTerms,
+    currentStatus: "issued",
+  });
+
+  if (totals.subtotal <= 0) {
+    return NextResponse.json({ error: "An invoice must have a positive total." }, { status: 400 });
+  }
 
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
@@ -293,17 +311,17 @@ export async function POST(request: Request) {
       invoice_number: generateInvoiceNumber(),
       customer_id: customerId,
       contract_id: contractId,
-      invoice_date: invoiceDate,
-      due_date: dueDate,
-      status: "issued",
+      invoice_date: totals.invoiceDate,
+      due_date: totals.dueDate,
+      status: totals.status,
       billing_period_start: billingPeriodStart,
       billing_period_end: billingPeriodEnd,
-      subtotal,
-      tax_amount: 0,
-      credits: 0,
-      total_amount: subtotal,
+      subtotal: totals.subtotal,
+      tax_amount: totals.taxAmount,
+      credits: totals.credits,
+      total_amount: totals.totalAmount,
       amount_paid: 0,
-      remaining_balance: subtotal,
+      remaining_balance: totals.remainingBalance,
       generated_by: profile.id,
       generated_at: new Date().toISOString(),
     })
@@ -317,7 +335,7 @@ export async function POST(request: Request) {
   const { data: lineItems, error: lineItemsError } = await supabase
     .from("invoice_line_items")
     .insert(
-      drafts.map((d) => ({
+      totals.lines.map((d) => ({
         invoice_id: invoice.id,
         description: d.description,
         quantity: d.quantity,
@@ -341,25 +359,29 @@ export async function POST(request: Request) {
 
   for (const entry of timeEntries) {
     const lineItemId = lineItemBySource.get(`time_entry:${entry.id}`) ?? null;
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from("time_entries")
       .update({ billing_status: "billed", invoice_line_item_id: lineItemId })
       .eq("id", entry.id)
-      .neq("billing_status", "billed");
+      .in("billing_status", ["unbilled", "ready"])
+      .select("id");
     if (error) updateErrors.push(error.message);
+    else if (!updated?.length) updateErrors.push(`Time entry on ${entry.work_date} was billed by another invoice.`);
   }
   for (const cost of directCosts) {
     const lineItemId = lineItemBySource.get(`direct_cost:${cost.id}`) ?? null;
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from("direct_costs")
       .update({ billing_status: "billed", invoice_line_item_id: lineItemId })
       .eq("id", cost.id)
-      .neq("billing_status", "billed");
+      .in("billing_status", ["unbilled", "ready"])
+      .select("id");
     if (error) updateErrors.push(error.message);
+    else if (!updated?.length) updateErrors.push(`Direct cost "${cost.description}" was billed by another invoice.`);
   }
   for (const project of projects) {
     const draft = drafts.find((d) => d.source_type === "project" && d.source_id === project.id);
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from("projects")
       .update({
         billing_status: "billed",
@@ -367,17 +389,21 @@ export async function POST(request: Request) {
         amount_billed: Number(project.amount_billed ?? 0) + Number(draft?.line_amount ?? 0),
       })
       .eq("id", project.id)
-      .neq("billing_status", "billed");
+      .in("billing_status", ["unbilled", "ready"])
+      .select("id");
     if (error) updateErrors.push(error.message);
+    else if (!updated?.length) updateErrors.push(`Project "${project.name}" was billed by another invoice.`);
   }
   for (const milestone of milestones) {
     const lineItemId = lineItemBySource.get(`milestone:${milestone.id}`) ?? null;
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from("project_milestones")
       .update({ billing_status: "billed", invoice_line_item_id: lineItemId })
       .eq("id", milestone.id)
-      .neq("billing_status", "billed");
+      .in("billing_status", ["unbilled", "ready"])
+      .select("id");
     if (error) updateErrors.push(error.message);
+    else if (!updated?.length) updateErrors.push(`Milestone "${milestone.name}" was billed by another invoice.`);
   }
   for (const contract of recurringContracts) {
     const amount = Number(contract.monthly_recurring_fee ?? 0);

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Menu, Settings2, X } from "lucide-react";
 import { ThemeSelector } from "@/components/ThemeSelector";
@@ -21,7 +20,7 @@ export function AppShell({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState<"menu" | "settings">("menu");
-  const nav = ROLE_NAV[profile.role as UserRole];
+  const nav = ROLE_NAV[profile.role as UserRole] ?? [];
 
   async function logout() {
     const supabase = createClient();
@@ -40,14 +39,23 @@ export function AppShell({
     setDrawerTab("menu");
   }
 
+  function goTo(href: string) {
+    if (pathname !== href) {
+      router.push(href);
+    }
+    closeMenu();
+  }
+
+  useEffect(() => {
+    setOpen(false);
+    setDrawerTab("menu");
+  }, [pathname]);
+
   useEffect(() => {
     if (!open) return;
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setOpen(false);
-        setDrawerTab("menu");
-      }
+      if (event.key === "Escape") closeMenu();
     }
 
     document.body.style.overflow = "hidden";
@@ -91,79 +99,82 @@ export function AppShell({
 
       <main className="p-4 md:p-6">{children}</main>
 
-      {open ? (
-        <div className="fixed inset-0 z-50">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/50"
-            aria-label="Close menu"
-            onClick={closeMenu}
-          />
-          <aside className="absolute left-0 top-0 flex h-full w-80 max-w-[85vw] flex-col bg-base-100 shadow-2xl">
-            <div className="flex items-start justify-between gap-3 border-b border-base-300 p-4">
+      <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none invisible"}`} aria-hidden={!open}>
+        <button
+          type="button"
+          className={`absolute inset-0 bg-black/50 transition-opacity ${open ? "opacity-100" : "opacity-0"}`}
+          aria-label="Close menu"
+          tabIndex={open ? 0 : -1}
+          onClick={closeMenu}
+        />
+        <aside
+          className={`absolute left-0 top-0 z-10 flex h-full w-80 max-w-[85vw] flex-col bg-base-100 shadow-2xl transition-transform duration-200 ${
+            open ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3 border-b border-base-300 p-4">
+            <div>
+              <p className="text-lg font-semibold">ServiceSync MSP</p>
+              <p className="text-xs opacity-60">Contract-to-cash workspace</p>
+              <div className="mt-3">
+                <span className="badge badge-primary badge-outline">{statusLabel(profile.role)}</span>
+              </div>
+            </div>
+            <button type="button" className="btn btn-ghost btn-square btn-sm" aria-label="Close menu" onClick={closeMenu}>
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div role="tablist" className="tabs tabs-box m-3">
+            <button
+              type="button"
+              role="tab"
+              className={`tab ${drawerTab === "menu" ? "tab-active" : ""}`}
+              onClick={() => setDrawerTab("menu")}
+            >
+              Menu
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className={`tab ${drawerTab === "settings" ? "tab-active" : ""}`}
+              onClick={() => setDrawerTab("settings")}
+            >
+              <Settings2 className="mr-1 h-3.5 w-3.5" />
+              Settings
+            </button>
+          </div>
+
+          {drawerTab === "menu" ? (
+            <>
+              <ul className="menu min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+                {nav.map((item) => {
+                  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  return (
+                    <li key={item.href}>
+                      <button type="button" className={active ? "active" : ""} onClick={() => goTo(item.href)}>
+                        {item.label}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="border-t border-base-300 p-4 text-xs opacity-70">
+                Use the Demo Role Switcher to change perspectives. A password is required for each role. Log out still
+                ends the session completely.
+              </div>
+            </>
+          ) : (
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
               <div>
-                <p className="text-lg font-semibold">ServiceSync MSP</p>
-                <p className="text-xs opacity-60">Contract-to-cash workspace</p>
-                <div className="mt-3">
-                  <span className="badge badge-primary badge-outline">{statusLabel(profile.role)}</span>
-                </div>
+                <h2 className="text-base font-semibold">Settings</h2>
+                <p className="text-sm opacity-70">Appearance options for this workspace.</p>
               </div>
-              <button type="button" className="btn btn-ghost btn-square btn-sm" aria-label="Close menu" onClick={closeMenu}>
-                <X className="h-4 w-4" />
-              </button>
+              <ThemeSelector />
             </div>
-
-            <div role="tablist" className="tabs tabs-box m-3">
-              <button
-                type="button"
-                role="tab"
-                className={`tab ${drawerTab === "menu" ? "tab-active" : ""}`}
-                onClick={() => setDrawerTab("menu")}
-              >
-                Menu
-              </button>
-              <button
-                type="button"
-                role="tab"
-                className={`tab ${drawerTab === "settings" ? "tab-active" : ""}`}
-                onClick={() => setDrawerTab("settings")}
-              >
-                <Settings2 className="mr-1 h-3.5 w-3.5" />
-                Settings
-              </button>
-            </div>
-
-            {drawerTab === "menu" ? (
-              <>
-                <nav className="menu min-h-0 flex-1 overflow-y-auto px-3 pb-3">
-                  {nav.map((item) => {
-                    const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                    return (
-                      <li key={item.href}>
-                        <Link href={item.href} className={active ? "active" : ""} onClick={closeMenu}>
-                          {item.label}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </nav>
-                <div className="border-t border-base-300 p-4 text-xs opacity-70">
-                  Use the Demo Role Switcher to change perspectives. A password is required for each role. Log out still
-                  ends the session completely.
-                </div>
-              </>
-            ) : (
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-                <div>
-                  <h2 className="text-base font-semibold">Settings</h2>
-                  <p className="text-sm opacity-70">Appearance options for this workspace.</p>
-                </div>
-                <ThemeSelector />
-              </div>
-            )}
-          </aside>
-        </div>
-      ) : null}
+          )}
+        </aside>
+      </div>
     </div>
   );
 }
