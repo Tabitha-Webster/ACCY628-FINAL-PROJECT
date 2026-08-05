@@ -8,7 +8,6 @@ import { Card } from "@/components/Card";
 import { DeleteCustomerButton } from "@/components/DeleteCustomerButton";
 import { PageLayout } from "@/components/PageLayout";
 import {
-  AccountingExplainer,
   DataTable,
   EmptyState,
   ErrorState,
@@ -417,8 +416,6 @@ export default async function CustomerDetailPage({
           <EmptyState title="No invoices issued yet" />
         )}
       </div>
-
-      <AccountingExplainer />
     </PageLayout>
   );
 }
