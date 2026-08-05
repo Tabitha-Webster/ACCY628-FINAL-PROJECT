@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { ExplainNumber, type MetricExplanation } from "@/components/ExplainNumber";
@@ -47,6 +47,7 @@ export function DashboardMetricAccordion({
   children?: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const rootRef = useRef<HTMLDivElement>(null);
   const border =
     tone === "success"
       ? "border-success/40"
@@ -58,8 +59,27 @@ export function DashboardMetricAccordion({
             ? "border-info/40"
             : "border-base-300";
 
-  return (
-    <div className={`rounded-box border ${border} bg-base-100 shadow-sm`}>
+  useEffect(() => {
+    if (!open) return;
+
+    function onPointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  function MetricHeader() {
+    return (
       <button
         type="button"
         className="flex w-full items-start justify-between gap-3 p-4 text-left"
@@ -73,16 +93,32 @@ export function DashboardMetricAccordion({
         </div>
         <ChevronDown className={`mt-1 size-4 shrink-0 opacity-50 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
+    );
+  }
+
+  return (
+    <div ref={rootRef} className={`relative self-start ${open ? "z-40" : "z-0"}`}>
+      <div className={`rounded-box border ${border} bg-base-100 shadow-sm ${open ? "invisible" : ""}`}>
+        <MetricHeader />
+      </div>
+
       {open ? (
-        <div className="space-y-3 border-t border-base-300 px-4 py-3">
-          {children}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            {explanation ? <ExplainNumber explanation={explanation} /> : <span />}
-            {href ? (
-              <Link href={href} className="link link-hover text-sm" onClick={(event) => event.stopPropagation()}>
-                {hrefLabel}
-              </Link>
-            ) : null}
+        <div
+          className={`absolute left-0 top-0 z-50 w-full min-w-full overflow-hidden rounded-box border ${border} bg-base-100 shadow-xl ring-1 ring-base-300/60`}
+          role="dialog"
+          aria-label={`${label} details`}
+        >
+          <MetricHeader />
+          <div className="max-h-72 space-y-3 overflow-auto border-t border-base-300 px-4 py-3 sm:max-h-96">
+            {children}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              {explanation ? <ExplainNumber explanation={explanation} /> : <span />}
+              {href ? (
+                <Link href={href} className="link link-hover text-sm" onClick={(event) => event.stopPropagation()}>
+                  {hrefLabel}
+                </Link>
+              ) : null}
+            </div>
           </div>
         </div>
       ) : null}
@@ -106,7 +142,12 @@ export function DashboardCollapse({
   return (
     <div className="rounded-box border border-base-300 bg-base-100 shadow-sm">
       <div className="flex items-center justify-between gap-3 p-4">
-        <button type="button" className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
+        >
           <h3 className="text-sm font-semibold">{title}</h3>
           <ChevronDown className={`size-4 shrink-0 opacity-50 transition-transform ${open ? "rotate-180" : ""}`} />
         </button>
