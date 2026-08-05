@@ -28,6 +28,7 @@ export function ContractsAgreementsNavTree({
   const links: NavLink[] = [
     ...(showReports ? [{ href: "/contracts/reports", label: "Reports & Dashboard" }] : []),
     { href: "/contracts/renewals", label: "Renewal & Expiration" },
+    { href: "/contracts/customers", label: "Customer" },
     ...(showNewContract ? [{ href: "/contracts/new", label: "New Contract" }] : []),
   ];
   const [open, setOpen] = useState(() => sectionActive(pathname, links) || pathname.startsWith("/contracts"));
