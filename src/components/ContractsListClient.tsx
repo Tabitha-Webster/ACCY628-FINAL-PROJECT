@@ -6,7 +6,6 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Search, X } from "lucide-react";
 import { EmptyState, Money, StatusBadge } from "@/components/ui";
 import { formatDate, statusLabel } from "@/lib/format";
 import {
-  CONTRACT_EXPIRY_WARNING_DAYS,
   CONTRACT_STATUSES,
   CONTRACT_STATUS_LABELS,
   CONTRACT_TYPE_LABELS,
@@ -142,15 +141,35 @@ export function ContractsListClient({ contracts }: { contracts: ContractsListIte
       const manager = unwrapAssignedManager(row);
       const renewalDate = getContractRenewalDate(row);
       const warnings = getContractWarnings(row, now).filter((w) =>
-        ["ends_soon", "past_end_date", "renewal_soon"].includes(w.code)
+        [
+          "ends_soon",
+          "past_end_date",
+          "renewal_soon",
+          "renewal_90",
+          "renewal_60",
+          "renewal_30",
+          "expiration_warning",
+        ].includes(w.code)
       );
+      // Prefer specific reminder badges over the generic renewal_soon duplicate
+      const displayWarnings = warnings.filter((w) => {
+        if (w.code === "renewal_soon") {
+          return !warnings.some((x) =>
+            ["renewal_90", "renewal_60", "renewal_30"].includes(x.code)
+          );
+        }
+        if (w.code === "ends_soon") {
+          return !warnings.some((x) => x.code === "expiration_warning");
+        }
+        return true;
+      });
       const highlight = getContractHighlight(row, now);
       return {
         row,
         customer,
         manager,
         renewalDate,
-        warnings,
+        warnings: displayWarnings,
         highlight,
         mrr: Number(row.monthly_recurring_fee ?? 0),
       };
@@ -244,11 +263,27 @@ export function ContractsListClient({ contracts }: { contracts: ContractsListIte
   ]);
 
   const highlightCounts = useMemo(() => {
-    const counts = { ends_soon: 0, renewal_soon: 0, past_end_date: 0 };
+    const counts = {
+      ends_soon: 0,
+      renewal_soon: 0,
+      past_end_date: 0,
+      renewal_90: 0,
+      renewal_60: 0,
+      renewal_30: 0,
+    };
     for (const item of enriched) {
-      if (item.highlight === "ends_soon") counts.ends_soon += 1;
-      if (item.highlight === "renewal_soon") counts.renewal_soon += 1;
+      if (item.highlight === "ends_soon" || item.highlight === "renewal_30") counts.ends_soon += 1;
+      if (
+        item.highlight === "renewal_soon" ||
+        item.highlight === "renewal_60" ||
+        item.highlight === "renewal_90"
+      ) {
+        counts.renewal_soon += 1;
+      }
       if (item.highlight === "past_end_date") counts.past_end_date += 1;
+      if (item.highlight === "renewal_90") counts.renewal_90 += 1;
+      if (item.highlight === "renewal_60") counts.renewal_60 += 1;
+      if (item.highlight === "renewal_30") counts.renewal_30 += 1;
     }
     return counts;
   }, [enriched]);
@@ -409,7 +444,7 @@ export function ContractsListClient({ contracts }: { contracts: ContractsListIte
               >
                 <option value="">Any expiration</option>
                 <option value="next_30">Next 30 days</option>
-                <option value="next_60">Next {CONTRACT_EXPIRY_WARNING_DAYS} days</option>
+                <option value="next_60">Next 60 days</option>
                 <option value="next_90">Next 90 days</option>
                 <option value="past">Already expired</option>
                 <option value="custom">Custom range</option>
@@ -425,7 +460,7 @@ export function ContractsListClient({ contracts }: { contracts: ContractsListIte
               >
                 <option value="">Any renewal</option>
                 <option value="next_30">Next 30 days</option>
-                <option value="next_60">Next {CONTRACT_EXPIRY_WARNING_DAYS} days</option>
+                <option value="next_60">Next 60 days</option>
                 <option value="next_90">Next 90 days</option>
                 <option value="past">Past renewal date</option>
                 <option value="custom">Custom range</option>
@@ -484,11 +519,11 @@ export function ContractsListClient({ contracts }: { contracts: ContractsListIte
           <span className="opacity-60">
             Showing {filtered.length} of {contracts.length}
           </span>
-          <span className="badge badge-warning badge-sm">
+          <span className="badge badge-ghost badge-sm">90-day: {highlightCounts.renewal_90}</span>
+          <span className="badge badge-info badge-sm">60-day: {highlightCounts.renewal_60}</span>
+          <span className="badge badge-warning badge-sm">30-day: {highlightCounts.renewal_30}</span>
+          <span className="badge badge-warning badge-outline badge-sm">
             Expiring soon: {highlightCounts.ends_soon}
-          </span>
-          <span className="badge badge-info badge-sm">
-            Renewal soon: {highlightCounts.renewal_soon}
           </span>
           <span className="badge badge-error badge-sm">
             Past end date: {highlightCounts.past_end_date}
@@ -592,9 +627,11 @@ export function ContractsListClient({ contracts }: { contracts: ContractsListIte
                             className={`badge badge-sm ${
                               warning.code === "past_end_date"
                                 ? "badge-error"
-                                : warning.code === "renewal_soon"
-                                  ? "badge-info"
-                                  : "badge-warning"
+                                : warning.code === "renewal_90"
+                                  ? "badge-ghost"
+                                  : warning.code === "renewal_60" || warning.code === "renewal_soon"
+                                    ? "badge-info"
+                                    : "badge-warning"
                             }`}
                           >
                             {warning.label}

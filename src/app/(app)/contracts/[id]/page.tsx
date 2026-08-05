@@ -30,8 +30,11 @@ import {
   listContractChanges,
   listContractDocuments,
   listContractModifications,
+  listContractRenewalReminders,
+  listContractRenewals,
   listContractServices,
   listContractVersions,
+  syncContractReminders,
   unwrapAssignedManager,
   unwrapCustomer,
   unwrapProfile,
@@ -40,6 +43,7 @@ import {
 } from "@/lib/contracts";
 import { ContractDocumentsPanel } from "@/components/ContractDocumentsPanel";
 import { ContractChangesPanel } from "@/components/ContractChangesPanel";
+import { ContractRenewalsPanel } from "@/components/ContractRenewalsPanel";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -115,7 +119,27 @@ export default async function ContractDetailPage({
   const status = contract.status as ContractStatus;
   const statusLabelText = CONTRACT_STATUS_LABELS[status] ?? statusLabel(status);
   const lifecycleActions = getLifecycleActions(status);
-  const warnings = getContractWarnings(contract);
+  const allWarnings = getContractWarnings(contract);
+  const warnings = allWarnings.filter((w) => {
+    if (["missing_payment_terms", "missing_billing_frequency"].includes(w.code)) return true;
+    if (w.code === "renewal_soon") {
+      return !allWarnings.some((x) =>
+        ["renewal_90", "renewal_60", "renewal_30"].includes(x.code)
+      );
+    }
+    if (w.code === "ends_soon") {
+      return !allWarnings.some((x) => x.code === "expiration_warning");
+    }
+    return [
+      "past_end_date",
+      "expiration_warning",
+      "renewal_90",
+      "renewal_60",
+      "renewal_30",
+      "ends_soon",
+      "renewal_soon",
+    ].includes(w.code);
+  });
   const managerCanEdit = canManageContracts(profile.role);
   const renewalDate = getContractRenewalDate(contract);
   const autoRenew = (contract.renewal_type ?? "").toLowerCase() === "auto";
@@ -130,11 +154,26 @@ export default async function ContractDetailPage({
       listContractChanges(supabase, id),
     ]);
 
+  await syncContractReminders(supabase, {
+    id: contract.id,
+    status: contract.status,
+    start_date: contract.start_date,
+    end_date: contract.end_date,
+    renewal_type: contract.renewal_type,
+  });
+
+  const [remindersResult, renewalsResult] = await Promise.all([
+    listContractRenewalReminders(supabase, id),
+    listContractRenewals(supabase, id),
+  ]);
+
   const services = servicesResult.data ?? [];
   const modifications = modificationsResult.data ?? [];
   const documents = documentsResult.data ?? [];
   const versions = versionsResult.data ?? [];
   const changes = changesResult.data ?? [];
+  const reminders = remindersResult.data ?? [];
+  const renewals = renewalsResult.data ?? [];
   const { tickets, projects, invoices, monthEntries } = related;
 
   const includedHours = Number(contract.included_hours_per_month ?? 0);
@@ -150,6 +189,9 @@ export default async function ContractDetailPage({
       <div className="flex flex-wrap items-center gap-2">
         <Link href="/contracts" className="btn btn-ghost btn-sm">
           ← Back to contracts
+        </Link>
+        <Link href="/contracts/renewals" className="btn btn-outline btn-sm">
+          Renewal & Expiration
         </Link>
         {managerCanEdit ? (
           <Link href={`/contracts/${id}/edit`} className="btn btn-primary btn-sm">
@@ -172,9 +214,11 @@ export default async function ContractDetailPage({
               className={`badge ${
                 warning.code === "past_end_date"
                   ? "badge-error"
-                  : warning.code === "renewal_soon"
-                    ? "badge-info"
-                    : "badge-warning"
+                  : warning.code === "renewal_90"
+                    ? "badge-ghost"
+                    : warning.code === "renewal_60" || warning.code === "renewal_soon"
+                      ? "badge-info"
+                      : "badge-warning"
               }`}
             >
               {warning.label}
@@ -430,6 +474,23 @@ export default async function ContractDetailPage({
             description="Add covered services under this agreement to show them here."
           />
         )}
+      </Section>
+
+      <Section title="Renewal & Expiration">
+        <ContractRenewalsPanel
+          contract={{
+            id: contract.id,
+            status: contract.status,
+            start_date: contract.start_date,
+            end_date: contract.end_date,
+            renewal_type: contract.renewal_type,
+            version_number: contract.version_number,
+          }}
+          profileId={profile.id}
+          canManage={managerCanEdit}
+          reminders={reminders as Parameters<typeof ContractRenewalsPanel>[0]["reminders"]}
+          renewals={renewals as Parameters<typeof ContractRenewalsPanel>[0]["renewals"]}
+        />
       </Section>
 
       <Section title="Contract Documents">

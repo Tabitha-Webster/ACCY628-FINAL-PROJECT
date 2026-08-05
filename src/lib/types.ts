@@ -193,6 +193,43 @@ export type ContractChange = {
   source: string;
 };
 
+export type ContractRenewalReminderKind =
+  | "renewal_90"
+  | "renewal_60"
+  | "renewal_30"
+  | "expiration_warning"
+  | "expired";
+
+export type ContractRenewalReminderStatus = "open" | "acknowledged" | "dismissed" | "resolved";
+
+export type ContractRenewalReminder = {
+  id: string;
+  contract_id: string;
+  reminder_kind: ContractRenewalReminderKind;
+  anchor_date: string;
+  days_before: number;
+  status: ContractRenewalReminderStatus;
+  message: string;
+  generated_at: string;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+};
+
+export type ContractRenewal = {
+  id: string;
+  contract_id: string;
+  previous_start_date: string | null;
+  previous_end_date: string | null;
+  new_start_date: string;
+  new_end_date: string | null;
+  renewal_method: "auto" | "manual";
+  previous_status: string | null;
+  resulting_status: string;
+  notes: string | null;
+  renewed_by: string | null;
+  renewed_at: string;
+};
+
 export type SupportTicket = {
   id: string;
   ticket_number: string;

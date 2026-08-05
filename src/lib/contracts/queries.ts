@@ -178,6 +178,56 @@ export async function listContractVersions(supabase: SupabaseClient, contractId:
     .order("version_number", { ascending: false });
 }
 
+export async function listContractRenewalReminders(
+  supabase: SupabaseClient,
+  contractId: string,
+  options?: { openOnly?: boolean }
+) {
+  let query = supabase
+    .from("contract_renewal_reminders")
+    .select(
+      "id, contract_id, reminder_kind, anchor_date, days_before, status, message, generated_at, acknowledged_at, acknowledged_by"
+    )
+    .eq("contract_id", contractId)
+    .order("days_before", { ascending: false });
+
+  if (options?.openOnly) {
+    query = query.eq("status", "open");
+  }
+
+  return query;
+}
+
+export async function listOpenRenewalReminders(supabase: SupabaseClient) {
+  return supabase
+    .from("contract_renewal_reminders")
+    .select(
+      "id, contract_id, reminder_kind, anchor_date, days_before, status, message, generated_at, contracts(id, contract_number, name, status, end_date, renewal_type, customers(id, name))"
+    )
+    .eq("status", "open")
+    .order("days_before", { ascending: true });
+}
+
+export async function listContractRenewals(supabase: SupabaseClient, contractId: string) {
+  return supabase
+    .from("contract_renewals")
+    .select(
+      "id, contract_id, previous_start_date, previous_end_date, new_start_date, new_end_date, renewal_method, previous_status, resulting_status, notes, renewed_by, renewed_at, renewed_by_profile:profiles!contract_renewals_renewed_by_fkey(full_name)"
+    )
+    .eq("contract_id", contractId)
+    .order("renewed_at", { ascending: false });
+}
+
+export async function listRecentContractRenewals(supabase: SupabaseClient, limit = 25) {
+  return supabase
+    .from("contract_renewals")
+    .select(
+      "id, contract_id, previous_start_date, previous_end_date, new_start_date, new_end_date, renewal_method, previous_status, resulting_status, notes, renewed_by, renewed_at, contracts(id, contract_number, name, customers(id, name)), renewed_by_profile:profiles!contract_renewals_renewed_by_fkey(full_name)"
+    )
+    .order("renewed_at", { ascending: false })
+    .limit(limit);
+}
+
 /** Related operational records for the contract detail view / future reporting. */
 export async function getContractRelatedWork(supabase: SupabaseClient, contractId: string) {
   const now = new Date();

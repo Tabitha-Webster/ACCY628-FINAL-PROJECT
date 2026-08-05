@@ -11,6 +11,7 @@ import {
   canViewContractsModule,
   listContracts,
   summarizeContractsByStatus,
+  syncRemindersForContracts,
   type ContractListRow,
 } from "@/lib/contracts";
 
@@ -24,6 +25,20 @@ export default async function ContractsPage() {
   const supabase = await createClient();
   const { data, error } = await listContracts(supabase);
   const contracts = (data ?? []) as ContractListRow[];
+
+  if (!error && contracts.length > 0) {
+    await syncRemindersForContracts(
+      supabase,
+      contracts.map((c) => ({
+        id: c.id,
+        status: c.status,
+        start_date: c.start_date,
+        end_date: c.end_date,
+        renewal_type: c.renewal_type,
+      }))
+    );
+  }
+
   const statusCounts = summarizeContractsByStatus(contracts);
 
   return (
@@ -32,11 +47,16 @@ export default async function ContractsPage() {
         title={copy.title}
         description={copy.description}
         actions={
-          canManage ? (
-            <Link href="/contracts/new" className="btn btn-primary">
-              New contract
+          <div className="flex flex-wrap gap-2">
+            <Link href="/contracts/renewals" className="btn btn-outline">
+              Renewal & Expiration
             </Link>
-          ) : null
+            {canManage ? (
+              <Link href="/contracts/new" className="btn btn-primary">
+                New contract
+              </Link>
+            ) : null}
+          </div>
         }
       />
 

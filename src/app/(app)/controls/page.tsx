@@ -27,7 +27,7 @@ const CONTROLS: Control[] = [
   {
     category: "Contract",
     risk: "a contract could lapse or auto-renew on unfavorable terms without anyone noticing",
-    control: "the contracts list flags agreements approaching their end date and any contract missing payment terms or a billing frequency, so managers can act before the term expires",
+    control: "the contracts list and Renewal & Expiration page generate 90/60/30-day renewal reminders and expiration warnings, support auto-renew processing, and keep a renewal history so managers can act before a term lapses",
   },
   {
     category: "Work",

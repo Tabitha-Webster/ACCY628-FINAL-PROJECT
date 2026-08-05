@@ -37,8 +37,22 @@ export const BILLING_FREQUENCIES: readonly BillingFrequency[] = [
 
 export const BILLING_TIMINGS: readonly BillingTiming[] = ["in_advance", "in_arrears"] as const;
 
-/** Days before end_date used for renewal / expiry warnings. */
-export const CONTRACT_EXPIRY_WARNING_DAYS = 60;
+/** Longest window used for list filters and expiry highlighting. */
+export const CONTRACT_EXPIRY_WARNING_DAYS = 90;
+
+/** Automatic renewal reminder thresholds (days before renewal/end date). */
+export const RENEWAL_REMINDER_DAYS = [90, 60, 30] as const;
+
+export type RenewalReminderDays = (typeof RENEWAL_REMINDER_DAYS)[number];
+
+export const RENEWAL_REMINDER_KIND_BY_DAYS: Record<
+  RenewalReminderDays,
+  "renewal_90" | "renewal_60" | "renewal_30"
+> = {
+  90: "renewal_90",
+  60: "renewal_60",
+  30: "renewal_30",
+};
 
 export const CONTRACT_STATUS_LABELS: Record<ContractStatus, string> = {
   draft: "Draft",
