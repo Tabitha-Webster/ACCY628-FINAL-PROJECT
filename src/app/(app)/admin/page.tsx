@@ -35,6 +35,11 @@ const ADMIN_LINKS = [
     description: "Quick-assign unassigned tickets and rebalance open work.",
   },
   {
+    href: "/admin/employees",
+    title: "Employees",
+    description: "Company employee directory with names and job titles.",
+  },
+  {
     href: "/admin/users",
     title: "User & Role Management",
     description: "Roles, activate/deactivate, bulk actions, customer links, cost rates.",
