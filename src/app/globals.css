@@ -22,3 +22,8 @@ body {
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+.rounded-box.border,
+.card.border {
+  border-width: 2px;
+}
