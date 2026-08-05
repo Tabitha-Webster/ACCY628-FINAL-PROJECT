@@ -103,12 +103,11 @@ export default function LoginPage() {
                 }}
               />
 
-              <p className="text-center text-sm opacity-70">
-                Need an account?{" "}
-                <Link href="/signup" className="link link-primary">
-                  Sign up
-                </Link>
-              </p>
+              <div className="divider my-1 text-xs opacity-50">or</div>
+
+              <Link href="/customer-signup" className="btn btn-outline btn-primary w-full">
+                New Customer? Create an Account
+              </Link>
             </div>
           </div>
         </div>
