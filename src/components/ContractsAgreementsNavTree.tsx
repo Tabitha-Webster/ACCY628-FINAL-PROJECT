@@ -26,7 +26,7 @@ export function ContractsAgreementsNavTree({
 }) {
   const pathname = usePathname();
   const links: NavLink[] = [
-    ...(showReports ? [{ href: "/contracts/reports", label: "Reports & Dashboard" }] : []),
+    ...(showReports ? [{ href: "/contracts/reports", label: "Contracts Dashboard" }] : []),
     { href: "/contracts/renewals", label: "Renewal & Expiration" },
     { href: "/contracts/customers", label: "Customer" },
     ...(showNewContract ? [{ href: "/contracts/new", label: "New Contract" }] : []),

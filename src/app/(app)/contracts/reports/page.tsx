@@ -16,8 +16,8 @@ export default async function ContractReportsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Reports & Dashboard"
-        description="Active agreements, expirations, renewals, MRR/ACV, SLA compliance, and support-hour utilization."
+        title="Contracts Dashboard"
+        description="Portfolio money, term risk, SLA health, and hour-pool pressure — with drill-downs below."
       />
 
       {error ? <ErrorState message={error.message} /> : null}
