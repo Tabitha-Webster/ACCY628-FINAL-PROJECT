@@ -26,11 +26,9 @@ export function DemoLoginSelector({ onSelect }: Props) {
               type="button"
               aria-pressed={selected}
               className={[
-                "btn h-11 min-h-11 w-full justify-center px-3 text-sm font-medium normal-case",
-                "border transition-colors duration-150",
-                selected
-                  ? "border-primary bg-primary/10 text-primary hover:border-primary hover:bg-primary/15"
-                  : "btn-outline border-base-300/80 bg-base-100/70 hover:border-primary/40 hover:bg-primary/5 hover:text-primary",
+                "btn login-demo-role-btn h-11 min-h-11 w-full justify-center px-3 text-sm font-medium normal-case",
+                "border",
+                selected ? "login-demo-role-btn-selected" : "",
               ].join(" ")}
               onClick={() => {
                 setSelectedEmail(account.email);

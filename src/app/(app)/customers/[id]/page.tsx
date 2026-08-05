@@ -183,8 +183,8 @@ export default async function CustomerDetailPage({
       title={display(row.name)}
       description={
         canEdit
-          ? `Shared customer profile. Manager and HR can edit; Technician and Billing view the same live data.${lastUpdated}`
-          : `View-only shared profile — same live data Manager and HR maintain.${lastUpdated}`
+          ? `Shared customer profile. Admin, Manager, and HR can edit; Technician and Billing view the same live data.${lastUpdated}`
+          : `View-only shared profile — same live data Admin, Manager, and HR maintain.${lastUpdated}`
       }
       actions={
         <>

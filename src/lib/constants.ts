@@ -262,6 +262,9 @@ const MANAGER_NAV: NavItem[] = [
 export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   admin: [
     { href: "/admin", label: "Admin Console" },
+    // Same Customers entry other internal roles use — placed near the top for visibility.
+    { href: "/customers", label: "Customers" },
+    { href: "/customer-approvals", label: "Approvals" },
     { href: "/admin/employees", label: "Employees" },
     { href: "/admin/alerts", label: "Alerts" },
     { href: "/admin/approvals", label: "Approvals Inbox" },
@@ -273,7 +276,10 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/admin/exports", label: "CSV Exports" },
     { href: "/admin/exceptions", label: "Exceptions" },
     { href: "/admin/system", label: "System Health" },
-    ...MANAGER_NAV,
+    // Manager nav minus Customers/Approvals (already listed above).
+    ...MANAGER_NAV.filter(
+      (item) => item.href !== "/customers" && item.href !== "/customer-approvals"
+    ),
     { href: "/ready-to-bill", label: "Ready to Bill" },
     { href: "/invoices", label: "Invoices" },
     { href: "/accounts-receivable", label: "Accounts Receivable" },

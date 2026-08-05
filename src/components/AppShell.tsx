@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
@@ -9,7 +10,7 @@ import { ContractsAgreementsNavTree } from "@/components/ContractsAgreementsNavT
 import { CustomerBillingNavTree } from "@/components/CustomerBillingNavTree";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { UserSettingsPanel } from "@/components/UserSettingsPanel";
-import { ROLE_NAV, type Profile, type UserRole } from "@/lib/constants";
+import { isManagerRole, ROLE_NAV, roleHomePath, type Profile, type UserRole } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
 import { applyPreferencesToDom, loadPreferences } from "@/lib/user-preferences";
@@ -36,14 +37,30 @@ function SideNav({
     : (ROLE_NAV[profile.role as UserRole] ?? []);
   const isCustomer = profile.role === "customer";
   const isBilling = profile.role === "billing";
-  const isManager = profile.role === "manager";
+  const isManager = isManagerRole(profile.role);
   const isTechnician = profile.role === "technician";
 
   return (
     <>
       <div className="border-b border-base-300 p-4">
-        <p className="text-lg font-semibold">ServiceSync MSP</p>
-        <p className="text-xs opacity-60">Contract-to-cash workspace</p>
+        <Link
+          href={restrictedCustomer ? "/pending-approval" : roleHomePath(profile.role as UserRole)}
+          className="block outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+          onClick={onNavigate}
+          aria-label="ServiceSync MSP home"
+        >
+          <Image
+            src="/images/servicesync-msp-logo.png?v=5"
+            alt="ServiceSync MSP"
+            width={1160}
+            height={700}
+            className="sidebar-brand-logo h-auto w-full max-w-[11.5rem] object-contain object-left"
+            sizes="184px"
+            priority
+            unoptimized
+          />
+        </Link>
+        <p className="mt-2 text-xs opacity-60">Contract-to-cash workspace</p>
         <div className="mt-3">
           <span className="badge badge-primary badge-outline">{statusLabel(profile.role)}</span>
         </div>

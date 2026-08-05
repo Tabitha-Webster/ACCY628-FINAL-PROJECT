@@ -66,3 +66,36 @@ begin
     end if;
   end loop;
 end $$;
+
+-- Customers: same list/add/edit access as Manager (fixes empty Admin customer list)
+do $$
+begin
+  if to_regclass('public.customers') is not null then
+    execute 'alter table public.customers enable row level security';
+    execute 'drop policy if exists customers_select_admin on public.customers';
+    execute 'drop policy if exists customers_insert_admin on public.customers';
+    execute 'drop policy if exists customers_update_admin on public.customers';
+    execute $p$
+      create policy customers_select_admin
+      on public.customers
+      for select
+      to authenticated
+      using (public.is_admin())
+    $p$;
+    execute $p$
+      create policy customers_insert_admin
+      on public.customers
+      for insert
+      to authenticated
+      with check (public.is_admin())
+    $p$;
+    execute $p$
+      create policy customers_update_admin
+      on public.customers
+      for update
+      to authenticated
+      using (public.is_admin())
+      with check (public.is_admin())
+    $p$;
+  end if;
+end $$;

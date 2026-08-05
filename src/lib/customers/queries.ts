@@ -4,13 +4,13 @@ import type { UserRole } from "@/lib/constants";
 import type { CustomerStatus } from "@/lib/types";
 
 /** Internal roles that share one live customer list / profile. */
-export const CUSTOMER_VIEW_ROLES: UserRole[] = ["manager", "billing", "technician", "hr"];
+export const CUSTOMER_VIEW_ROLES: UserRole[] = ["admin", "manager", "billing", "technician", "hr"];
 
-/** Roles that can add and edit customer master data (same capabilities). */
-export const CUSTOMER_MANAGE_ROLES: UserRole[] = ["manager", "hr"];
+/** Roles that can add and edit customer master data (Admin matches Manager). */
+export const CUSTOMER_MANAGE_ROLES: UserRole[] = ["admin", "manager", "hr"];
 
-/** Roles allowed to export the customer list to Excel (read-only reporting). */
-export const CUSTOMER_EXPORT_ROLES: UserRole[] = ["manager", "billing"];
+/** Roles allowed to export the customer list to Excel (Admin matches Manager). */
+export const CUSTOMER_EXPORT_ROLES: UserRole[] = ["admin", "manager", "billing"];
 
 export function canViewCustomers(role: UserRole) {
   return CUSTOMER_VIEW_ROLES.includes(role);
