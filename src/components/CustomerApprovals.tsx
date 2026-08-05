@@ -39,11 +39,14 @@ export function CustomerProjectApprovalCard({
     setError(null);
     setLoading(decision);
     const supabase = createClient();
+    const now = new Date().toISOString();
     const { error: updateError } = await supabase
       .from("projects")
       .update({
         customer_approval_status: decision,
         status: decision === "approved" ? "approved" : "canceled",
+        customer_approved_by: currentUserId,
+        customer_approved_at: now,
       })
       .eq("id", project.id);
     setLoading(null);
@@ -51,7 +54,6 @@ export function CustomerProjectApprovalCard({
       setError(updateError.message);
       return;
     }
-    void currentUserId;
     void notes;
     router.refresh();
   }
@@ -105,15 +107,30 @@ export function CustomerChangeRequestApprovalCard({
     setError(null);
     setLoading(decision);
     const supabase = createClient();
+    const now = new Date().toISOString();
     const { error: updateError } = await supabase
       .from("additional_work_requests")
       .update({
         approval_status: decision,
         reviewed_by: currentUserId,
-        reviewed_at: new Date().toISOString(),
+        reviewed_at: now,
         review_notes: notes.trim() || `Customer ${decision} additional hours/price request.`,
       })
       .eq("id", request.id);
+
+    if (!updateError && decision === "approved" && request.project_id) {
+      await supabase
+        .from("time_entries")
+        .update({
+          approval_status: "approved",
+          approved_by: currentUserId,
+          approved_at: now,
+        })
+        .eq("project_id", request.project_id)
+        .eq("classification", "out_of_scope")
+        .eq("approval_status", "pending");
+    }
+
     setLoading(null);
     if (updateError) {
       setError(updateError.message);

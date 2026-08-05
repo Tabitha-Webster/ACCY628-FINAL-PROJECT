@@ -61,7 +61,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     supabase
       .from("additional_work_requests")
       .select(
-        "id, title, description, estimated_hours, estimated_amount, approval_status, created_at, requested_by, project_id, contract_id"
+        "id, title, description, estimated_hours, estimated_amount, approval_status, created_at, requested_by, reviewed_by, reviewed_at, project_id, contract_id"
       )
       .eq("project_id", p.id)
       .order("created_at", { ascending: false }),
@@ -91,14 +91,27 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     contractLabels[contractRes.data.id] = `${contractRes.data.contract_number} · ${contractRes.data.name}`;
   }
 
-  const requesterIds = Array.from(new Set(changeRequests.map((r) => r.requested_by)));
+  const requesterIds = Array.from(
+    new Set([
+      ...changeRequests.map((r) => r.requested_by),
+      ...changeRequests.map((r) => r.reviewed_by).filter((id): id is string => Boolean(id)),
+      ...(p.customer_approved_by ? [p.customer_approved_by] : []),
+    ])
+  );
   const technicianIds = Array.from(new Set(assignments.map((a) => a.technician_id)));
-  const profileIds = Array.from(new Set([...requesterIds, ...technicianIds, p.project_manager_id].filter(Boolean))) as string[];
+  const profileIds = Array.from(
+    new Set([...requesterIds, ...technicianIds, p.project_manager_id].filter(Boolean))
+  ) as string[];
   const profilesRes = profileIds.length
     ? await supabase.from("profiles").select("id, full_name").in("id", profileIds)
     : { data: [] as { id: string; full_name: string }[] };
   const profileName = new Map((profilesRes.data ?? []).map((u) => [u.id, u.full_name]));
-  const requesterNames = Object.fromEntries(requesterIds.map((id) => [id, profileName.get(id) ?? "—"]));
+  const requesterNames = Object.fromEntries(
+    Array.from(new Set([...requesterIds, ...Array.from(profileName.keys())])).map((id) => [
+      id,
+      profileName.get(id) ?? "—",
+    ])
+  );
 
   const laborActual = timeEntries.reduce((sum, t) => sum + Number(t.labor_cost ?? 0), 0);
   const laborHours = timeEntries.reduce((sum, t) => sum + Number(t.hours_worked), 0);
@@ -161,6 +174,13 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 <span className="badge badge-warning">{pendingChangeCount} out-of-scope / CR pending</span>
               ) : null}
             </div>
+            {p.customer_approved_at ? (
+              <p className="mb-3 text-xs opacity-70">
+                Customer approval recorded
+                {p.customer_approved_by ? ` by ${profileName.get(p.customer_approved_by) ?? "user"}` : ""} on{" "}
+                <DateText value={p.customer_approved_at} />
+              </p>
+            ) : null}
             {p.description ? <p className="text-sm leading-relaxed opacity-80">{p.description}</p> : <p className="text-sm opacity-60">No description provided.</p>}
           </div>
 

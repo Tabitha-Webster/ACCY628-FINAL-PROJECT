@@ -58,15 +58,31 @@ export function ManagerApprovalQueue({
     setError(null);
     setLoading(`cr-${requestId}-${decision}`);
     const supabase = createClient();
+    const now = new Date().toISOString();
+    const request = pendingChangeRequests.find((r) => r.id === requestId);
     const { error: updateError } = await supabase
       .from("additional_work_requests")
       .update({
         approval_status: decision,
         reviewed_by: currentUserId,
-        reviewed_at: new Date().toISOString(),
+        reviewed_at: now,
         review_notes: notes.trim() || null,
       })
       .eq("id", requestId);
+
+    if (!updateError && decision === "approved" && request?.project_id) {
+      await supabase
+        .from("time_entries")
+        .update({
+          approval_status: "approved",
+          approved_by: currentUserId,
+          approved_at: now,
+        })
+        .eq("project_id", request.project_id)
+        .eq("classification", "out_of_scope")
+        .eq("approval_status", "pending");
+    }
+
     setLoading(null);
     if (updateError) {
       setError(updateError.message);
@@ -79,10 +95,15 @@ export function ManagerApprovalQueue({
     setError(null);
     setLoading(`ms-${milestoneId}-${decision}`);
     const supabase = createClient();
-    const patch: Record<string, unknown> = { approval_status: decision };
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> = {
+      approval_status: decision,
+      approved_by: currentUserId,
+      approved_at: now,
+    };
     if (decision === "approved") {
       patch.completed = true;
-      patch.completed_at = new Date().toISOString();
+      patch.completed_at = now;
     }
     const { error: updateError } = await supabase.from("project_milestones").update(patch).eq("id", milestoneId);
     setLoading(null);

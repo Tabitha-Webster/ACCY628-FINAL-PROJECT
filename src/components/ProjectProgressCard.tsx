@@ -87,20 +87,21 @@ export function ProjectProgressCard({
   compact = false,
   showMilestoneList = true,
 }: Props) {
-  const completedCount = milestones.filter((m) => m.completed).length;
   const pct = completionPercent(status, milestones);
   const tone = barTone(pct, status);
 
   if (compact) {
     return (
       <div className="min-w-[7rem]">
-        <div className="mb-1 flex items-center justify-between gap-2 text-[10px] opacity-70">
-          <span>
-            {milestones.length > 0 ? `${completedCount}/${milestones.length}` : `${pct}%`}
-          </span>
-          <span>{pct}%</span>
+        <div className="mb-1 text-[10px] opacity-70">
+          <span className="tabular-nums">{pct}%</span>
         </div>
-        <progress className={`progress ${tone} h-2 w-full`} value={pct} max={100} />
+        <progress
+          className={`progress ${tone} h-2 w-full`}
+          value={pct}
+          max={100}
+          aria-label={`${pct}% complete`}
+        />
       </div>
     );
   }
@@ -114,11 +115,6 @@ export function ProjectProgressCard({
         </div>
         <div className="text-right">
           <p className="text-2xl font-semibold tabular-nums">{pct}%</p>
-          <p className="text-xs opacity-60">
-            {milestones.length > 0
-              ? `${completedCount} of ${milestones.length} milestones`
-              : "Status-based estimate"}
-          </p>
         </div>
       </div>
 

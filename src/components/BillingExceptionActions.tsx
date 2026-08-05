@@ -31,6 +31,11 @@ export function BillingExceptionActions({ exception }: { exception: ExceptionAct
     setError(null);
     setBusy(decision);
     const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const reviewerId = user?.id ?? null;
+    const now = new Date().toISOString();
 
     try {
       if (exception.kind === "time_entry" || exception.kind === "direct_cost") {
@@ -40,7 +45,11 @@ export function BillingExceptionActions({ exception }: { exception: ExceptionAct
           const table = exception.kind === "time_entry" ? "time_entries" : "direct_costs";
           const { error: updateError } = await supabase
             .from(table)
-            .update({ approval_status: "rejected" })
+            .update({
+              approval_status: "rejected",
+              approved_by: reviewerId,
+              approved_at: now,
+            })
             .eq("id", exception.recordId)
             .eq("approval_status", "pending");
           if (updateError) throw new Error(updateError.message);
@@ -50,7 +59,8 @@ export function BillingExceptionActions({ exception }: { exception: ExceptionAct
           .from("additional_work_requests")
           .update({
             approval_status: decision,
-            reviewed_at: new Date().toISOString(),
+            reviewed_by: reviewerId,
+            reviewed_at: now,
           })
           .eq("id", exception.recordId)
           .eq("approval_status", "pending");
@@ -59,7 +69,11 @@ export function BillingExceptionActions({ exception }: { exception: ExceptionAct
         if (exception.supportTicketId) {
           await supabase
             .from("support_tickets")
-            .update({ billable_approval_status: decision })
+            .update({
+              billable_approval_status: decision,
+              billable_approved_by: reviewerId,
+              billable_approved_at: now,
+            })
             .eq("id", exception.supportTicketId);
 
           if (decision === "approved") {

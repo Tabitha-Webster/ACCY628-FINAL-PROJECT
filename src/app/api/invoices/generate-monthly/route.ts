@@ -14,6 +14,7 @@ import {
   isApprovedForBilling,
   isOpenBillingStatus,
   isTimeEntryAlreadyInvoiced,
+  pendingAdditionalWorkBlockReason,
   projectBillingBlockReason,
 } from "@/lib/billing-eligibility";
 
@@ -81,10 +82,13 @@ export async function POST(request: Request) {
   for (const contract of contracts) {
     const monthlyAlreadyBilled = alreadyBilled.has(contract.id);
 
-    const [{ data: timeEntries }, { data: directCosts }, { data: projects }, { data: milestones }] = await Promise.all([
+    const [{ data: timeEntries }, { data: directCosts }, { data: projects }, { data: milestones }, { data: pendingAw }] =
+      await Promise.all([
       supabase
         .from("time_entries")
-        .select("id, hours_worked, classification, approval_status, billing_status, work_date, invoice_id, invoice_line_item_id, billed_at")
+        .select(
+          "id, hours_worked, classification, approval_status, billing_status, work_date, project_id, support_ticket_id, invoice_id, invoice_line_item_id, billed_at"
+        )
         .eq("contract_id", contract.id)
         .gte("work_date", periodStart)
         .lte("work_date", periodEnd),
@@ -104,12 +108,24 @@ export async function POST(request: Request) {
         .in("billing_status", ["unbilled", "ready"]),
       supabase
         .from("project_milestones")
-        .select("id, name, amount, billing_status, approval_status, completed, projects!inner(contract_id, name)")
+        .select("id, name, amount, billing_status, approval_status, completed, project_id, projects!inner(contract_id, name)")
         .eq("completed", true)
         .in("approval_status", ["approved", "not_required"])
         .in("billing_status", ["unbilled", "ready"])
         .eq("projects.contract_id", contract.id),
+      supabase
+        .from("additional_work_requests")
+        .select("id, project_id, support_ticket_id")
+        .eq("contract_id", contract.id)
+        .eq("approval_status", "pending"),
     ]);
+
+    const pendingAwByProject = new Set(
+      (pendingAw ?? []).map((r) => r.project_id).filter((id): id is string => Boolean(id))
+    );
+    const pendingAwByTicket = new Set(
+      (pendingAw ?? []).map((r) => r.support_ticket_id).filter((id): id is string => Boolean(id))
+    );
 
     const usage = computeMonthlyUsage(
       timeEntries ?? [],
@@ -117,7 +133,20 @@ export async function POST(request: Request) {
       Number(contract.additional_hourly_rate ?? 0),
       Number(contract.monthly_recurring_fee ?? 0)
     );
-    const approvedProjects = (projects ?? []).filter((project) => !projectBillingBlockReason(project));
+    const approvedProjects = (projects ?? []).filter((project) => {
+      if (projectBillingBlockReason(project)) return false;
+      return !pendingAdditionalWorkBlockReason({
+        hasPendingAdditionalWork: pendingAwByProject.has(project.id),
+        contextLabel: project.name,
+      });
+    });
+    const approvedMilestones = (milestones ?? []).filter(
+      (milestone) =>
+        !pendingAdditionalWorkBlockReason({
+          hasPendingAdditionalWork: pendingAwByProject.has(milestone.project_id),
+          contextLabel: milestone.name,
+        })
+    );
 
     const drafts = [];
 
@@ -171,7 +200,7 @@ export async function POST(request: Request) {
       );
     }
 
-    for (const milestone of milestones ?? []) {
+    for (const milestone of approvedMilestones) {
       const amount = round2(Number(milestone.amount ?? 0));
       if (amount <= 0) continue;
       const project = Array.isArray(milestone.projects) ? milestone.projects[0] : milestone.projects;
@@ -293,13 +322,23 @@ export async function POST(request: Request) {
 
     if (!monthlyAlreadyBilled) {
       const billableTimeIds = (timeEntries ?? [])
-        .filter(
-          (entry) =>
-            !isTimeEntryAlreadyInvoiced(entry) &&
-            isOpenBillingStatus(entry.billing_status) &&
-            (entry.classification === "included" ||
-              (["billable", "out_of_scope"].includes(entry.classification) && isApprovedForBilling(entry.approval_status)))
-        )
+        .filter((entry) => {
+          if (isTimeEntryAlreadyInvoiced(entry) || !isOpenBillingStatus(entry.billing_status)) return false;
+          if (entry.classification === "included") return true;
+          if (entry.classification === "out_of_scope") {
+            if (entry.approval_status !== "approved") return false;
+            const pendingOnProject = entry.project_id ? pendingAwByProject.has(entry.project_id) : false;
+            const pendingOnTicket = entry.support_ticket_id ? pendingAwByTicket.has(entry.support_ticket_id) : false;
+            return !pendingOnProject && !pendingOnTicket;
+          }
+          if (entry.classification === "billable") {
+            if (!isApprovedForBilling(entry.approval_status)) return false;
+            const pendingOnProject = entry.project_id ? pendingAwByProject.has(entry.project_id) : false;
+            const pendingOnTicket = entry.support_ticket_id ? pendingAwByTicket.has(entry.support_ticket_id) : false;
+            return !pendingOnProject && !pendingOnTicket;
+          }
+          return false;
+        })
         .map((entry) => entry.id);
 
       if (billableTimeIds.length > 0) {
@@ -329,7 +368,7 @@ export async function POST(request: Request) {
         .in("billing_status", ["unbilled", "ready"]);
     }
 
-    for (const milestone of milestones ?? []) {
+    for (const milestone of approvedMilestones) {
       await supabase
         .from("project_milestones")
         .update({
@@ -395,7 +434,7 @@ export async function POST(request: Request) {
       });
     }
 
-    for (const milestone of milestones ?? []) {
+    for (const milestone of approvedMilestones) {
       const amount = round2(Number(milestone.amount ?? 0));
       if (amount <= 0) continue;
       const project = Array.isArray(milestone.projects) ? milestone.projects[0] : milestone.projects;

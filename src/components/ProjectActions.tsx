@@ -92,11 +92,14 @@ export function ProjectActions({
     await run(decision, async () => {
       const supabase = createClient();
       const nextStatus: ProjectStatus = decision === "approved" ? "approved" : "canceled";
+      const now = new Date().toISOString();
       const { error: updateError } = await supabase
         .from("projects")
         .update({
           customer_approval_status: decision,
           status: nextStatus,
+          customer_approved_by: currentUserId,
+          customer_approved_at: now,
         })
         .eq("id", projectId);
       if (updateError) return updateError.message;
@@ -125,13 +128,19 @@ export function ProjectActions({
   async function completeMilestone(milestoneId: string) {
     await run(`milestone-${milestoneId}`, async () => {
       const supabase = createClient();
+      const now = new Date().toISOString();
+      const patch: Record<string, unknown> = {
+        completed: true,
+        completed_at: now,
+        approval_status: role === "manager" ? "approved" : "pending",
+      };
+      if (role === "manager") {
+        patch.approved_by = currentUserId;
+        patch.approved_at = now;
+      }
       const { error: updateError } = await supabase
         .from("project_milestones")
-        .update({
-          completed: true,
-          completed_at: new Date().toISOString(),
-          approval_status: role === "manager" ? "approved" : "pending",
-        })
+        .update(patch)
         .eq("id", milestoneId)
         .eq("project_id", projectId);
       if (updateError) return updateError.message;
@@ -143,10 +152,15 @@ export function ProjectActions({
   async function decideMilestone(milestoneId: string, decision: "approved" | "rejected") {
     await run(`milestone-decision-${milestoneId}`, async () => {
       const supabase = createClient();
-      const patch: Record<string, unknown> = { approval_status: decision };
+      const now = new Date().toISOString();
+      const patch: Record<string, unknown> = {
+        approval_status: decision,
+        approved_by: currentUserId,
+        approved_at: now,
+      };
       if (decision === "approved") {
         patch.completed = true;
-        patch.completed_at = new Date().toISOString();
+        patch.completed_at = now;
       }
       const { error: updateError } = await supabase
         .from("project_milestones")
@@ -463,6 +477,8 @@ type ChangeRequestRow = {
   approval_status: ApprovalStatus;
   created_at: string;
   requested_by: string;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
   project_id?: string | null;
   contract_id?: string | null;
 };
@@ -501,15 +517,31 @@ export function ProjectChangeRequestPanel({
     setError(null);
     setLoading(`${requestId}-${decision}`);
     const supabase = createClient();
+    const now = new Date().toISOString();
+    const request = requests.find((r) => r.id === requestId);
     const { error: updateError } = await supabase
       .from("additional_work_requests")
       .update({
         approval_status: decision,
         reviewed_by: currentUserId,
-        reviewed_at: new Date().toISOString(),
+        reviewed_at: now,
         review_notes: notes.trim() || null,
       })
       .eq("id", requestId);
+
+    if (!updateError && decision === "approved" && request?.project_id) {
+      await supabase
+        .from("time_entries")
+        .update({
+          approval_status: "approved",
+          approved_by: currentUserId,
+          approved_at: now,
+        })
+        .eq("project_id", request.project_id)
+        .eq("classification", "out_of_scope")
+        .eq("approval_status", "pending");
+    }
+
     setLoading(null);
     if (updateError) {
       setError(updateError.message);
@@ -652,6 +684,12 @@ export function ProjectChangeRequestPanel({
                     </span>
                   </div>
                   <p className="mt-1 text-xs opacity-60">{requesterNames[r.requested_by] ?? "—"}</p>
+                  {r.reviewed_at ? (
+                    <p className="mt-1 text-xs opacity-70">
+                      Decision by {r.reviewed_by ? requesterNames[r.reviewed_by] ?? "team member" : "team member"} on{" "}
+                      {new Date(r.reviewed_at).toLocaleString()}
+                    </p>
+                  ) : null}
                   <div className="mt-2 flex flex-wrap gap-3 text-xs">
                     <span>
                       Hours:{" "}

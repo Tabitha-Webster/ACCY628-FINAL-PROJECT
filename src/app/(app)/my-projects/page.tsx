@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { PageHeader, DataTable, EmptyState, StatusBadge, Money, DateText, ErrorState, StatCard } from "@/components/ui";
 import { CustomerChangeRequestApprovalCard, CustomerProjectApprovalCard } from "@/components/CustomerApprovals";
-import type { ApprovalStatus, Project } from "@/lib/types";
+import { ProjectProgressCard } from "@/components/ProjectProgressCard";
+import type { ApprovalStatus, Project, ProjectMilestone } from "@/lib/types";
 
 export default async function MyProjectsPage() {
   const profile = await getCurrentProfile();
@@ -51,27 +52,55 @@ export default async function MyProjectsPage() {
     (p) => p.status === "awaiting_customer_approval" || p.customer_approval_status === "pending"
   );
 
-  const { data: pendingRequests } = projectIds.length
-    ? await supabase
-        .from("additional_work_requests")
-        .select("id, title, description, project_id, estimated_hours, estimated_amount, approval_status")
-        .in("project_id", projectIds)
-        .eq("approval_status", "pending")
-        .order("created_at", { ascending: false })
-    : { data: [] as {
-        id: string;
-        title: string;
-        description: string;
-        project_id: string | null;
-        estimated_hours: number | null;
-        estimated_amount: number | null;
-        approval_status: ApprovalStatus;
-      }[] };
+  const [pendingRequestsRes, milestonesRes] = await Promise.all([
+    projectIds.length
+      ? supabase
+          .from("additional_work_requests")
+          .select("id, title, description, project_id, estimated_hours, estimated_amount, approval_status")
+          .in("project_id", projectIds)
+          .eq("approval_status", "pending")
+          .order("created_at", { ascending: false })
+      : Promise.resolve({
+          data: [] as {
+            id: string;
+            title: string;
+            description: string;
+            project_id: string | null;
+            estimated_hours: number | null;
+            estimated_amount: number | null;
+            approval_status: ApprovalStatus;
+          }[],
+        }),
+    projectIds.length
+      ? supabase
+          .from("project_milestones")
+          .select("id, project_id, name, completed, approval_status, due_date")
+          .in("project_id", projectIds)
+          .order("due_date", { ascending: true, nullsFirst: false })
+      : Promise.resolve({
+          data: [] as Pick<
+            ProjectMilestone,
+            "id" | "project_id" | "name" | "completed" | "approval_status" | "due_date"
+          >[],
+        }),
+  ]);
+
+  const pendingRequests = pendingRequestsRes.data;
 
   const costRequests = (pendingRequests ?? []).filter(
     (r) => Number(r.estimated_hours ?? 0) > 0 || Number(r.estimated_amount ?? 0) > 0
   );
   const projectName = new Map(rows.map((p) => [p.id, p.name]));
+
+  const milestonesByProject = new Map<
+    string,
+    Pick<ProjectMilestone, "id" | "name" | "completed" | "approval_status" | "due_date">[]
+  >();
+  for (const m of milestonesRes.data ?? []) {
+    const list = milestonesByProject.get(m.project_id) ?? [];
+    list.push(m);
+    milestonesByProject.set(m.project_id, list);
+  }
 
   return (
     <div>
@@ -139,10 +168,13 @@ export default async function MyProjectsPage() {
       {rows.length === 0 ? (
         <EmptyState title="No projects yet" description="Any projects scoped for your organization will appear here." />
       ) : (
-        <DataTable headers={["Project", "Status", "Your Approval", "Target Completion", "Amount", "Billed", "Collected"]}>
+        <DataTable
+          headers={["Project", "Status", "Completion", "Your Approval", "Target Completion", "Amount", "Billed", "Collected"]}
+        >
           {rows.map((p) => {
             const needsYou =
               p.status === "awaiting_customer_approval" || p.customer_approval_status === "pending";
+            const milestones = milestonesByProject.get(p.id) ?? [];
             return (
               <tr key={p.id}>
                 <td>
@@ -154,6 +186,22 @@ export default async function MyProjectsPage() {
                 </td>
                 <td>
                   <StatusBadge status={p.status} />
+                </td>
+                <td>
+                  <ProjectProgressCard
+                    compact
+                    status={p.status}
+                    startDate={p.start_date}
+                    targetCompletionDate={p.target_completion_date}
+                    projectManagerName={null}
+                    milestones={milestones.map((m) => ({
+                      id: m.id,
+                      name: m.name,
+                      completed: m.completed,
+                      approval_status: m.approval_status,
+                      due_date: m.due_date,
+                    }))}
+                  />
                 </td>
                 <td>
                   {needsYou ? (

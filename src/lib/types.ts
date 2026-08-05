@@ -376,6 +376,8 @@ export type Project = {
   software_budget: number | null;
   vendor_budget: number | null;
   customer_approval_status: ApprovalStatus | null;
+  customer_approved_by?: string | null;
+  customer_approved_at?: string | null;
   uses_milestone_billing: boolean | null;
   amount_billed: number | null;
   amount_collected: number | null;
@@ -393,6 +395,8 @@ export type ProjectMilestone = {
   completed: boolean;
   completed_at: string | null;
   approval_status: ApprovalStatus | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
   billing_status: BillingStatus | null;
   created_at: string;
 };
