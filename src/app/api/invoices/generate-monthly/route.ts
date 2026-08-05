@@ -1,21 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { computeMonthlyUsage, currentBillingPeriod, round2 } from "@/lib/billing";
-
-function parsePaymentTermsDays(paymentTerms: string | null | undefined): number {
-  if (!paymentTerms) return 30;
-  const match = paymentTerms.match(/(\d+)/);
-  if (!match) return 30;
-  const days = Number(match[1]);
-  return Number.isFinite(days) && days > 0 ? days : 30;
-}
-
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(`${dateStr}T00:00:00`);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
+import { computeMonthlyUsage, currentBillingPeriod, makeInvoiceLine, round2, summarizeInvoice } from "@/lib/billing";
+import { isApprovedForBilling, isOpenBillingStatus, projectBillingBlockReason } from "@/lib/billing-eligibility";
 
 function generateInvoiceNumber(): string {
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -43,7 +30,7 @@ export async function POST(request: Request) {
   let contractQuery = supabase
     .from("contracts")
     .select(
-      "id, name, customer_id, status, monthly_recurring_fee, included_hours_per_month, additional_hourly_rate, payment_terms, billing_timing"
+      "id, name, customer_id, status, monthly_recurring_fee, included_hours_per_month, additional_hourly_rate, payment_terms, billing_timing, tax_status"
     )
     .eq("status", "active");
 
@@ -94,7 +81,7 @@ export async function POST(request: Request) {
         .in("cost_category", ["software", "equipment"]),
       supabase
         .from("projects")
-        .select("id, name, fixed_fee, estimated_billing_amount, status, billing_status, amount_billed, uses_milestone_billing")
+        .select("id, name, fixed_fee, estimated_billing_amount, status, billing_status, amount_billed, uses_milestone_billing, customer_approval_status")
         .eq("contract_id", contract.id)
         .eq("uses_milestone_billing", false)
         .in("status", ["completed", "approved"])
@@ -114,94 +101,97 @@ export async function POST(request: Request) {
       Number(contract.additional_hourly_rate ?? 0),
       Number(contract.monthly_recurring_fee ?? 0)
     );
+    const approvedProjects = (projects ?? []).filter((project) => !projectBillingBlockReason(project));
 
-    type Draft = {
-      description: string;
-      quantity: number;
-      rate: number;
-      line_amount: number;
-      source_type: string;
-      source_id: string;
-    };
-
-    const drafts: Draft[] = [];
+    const drafts = [];
 
     if (!monthlyAlreadyBilled && usage.monthlyFee > 0) {
-      drafts.push({
-        description: `${contract.name} monthly support fee — ${periodLabel}`,
-        quantity: 1,
-        rate: usage.monthlyFee,
-        line_amount: usage.monthlyFee,
-        source_type: "recurring",
-        source_id: contract.id,
-      });
+      drafts.push(
+        makeInvoiceLine({
+          description: `${contract.name} monthly support fee — ${periodLabel}`,
+          quantity: 1,
+          rate: usage.monthlyFee,
+          source_type: "recurring",
+          source_id: contract.id,
+        })
+      );
     }
 
     if (!monthlyAlreadyBilled && usage.includedHours > 0) {
-      drafts.push({
-        description: `Included support hours used — ${usage.includedHoursUsed.toFixed(1)} of ${usage.includedHours.toFixed(1)} hrs`,
-        quantity: usage.includedHoursUsed,
-        rate: 0,
-        line_amount: 0,
-        source_type: "hours_included",
-        source_id: contract.id,
-      });
+      drafts.push(
+        makeInvoiceLine({
+          description: `Included support hours used — ${usage.includedHoursUsed.toFixed(1)} of ${usage.includedHours.toFixed(1)} hrs`,
+          quantity: usage.includedHoursUsed,
+          rate: 0,
+          source_type: "hours_included",
+          source_id: contract.id,
+        })
+      );
     }
 
     if (!monthlyAlreadyBilled && usage.overageHours > 0 && usage.overageCharge > 0) {
-      drafts.push({
-        description: `Overage support hours — ${usage.overageHours.toFixed(1)} hrs above included allotment`,
-        quantity: usage.overageHours,
-        rate: usage.additionalHourlyRate,
-        line_amount: usage.overageCharge,
-        source_type: "overage",
-        source_id: contract.id,
-      });
+      drafts.push(
+        makeInvoiceLine({
+          description: `Overage support hours — ${usage.overageHours.toFixed(1)} hrs above included allotment`,
+          quantity: usage.overageHours,
+          rate: usage.additionalHourlyRate,
+          source_type: "overage",
+          source_id: contract.id,
+        })
+      );
     }
 
-    for (const project of projects ?? []) {
+    for (const project of approvedProjects) {
       const amount = round2(Number(project.fixed_fee || project.estimated_billing_amount || 0));
       if (amount <= 0) continue;
-      drafts.push({
-        description: `Approved project: ${project.name}`,
-        quantity: 1,
-        rate: amount,
-        line_amount: amount,
-        source_type: "project",
-        source_id: project.id,
-      });
+      drafts.push(
+        makeInvoiceLine({
+          description: `Approved project: ${project.name}`,
+          quantity: 1,
+          rate: amount,
+          source_type: "project",
+          source_id: project.id,
+        })
+      );
     }
 
     for (const milestone of milestones ?? []) {
       const amount = round2(Number(milestone.amount ?? 0));
       if (amount <= 0) continue;
       const project = Array.isArray(milestone.projects) ? milestone.projects[0] : milestone.projects;
-      drafts.push({
-        description: `Approved milestone: ${project?.name ?? "Project"} — ${milestone.name}`,
-        quantity: 1,
-        rate: amount,
-        line_amount: amount,
-        source_type: "milestone",
-        source_id: milestone.id,
-      });
+      drafts.push(
+        makeInvoiceLine({
+          description: `Approved milestone: ${project?.name ?? "Project"} — ${milestone.name}`,
+          quantity: 1,
+          rate: amount,
+          source_type: "milestone",
+          source_id: milestone.id,
+        })
+      );
     }
 
     for (const cost of directCosts ?? []) {
       const amount = round2(Number(cost.billable_amount ?? 0));
       if (amount <= 0) continue;
       const kind = cost.cost_category === "software" ? "Software" : "Equipment";
-      drafts.push({
-        description: `Approved ${kind.toLowerCase()} charge: ${cost.description}${cost.vendor ? ` (${cost.vendor})` : ""}`,
-        quantity: 1,
-        rate: amount,
-        line_amount: amount,
-        source_type: "direct_cost",
-        source_id: cost.id,
-      });
+      drafts.push(
+        makeInvoiceLine({
+          description: `Approved ${kind.toLowerCase()} charge: ${cost.description}${cost.vendor ? ` (${cost.vendor})` : ""}`,
+          quantity: 1,
+          rate: amount,
+          source_type: "direct_cost",
+          source_id: cost.id,
+        })
+      );
     }
 
-    const chargeable = drafts.filter((d) => d.line_amount > 0);
-    if (chargeable.length === 0) {
+    const totals = summarizeInvoice(drafts, {
+      taxStatus: contract.tax_status,
+      paymentTerms: contract.payment_terms,
+      currentStatus: "issued",
+    });
+
+    if (totals.subtotal <= 0) {
       skipped.push(
         monthlyAlreadyBilled
           ? `${contract.name} already has a monthly invoice for ${periodLabel} and has no new project or equipment/software charges.`
@@ -210,33 +200,24 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const subtotal = round2(drafts.reduce((sum, d) => sum + d.line_amount, 0));
-    if (subtotal <= 0) {
-      skipped.push(`${contract.name} produced a zero-total invoice and was skipped.`);
-      continue;
-    }
-
-    const invoiceDate = new Date().toISOString().slice(0, 10);
-    const dueDate = addDays(invoiceDate, parsePaymentTermsDays(contract.payment_terms));
-
     const { data: invoice, error: invoiceError } = await supabase
       .from("invoices")
       .insert({
         invoice_number: generateInvoiceNumber(),
         customer_id: contract.customer_id,
         contract_id: contract.id,
-        invoice_date: invoiceDate,
-        due_date: dueDate,
-        status: "issued",
+        invoice_date: totals.invoiceDate,
+        due_date: totals.dueDate,
+        status: totals.status,
         billing_period_start: periodStart,
         billing_period_end: periodEnd,
-        subtotal,
-        tax_amount: 0,
-        credits: 0,
-        total_amount: subtotal,
+        subtotal: totals.subtotal,
+        tax_amount: totals.taxAmount,
+        credits: totals.credits,
+        total_amount: totals.totalAmount,
         amount_paid: 0,
-        remaining_balance: subtotal,
-        notes: `Monthly contract invoice for ${periodLabel}. Included hours used: ${usage.includedHoursUsed.toFixed(1)}. Overage hours: ${usage.overageHours.toFixed(1)}.`,
+        remaining_balance: totals.remainingBalance,
+        notes: `Monthly contract invoice for ${periodLabel}. Included hours used: ${usage.includedHoursUsed.toFixed(1)}. Overage hours: ${usage.overageHours.toFixed(1)}. Tax ${totals.taxExempt ? "exempt" : `${(totals.taxRate * 100).toFixed(1)}%`}. Due ${totals.dueDate}.`,
         generated_by: profile.id,
         generated_at: new Date().toISOString(),
       })
@@ -251,7 +232,7 @@ export async function POST(request: Request) {
     const { data: lineItems, error: lineError } = await supabase
       .from("invoice_line_items")
       .insert(
-        drafts.map((d) => ({
+        totals.lines.map((d) => ({
           invoice_id: invoice.id,
           description: d.description,
           quantity: d.quantity,
@@ -274,18 +255,22 @@ export async function POST(request: Request) {
       const billableTimeIds = (timeEntries ?? [])
         .filter(
           (entry) =>
-            ["included", "billable"].includes(entry.classification) &&
-            (entry.classification === "included" || ["approved", "not_required"].includes(entry.approval_status)) &&
-            entry.billing_status !== "billed"
+            isOpenBillingStatus(entry.billing_status) &&
+            (entry.classification === "included" ||
+              (["billable", "out_of_scope"].includes(entry.classification) && isApprovedForBilling(entry.approval_status)))
         )
         .map((entry) => entry.id);
 
       if (billableTimeIds.length > 0) {
-        await supabase.from("time_entries").update({ billing_status: "billed" }).in("id", billableTimeIds);
+        await supabase
+          .from("time_entries")
+          .update({ billing_status: "billed" })
+          .in("id", billableTimeIds)
+          .in("billing_status", ["unbilled", "ready"]);
       }
     }
 
-    for (const project of projects ?? []) {
+    for (const project of approvedProjects) {
       const amount = round2(Number(project.fixed_fee || project.estimated_billing_amount || 0));
       await supabase
         .from("projects")
@@ -294,7 +279,8 @@ export async function POST(request: Request) {
           status: "billed",
           amount_billed: Number(project.amount_billed ?? 0) + amount,
         })
-        .eq("id", project.id);
+        .eq("id", project.id)
+        .in("billing_status", ["unbilled", "ready"]);
     }
 
     for (const milestone of milestones ?? []) {
@@ -304,7 +290,8 @@ export async function POST(request: Request) {
           billing_status: "billed",
           invoice_line_item_id: lineBySource.get(`milestone:${milestone.id}`) ?? null,
         })
-        .eq("id", milestone.id);
+        .eq("id", milestone.id)
+        .in("billing_status", ["unbilled", "ready"]);
     }
 
     for (const cost of directCosts ?? []) {
@@ -314,7 +301,8 @@ export async function POST(request: Request) {
           billing_status: "billed",
           invoice_line_item_id: lineBySource.get(`direct_cost:${cost.id}`) ?? null,
         })
-        .eq("id", cost.id);
+        .eq("id", cost.id)
+        .in("billing_status", ["unbilled", "ready"]);
     }
 
     const recognition = contract.billing_timing === "in_advance" ? "deferred" : "earned";
@@ -345,7 +333,7 @@ export async function POST(request: Request) {
       });
     }
 
-    for (const project of projects ?? []) {
+    for (const project of approvedProjects) {
       const amount = round2(Number(project.fixed_fee || project.estimated_billing_amount || 0));
       if (amount <= 0) continue;
       await supabase.from("revenue_records").insert({

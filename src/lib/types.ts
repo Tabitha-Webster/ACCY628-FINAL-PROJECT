@@ -27,6 +27,7 @@ export type ProjectStatus =
 export type InvoiceStatus =
   | "draft"
   | "issued"
+  | "sent"
   | "partially_paid"
   | "paid"
   | "overdue"
@@ -269,6 +270,8 @@ export type Invoice = {
   remaining_balance: number;
   dispute_status: boolean;
   notes: string | null;
+  sent_at: string | null;
+  sent_by: string | null;
   created_at: string;
 };
 

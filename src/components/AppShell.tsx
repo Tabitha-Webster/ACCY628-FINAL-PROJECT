@@ -28,7 +28,7 @@ export function AppShell({
 
   const nav = restrictedCustomer
     ? [{ href: "/pending-approval", label: "Pending Approval" }]
-    : ROLE_NAV[profile.role as UserRole];
+    : (ROLE_NAV[profile.role as UserRole] ?? []);
 
   useEffect(() => {
     if (!restrictedCustomer) return;
