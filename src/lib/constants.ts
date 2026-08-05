@@ -45,17 +45,21 @@ export const DEMO_ACCOUNTS = [
 export type NavItem = {
   href: string;
   label: string;
+  disabled?: boolean;
 };
 
 export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   manager: [
-    { href: "/dashboard", label: "Executive Dashboard" },
+    { href: "/dashboard", label: "Dashboard" },
     { href: "/customers", label: "Customers" },
     { href: "/contracts", label: "Contracts" },
-    { href: "/operations", label: "Service Operations" },
+    { href: "/tickets", label: "Support Tickets" },
+    { href: "/projects", label: "Projects" },
+    { href: "/time-costs", label: "Time and Costs" },
+    { href: "/customer-approvals", label: "Approvals" },
+    { href: "/billing-collections", label: "Billing" },
+    { href: "/accounts-receivable", label: "Accounts Receivable" },
     { href: "/profitability", label: "Profitability" },
-    { href: "/billing-collections", label: "Billing and Collections" },
-    { href: "/controls", label: "Controls and Exceptions" },
   ],
   technician: [
     { href: "/dashboard", label: "My Assignments" },
@@ -74,6 +78,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   ],
   customer: [
     { href: "/dashboard", label: "Customer Home" },
+    { href: "/pending-approval", label: "Pending Approval" },
     { href: "/my-contracts", label: "My Contracts" },
     { href: "/support-requests", label: "Support Requests" },
     { href: "/service-usage", label: "Service Usage" },
@@ -89,7 +94,9 @@ export function roleHomePath(_role: UserRole) {
 export function canAccessPath(role: UserRole, pathname: string): boolean {
   if (pathname === "/dashboard" || pathname.startsWith("/profile")) return true;
   const allowed = ROLE_NAV[role].some(
-    (item) => pathname === item.href || pathname.startsWith(item.href + "/")
+    (item) =>
+      !item.disabled &&
+      (pathname === item.href || pathname.startsWith(item.href + "/"))
   );
   if (allowed) return true;
 
@@ -105,6 +112,9 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/accounting",
       "/accounts-receivable",
       "/time-costs",
+      "/customer-approvals",
+      "/operations",
+      "/controls",
     ],
     technician: ["/contracts", "/customers"],
     billing: ["/customers", "/contracts", "/projects"],

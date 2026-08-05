@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import { getCurrentProfile } from "@/lib/auth";
+import { getCurrentProfile, getLinkedCustomer } from "@/lib/auth";
 import { canAccessPath, type UserRole } from "@/lib/constants";
+import type { CustomerStatus } from "@/lib/types";
 
 export default async function AppLayout({
   children,
@@ -11,7 +12,17 @@ export default async function AppLayout({
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
 
-  return <AppShell profile={profile}>{children}</AppShell>;
+  let customerStatus: CustomerStatus | null = null;
+  if (profile.role === "customer") {
+    const linked = await getLinkedCustomer(profile);
+    customerStatus = linked?.status ?? null;
+  }
+
+  return (
+    <AppShell profile={profile} customerStatus={customerStatus}>
+      {children}
+    </AppShell>
+  );
 }
 
 export async function requireRole(roles: UserRole[]) {

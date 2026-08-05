@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/auth";
+import { getCurrentProfile, requireApprovedCustomer } from "@/lib/auth";
 import { PageHeader, DataTable, EmptyState, StatusBadge, Money, DateText, ErrorState } from "@/components/ui";
 import type { Project } from "@/lib/types";
 
@@ -9,6 +9,7 @@ export default async function MyProjectsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
   if (profile.role !== "customer" || !profile.customer_id) redirect("/projects");
+  await requireApprovedCustomer(profile);
 
   const supabase = await createClient();
   const { data: projects, error } = await supabase

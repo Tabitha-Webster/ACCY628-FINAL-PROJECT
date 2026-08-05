@@ -48,7 +48,13 @@ export type RevenueType =
   | "software_equipment"
   | "reimbursable";
 export type DisputeResolutionStatus = "open" | "under_review" | "resolved" | "rejected";
-export type CustomerStatus = "active" | "inactive" | "prospect" | "on_hold";
+export type CustomerStatus =
+  | "active"
+  | "inactive"
+  | "prospect"
+  | "on_hold"
+  | "pending_approval"
+  | "rejected";
 
 export type Customer = {
   id: string;
@@ -56,11 +62,15 @@ export type Customer = {
   industry: string | null;
   primary_contact: string | null;
   contact_email: string | null;
+  primary_contact_phone?: string | null;
   service_address: string | null;
   status: CustomerStatus;
   credit_terms: string | null;
   account_manager_id: string | null;
   notes: string | null;
+  approval_note?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
   created_at: string;
 };
 

@@ -718,6 +718,16 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
   }
 
   const supabase = await createClient();
+  const { data: linkedCustomer } = await supabase
+    .from("customers")
+    .select("id, name, status, approval_note")
+    .eq("id", profile.customer_id)
+    .maybeSingle();
+
+  if (linkedCustomer?.status === "pending_approval" || linkedCustomer?.status === "rejected") {
+    redirect("/pending-approval");
+  }
+
   const monthStart = `${lastNMonthKeys(1)[0]}-01`;
   const customerId = profile.customer_id;
 

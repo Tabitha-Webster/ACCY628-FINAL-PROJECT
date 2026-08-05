@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { ButtonLink } from "@/components/Button";
+import { Card } from "@/components/Card";
 import {
   AccountingExplainer,
   DataTable,
@@ -107,9 +109,8 @@ export default async function CustomerDetailPage({
         />
       </div>
 
-      <div className="rounded-box border border-base-300 bg-base-100 p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">Year to Date</h2>
-        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <Card title="Year to Date" description="Earned revenue, direct costs, and margin for the current calendar year.">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <p className="text-xs opacity-60">Earned Revenue</p>
             <p className="text-xl font-semibold tabular-nums">
@@ -129,13 +130,10 @@ export default async function CustomerDetailPage({
             </p>
           </div>
         </div>
-      </div>
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Contracts</h2>
-          </div>
+        <Card title="Contracts">
           {contracts && contracts.length > 0 ? (
             <DataTable headers={["Contract", "Status", "Type", "Term", "Monthly Fee"]}>
               {contracts.map((contract) => (
@@ -162,12 +160,9 @@ export default async function CustomerDetailPage({
           ) : (
             <EmptyState title="No contracts on file" />
           )}
-        </div>
+        </Card>
 
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Recent Tickets</h2>
-          </div>
+        <Card title="Recent Tickets">
           {tickets && tickets.length > 0 ? (
             <DataTable headers={["Ticket", "Priority", "Status", "Submitted"]}>
               {tickets.map((ticket) => (
@@ -187,11 +182,10 @@ export default async function CustomerDetailPage({
           ) : (
             <EmptyState title="No support tickets on file" />
           )}
-        </div>
+        </Card>
       </div>
 
-      <div>
-        <h2 className="mb-2 text-lg font-semibold">Invoices</h2>
+      <Card title="Invoices">
         {invoices && invoices.length > 0 ? (
           <DataTable headers={["Invoice", "Date", "Due", "Status", "Total", "Balance", ""]}>
             {invoices.map((invoice) => (
@@ -209,9 +203,9 @@ export default async function CustomerDetailPage({
                   <Money value={Number(invoice.remaining_balance ?? 0)} />
                 </td>
                 <td className="text-right">
-                  <Link href={`/invoices/${invoice.id}`} className="btn btn-ghost btn-xs">
+                  <ButtonLink href={`/invoices/${invoice.id}`} variant="secondary" size="xs">
                     View
-                  </Link>
+                  </ButtonLink>
                 </td>
               </tr>
             ))}
@@ -219,7 +213,7 @@ export default async function CustomerDetailPage({
         ) : (
           <EmptyState title="No invoices issued yet" />
         )}
-      </div>
+      </Card>
 
       <AccountingExplainer />
     </div>
