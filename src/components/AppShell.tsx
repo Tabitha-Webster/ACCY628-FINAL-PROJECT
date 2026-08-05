@@ -11,6 +11,7 @@ import { CustomerBillingNavTree } from "@/components/CustomerBillingNavTree";
 import { ROLE_NAV, type Profile, type UserRole } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
+import type { CustomerStatus } from "@/lib/types";
 import { Fragment, useEffect, useState } from "react";
 
 function profileInitials(name: string) {
@@ -38,14 +39,18 @@ function SideNav({
   onNavigate,
   showSettings,
   onOpenSettings,
+  restrictedCustomer = false,
 }: {
   profile: Profile;
   pathname: string;
   onNavigate?: () => void;
   showSettings?: boolean;
   onOpenSettings?: () => void;
+  restrictedCustomer?: boolean;
 }) {
-  const nav = ROLE_NAV[profile.role as UserRole] ?? [];
+  const nav = restrictedCustomer
+    ? [{ href: "/pending-approval", label: "Pending Approval" }]
+    : (ROLE_NAV[profile.role as UserRole] ?? []);
   const isCustomer = profile.role === "customer";
   const isBilling = profile.role === "billing";
   const isManager = profile.role === "manager";
@@ -120,9 +125,11 @@ function SideNav({
 
 export function AppShell({
   profile,
+  customerStatus = null,
   children,
 }: {
   profile: Profile;
+  customerStatus?: CustomerStatus | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -130,6 +137,17 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+
+  const restrictedCustomer =
+    profile.role === "customer" &&
+    (customerStatus === "pending_approval" || customerStatus === "rejected");
+
+  useEffect(() => {
+    if (!restrictedCustomer) return;
+    if (pathname !== "/pending-approval" && !pathname.startsWith("/profile")) {
+      router.replace("/pending-approval");
+    }
+  }, [restrictedCustomer, pathname, router]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -173,6 +191,7 @@ export function AppShell({
         <SideNav
           profile={profile}
           pathname={pathname}
+          restrictedCustomer={restrictedCustomer}
           showSettings
           onOpenSettings={() => setSettingsOpen(true)}
         />
@@ -240,6 +259,7 @@ export function AppShell({
             <SideNav
               profile={profile}
               pathname={pathname}
+              restrictedCustomer={restrictedCustomer}
               onNavigate={() => setMobileOpen(false)}
               showSettings
               onOpenSettings={() => {

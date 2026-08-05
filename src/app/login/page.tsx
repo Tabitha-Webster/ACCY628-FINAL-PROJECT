@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -41,38 +42,49 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-cyan-900">
-      <div className="mx-auto flex min-h-screen max-w-6xl flex-col justify-center gap-8 px-4 py-10 lg:flex-row lg:items-center lg:gap-12">
-        <div className="max-w-xl text-white">
-          <p className="text-sm uppercase tracking-[0.2em] text-cyan-200/80">Managed services</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">ServiceSync MSP</h1>
-          <p className="mt-3 text-lg text-cyan-50/90">
-            From service agreement to support, billing, and collection.
-          </p>
-          <p className="mt-5 text-sm leading-relaxed text-slate-200/90">
-            Track customer contracts, support hours, technician work, costs, invoices, and payments
-            in one place — so managers, technicians, billing staff, and customers each see what they
-            need.
-          </p>
-        </div>
+    <div className="login-page-bg relative min-h-screen overflow-x-hidden bg-slate-50">
+      <div className="login-page-geo pointer-events-none absolute inset-0" aria-hidden />
+      <div className="relative mx-auto flex w-full max-w-xl flex-col items-center px-4 py-6 sm:py-8 md:py-10">
+        <p className="text-center text-sm uppercase tracking-[0.2em] text-sky-700/80">
+          Managed services
+        </p>
+        <h1 className="mt-3 w-full max-w-[min(100%,40rem)] sm:mt-4">
+          <Image
+            src="/images/servicesync-logo.png"
+            alt="ServiceSync MSP"
+            width={971}
+            height={212}
+            className="mx-auto h-auto w-full object-contain"
+            sizes="(max-width: 640px) 94vw, 40rem"
+            priority
+          />
+        </h1>
+        <p className="mt-2 text-center text-base text-slate-700 sm:text-lg">
+          From service agreement to support, billing, and collection.
+        </p>
+        <p className="mt-3 max-w-md text-center text-sm leading-relaxed text-slate-600 sm:mt-4">
+          Track customer contracts, support hours, technician work, costs, invoices, and payments
+          in one place — so managers, technicians, billing staff, and customers each see what they
+          need.
+        </p>
 
-        <div className="w-full max-w-md">
-          <div className="card bg-base-100 shadow-2xl">
-            <div className="card-body gap-4">
+        <div className="mt-5 w-full max-w-md sm:mt-6">
+          <div className="card border border-slate-200/80 bg-white shadow-xl shadow-slate-200/70">
+            <div className="card-body gap-3 p-5 sm:gap-3.5 sm:p-6">
               <div>
                 <h2 className="card-title text-xl">Sign in</h2>
                 <p className="text-sm opacity-70">Access your ServiceSync workspace</p>
               </div>
 
               {error ? (
-                <div className="alert alert-error text-sm">
+                <div className="alert alert-error py-2 text-sm">
                   <span>{error}</span>
                 </div>
               ) : null}
 
-              <form className="space-y-3" onSubmit={onSubmit}>
+              <form className="space-y-2" onSubmit={onSubmit}>
                 <label className="form-control w-full">
-                  <span className="label-text mb-1">Email</span>
+                  <span className="label-text mb-0.5">Email</span>
                   <input
                     type="email"
                     className="input input-bordered w-full"
@@ -83,7 +95,7 @@ export default function LoginPage() {
                   />
                 </label>
                 <label className="form-control w-full">
-                  <span className="label-text mb-1">Password</span>
+                  <span className="label-text mb-0.5">Password</span>
                   <input
                     type="password"
                     className="input input-bordered w-full"
@@ -93,7 +105,7 @@ export default function LoginPage() {
                     required
                   />
                 </label>
-                <button className="btn btn-primary w-full" disabled={loading}>
+                <button className="btn btn-primary mt-2 w-full" disabled={loading}>
                   {loading ? "Signing in…" : "Sign in"}
                 </button>
               </form>
@@ -106,12 +118,11 @@ export default function LoginPage() {
                 }}
               />
 
-              <p className="text-center text-sm opacity-70">
-                Need an account?{" "}
-                <Link href="/signup" className="link link-primary">
-                  Sign up
-                </Link>
-              </p>
+              <div className="divider my-0 text-xs opacity-50">or</div>
+
+              <Link href="/customer-signup" className="btn btn-outline btn-primary w-full">
+                New Customer? Create an Account
+              </Link>
             </div>
           </div>
         </div>

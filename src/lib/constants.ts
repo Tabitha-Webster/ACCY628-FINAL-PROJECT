@@ -52,6 +52,7 @@ export const DEMO_ACCOUNTS = [
 export type NavItem = {
   href: string;
   label: string;
+  disabled?: boolean;
   children?: NavItem[];
 };
 
@@ -59,7 +60,9 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   manager: [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/customers", label: "Customers" },
+    { href: "/customer-approvals", label: "Approvals" },
     // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
+    { href: "/projects", label: "Projects" },
     { href: "/operations", label: "Service Operations" },
     { href: "/time-cost-approvals", label: "Approve Time & Costs" },
     { href: "/profitability", label: "Profitability" },
@@ -70,6 +73,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   ],
   technician: [
     { href: "/dashboard", label: "My Assignments" },
+    { href: "/customers", label: "Customers" },
     // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
     { href: "/tickets", label: "Support Tickets" },
     { href: "/projects", label: "Project Tasks" },
@@ -78,15 +82,19 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   ],
   billing: [
     { href: "/dashboard", label: "Dashboard" },
+    { href: "/customers", label: "Customers" },
     // Contracts & Agreements + Billing/Collections/Accounting trees render in AppShell
   ],
   hr: [
     { href: "/dashboard", label: "HR Home" },
+    { href: "/customers", label: "Customers" },
+    { href: "/customer-approvals", label: "Approvals" },
     { href: "/hr-analytics", label: "HR Analytics" },
     { href: "/hr-positions", label: "Positions" },
   ],
   customer: [
     { href: "/dashboard", label: "Customer Home" },
+    { href: "/pending-approval", label: "Pending Approval" },
     { href: "/my-contracts", label: "My Contracts & Agreements" },
     { href: "/my-projects", label: "Projects" },
     { href: "/service-usage", label: "Service Usage" },
@@ -137,7 +145,9 @@ export function roleHomePath(_role: UserRole) {
 export function canAccessPath(role: UserRole, pathname: string): boolean {
   if (pathname === "/dashboard" || pathname.startsWith("/profile")) return true;
   const allowed = ROLE_NAV[role].some(
-    (item) => pathname === item.href || pathname.startsWith(item.href + "/")
+    (item) =>
+      !item.disabled &&
+      (pathname === item.href || pathname.startsWith(item.href + "/"))
   );
   if (allowed) return true;
 
@@ -156,6 +166,10 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/time-costs",
       "/contracts",
       "/billing-cost-approvals",
+      "/customer-approvals",
+      "/operations",
+      "/controls",
+      "/hr-analytics",
     ],
     technician: ["/contracts", "/customers"],
     billing: [
@@ -172,7 +186,8 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/accounting",
       "/hr-analytics",
     ],
-    customer: ["/my-invoices", "/make-payment", "/tickets"],
+    hr: ["/contracts", "/customers", "/customer-approvals"],
+    customer: ["/projects", "/my-invoices", "/make-payment", "/tickets", "/pending-approval"],
   };
 
   return (shared[role] ?? []).some(

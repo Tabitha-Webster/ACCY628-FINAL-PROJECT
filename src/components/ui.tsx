@@ -60,22 +60,30 @@ export function StatusBadge({ status, label }: { status: string; label?: string 
   return <span className={`badge ${statusBadgeClass(status)}`}>{label ?? statusLabel(status)}</span>;
 }
 
-export function PageHeader({
-  title,
-  description,
-  actions,
-}: {
+export type PageHeaderProps = {
   title: string;
+  /** Short supporting line under the title. */
   description?: string;
+  /** Optional primary actions (buttons/links) aligned to the right on larger screens. */
   actions?: React.ReactNode;
-}) {
+};
+
+/**
+ * Shared page header: title, optional description, optional action area.
+ * Spacing matches PageLayout; standalone use keeps a bottom margin.
+ */
+export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <div className="mb-6">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {actions}
+    <div className="app-page-header-row mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <div className="min-w-0 flex-1 space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1>
+        {description ? (
+          <p className="max-w-3xl text-sm leading-relaxed opacity-70">{description}</p>
+        ) : null}
       </div>
-      {description ? <p className="mt-1 text-sm opacity-70">{description}</p> : null}
+      {actions ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end sm:pt-1">{actions}</div>
+      ) : null}
     </div>
   );
 }

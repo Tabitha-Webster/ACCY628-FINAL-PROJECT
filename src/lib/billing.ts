@@ -58,15 +58,21 @@ export function computeMonthlyUsage(
       continue;
     }
 
-    if (
-      ["billable", "out_of_scope"].includes(entry.classification) &&
-      ["approved", "not_required"].includes(entry.approval_status)
-    ) {
+    if (entry.classification === "out_of_scope") {
+      if (entry.approval_status === "approved") {
+        approvedBillableHours += hours;
+      } else if (entry.approval_status === "pending") {
+        unapprovedHours += hours;
+      }
+      continue;
+    }
+
+    if (entry.classification === "billable" && ["approved", "not_required"].includes(entry.approval_status)) {
       approvedBillableHours += hours;
       continue;
     }
 
-    if (["billable", "out_of_scope"].includes(entry.classification) && entry.approval_status === "pending") {
+    if (entry.classification === "billable" && entry.approval_status === "pending") {
       unapprovedHours += hours;
     }
   }

@@ -59,7 +59,13 @@ export type RevenueType =
   | "software_equipment"
   | "reimbursable";
 export type DisputeResolutionStatus = "open" | "under_review" | "resolved" | "rejected";
-export type CustomerStatus = "active" | "inactive" | "prospect" | "on_hold";
+export type CustomerStatus =
+  | "active"
+  | "inactive"
+  | "prospect"
+  | "on_hold"
+  | "pending_approval"
+  | "rejected";
 
 export type Customer = {
   id: string;
@@ -67,11 +73,15 @@ export type Customer = {
   industry: string | null;
   primary_contact: string | null;
   contact_email: string | null;
+  primary_contact_phone?: string | null;
   service_address: string | null;
   status: CustomerStatus;
   credit_terms: string | null;
   account_manager_id: string | null;
   notes: string | null;
+  approval_note?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
   created_at: string;
 };
 
@@ -379,6 +389,8 @@ export type Project = {
   software_budget: number | null;
   vendor_budget: number | null;
   customer_approval_status: ApprovalStatus | null;
+  customer_approved_by?: string | null;
+  customer_approved_at?: string | null;
   uses_milestone_billing: boolean | null;
   amount_billed: number | null;
   amount_collected: number | null;
@@ -396,6 +408,8 @@ export type ProjectMilestone = {
   completed: boolean;
   completed_at: string | null;
   approval_status: ApprovalStatus | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
   billing_status: BillingStatus | null;
   created_at: string;
 };
