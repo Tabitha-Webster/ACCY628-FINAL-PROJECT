@@ -2,13 +2,92 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Menu, Settings2, X } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Settings2, X } from "lucide-react";
 import { ThemeSelector } from "@/components/ThemeSelector";
 import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
-import { ROLE_NAV, type Profile, type UserRole } from "@/lib/constants";
+import { ROLE_NAV, type NavItem, type Profile, type UserRole } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
 import { useEffect, useState } from "react";
+
+function isNavActive(pathname: string, href: string) {
+  if (pathname === href) return true;
+  // Avoid treating every /contracts/* page as active for the parent only when matching children separately
+  return pathname.startsWith(href + "/");
+}
+
+function ContractsNavItem({
+  item,
+  pathname,
+  onNavigate,
+}: {
+  item: NavItem;
+  pathname: string;
+  onNavigate?: () => void;
+}) {
+  const childActive = item.children?.some(
+    (child) => pathname === child.href || pathname.startsWith(child.href + "/")
+  );
+  const [open, setOpen] = useState(Boolean(childActive));
+
+  useEffect(() => {
+    if (childActive) setOpen(true);
+  }, [childActive, pathname]);
+
+  if (!item.children?.length) {
+    const active = isNavActive(pathname, item.href);
+    return (
+      <Link
+        href={item.href}
+        className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+          active ? "bg-primary text-primary-content" : "hover:bg-base-200"
+        }`}
+        onClick={onNavigate}
+      >
+        {item.label}
+      </Link>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
+          childActive || open ? "bg-base-200" : "hover:bg-base-200"
+        }`}
+        aria-expanded={open}
+        aria-controls={`nav-submenu-${item.href.replace(/\//g, "-")}`}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span>{item.label}</span>
+        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? (
+        <div
+          id={`nav-submenu-${item.href.replace(/\//g, "-")}`}
+          className="ml-3 space-y-1 border-l border-base-300 pl-2"
+        >
+          {item.children.map((child) => {
+            const active = pathname === child.href || pathname.startsWith(child.href + "/");
+            return (
+              <Link
+                key={child.href}
+                href={child.href}
+                className={`block rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                  active ? "bg-primary text-primary-content font-medium" : "hover:bg-base-200 opacity-90"
+                }`}
+                onClick={onNavigate}
+              >
+                {child.label}
+              </Link>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function SideNav({
   profile,
@@ -35,21 +114,24 @@ function SideNav({
         </div>
       </div>
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3" aria-label="Main">
-        {nav.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
-          return (
+        {nav.map((item) =>
+          item.children?.length ? (
+            <ContractsNavItem key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />
+          ) : (
             <Link
               key={item.href}
               href={item.href}
               className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                active ? "bg-primary text-primary-content" : "hover:bg-base-200"
+                isNavActive(pathname, item.href)
+                  ? "bg-primary text-primary-content"
+                  : "hover:bg-base-200"
               }`}
               onClick={onNavigate}
             >
               {item.label}
             </Link>
-          );
-        })}
+          )
+        )}
       </nav>
       <div className="space-y-3 border-t border-base-300 p-4">
         {showSettings && onOpenSettings ? (

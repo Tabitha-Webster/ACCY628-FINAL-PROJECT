@@ -9,7 +9,7 @@ import { canCreateContracts, suggestNextContractNumber } from "@/lib/contracts";
 export default async function NewContractPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!canCreateContracts(profile.role)) redirect("/contracts");
+  if (!canCreateContracts(profile.role)) redirect("/contracts/reports");
 
   const supabase = await createClient();
   const [{ data: customers, error: customersError }, { data: managers }, { data: numbers }] =
@@ -46,8 +46,8 @@ export default async function NewContractPage() {
   return (
     <div>
       <div className="mb-4">
-        <Link href="/contracts" className="btn btn-ghost btn-sm">
-          ← Back to contracts
+        <Link href="/contracts/reports" className="btn btn-ghost btn-sm">
+          ← Back to reports
         </Link>
       </div>
       <ContractForm

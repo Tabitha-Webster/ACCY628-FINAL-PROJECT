@@ -96,7 +96,7 @@ export function ContractLifecycleActions({
         setError(deleteError.message);
         return;
       }
-      router.push("/contracts");
+      router.push("/contracts/reports");
       router.refresh();
     } finally {
       setBusy(null);

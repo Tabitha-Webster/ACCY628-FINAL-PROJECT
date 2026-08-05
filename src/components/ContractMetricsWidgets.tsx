@@ -94,9 +94,10 @@ export function ContractMetricsWidgets({
       </div>
 
       {showTables ? (
-        <div className="grid gap-4 lg:grid-cols-3">
-          <ReportTable
+        <div className="space-y-3">
+          <ExpandableReportTable
             title="Expiring contracts"
+            count={metrics.expiringContracts}
             empty="No contracts expiring in the next 90 days."
             headers={["Contract", "End", "Days"]}
             rows={metrics.expiringList.slice(0, 8).map((row) => (
@@ -113,8 +114,9 @@ export function ContractMetricsWidgets({
             ))}
           />
 
-          <ReportTable
+          <ExpandableReportTable
             title="Renewals due"
+            count={metrics.renewalsDue}
             empty="No renewals due in the next 90 days."
             headers={["Contract", "Renewal", "Type"]}
             rows={metrics.renewalsList.slice(0, 8).map((row) => (
@@ -133,8 +135,9 @@ export function ContractMetricsWidgets({
             ))}
           />
 
-          <ReportTable
+          <ExpandableReportTable
             title="Support hours utilization"
+            count={metrics.utilizationList.length}
             empty="No active contracts with hour pools."
             headers={["Contract", "Used", "Util."]}
             rows={metrics.utilizationList.slice(0, 8).map((row) => (
@@ -159,36 +162,44 @@ export function ContractMetricsWidgets({
   );
 }
 
-function ReportTable({
+function ExpandableReportTable({
   title,
+  count,
   empty,
   headers,
   rows,
 }: {
   title: string;
+  count: number;
   empty: string;
   headers: string[];
   rows: React.ReactNode[];
 }) {
   return (
-    <div className="rounded-box border border-base-300 bg-base-100 p-4">
-      <h3 className="mb-3 text-sm font-semibold">{title}</h3>
-      {rows.length === 0 ? (
-        <EmptyState title={empty} />
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="table table-sm">
-            <thead>
-              <tr>
-                {headers.map((h) => (
-                  <th key={h}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>{rows}</tbody>
-          </table>
-        </div>
-      )}
+    <div className="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
+      <input type="checkbox" aria-label={`Expand ${title}`} />
+      <div className="collapse-title min-h-0 py-3 text-sm font-semibold">
+        {title}
+        <span className="ml-2 font-normal opacity-50">({count})</span>
+      </div>
+      <div className="collapse-content px-4 pb-4">
+        {rows.length === 0 ? (
+          <EmptyState title={empty} />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="table table-sm">
+              <thead>
+                <tr>
+                  {headers.map((h) => (
+                    <th key={h}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>{rows}</tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

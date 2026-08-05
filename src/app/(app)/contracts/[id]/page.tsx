@@ -189,8 +189,8 @@ export default async function ContractDetailPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
-        <Link href="/contracts" className="btn btn-ghost btn-sm">
-          ← Back to contracts
+        <Link href="/contracts/reports" className="btn btn-ghost btn-sm">
+          ← Back to reports
         </Link>
         {permissions.report ? (
           <Link href="/contracts/reports" className="btn btn-ghost btn-sm">

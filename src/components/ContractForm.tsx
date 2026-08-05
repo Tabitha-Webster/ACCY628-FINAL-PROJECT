@@ -82,13 +82,23 @@ export function ContractForm({
     emptyContractFormValues(initialValues)
   );
   const [baseline] = useState<ContractFormValues>(() => emptyContractFormValues(initialValues));
+  const [selectedSlaLevel, setSelectedSlaLevel] = useState<
+    "critical" | "high" | "medium" | "low"
+  >("critical");
   const [changeReason, setChangeReason] = useState("");
   const [fieldErrors, setFieldErrors] = useState<ContractFormFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const title = mode === "create" ? "New Contract" : "Edit Contract";
-  const cancelHref = mode === "edit" && contractId ? `/contracts/${contractId}` : "/contracts";
+  const cancelHref = mode === "edit" && contractId ? `/contracts/${contractId}` : "/contracts/reports";
+
+  const slaHoursFieldKey = {
+    critical: "sla_critical_response_hours",
+    high: "sla_high_response_hours",
+    medium: "sla_medium_response_hours",
+    low: "sla_low_response_hours",
+  } as const satisfies Record<typeof selectedSlaLevel, keyof ContractFormValues>;
 
   function update<K extends keyof ContractFormValues>(key: K, value: ContractFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -600,44 +610,36 @@ export function ContractForm({
           Coverage & SLA
         </h2>
         <div className={fieldGridClass}>
-          <FormField label="SLA Critical (hrs)">
-            <input
-              type="number"
-              min={0}
-              step="0.1"
-              className={fieldControlClass}
-              value={values.sla_critical_response_hours}
-              onChange={(e) => update("sla_critical_response_hours", e.target.value)}
-            />
+          <FormField label="SLA level">
+            <select
+              className={selectControlClass}
+              value={selectedSlaLevel}
+              onChange={(e) =>
+                setSelectedSlaLevel(e.target.value as "critical" | "high" | "medium" | "low")
+              }
+            >
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
           </FormField>
-          <FormField label="SLA High (hrs)">
+          <FormField
+            label="Response hours"
+            error={fieldErrors[slaHoursFieldKey[selectedSlaLevel]]}
+          >
             <input
-              type="number"
-              min={0}
-              step="0.1"
+              type="text"
+              inputMode="decimal"
               className={fieldControlClass}
-              value={values.sla_high_response_hours}
-              onChange={(e) => update("sla_high_response_hours", e.target.value)}
-            />
-          </FormField>
-          <FormField label="SLA Medium (hrs)">
-            <input
-              type="number"
-              min={0}
-              step="0.1"
-              className={fieldControlClass}
-              value={values.sla_medium_response_hours}
-              onChange={(e) => update("sla_medium_response_hours", e.target.value)}
-            />
-          </FormField>
-          <FormField label="SLA Low (hrs)">
-            <input
-              type="number"
-              min={0}
-              step="0.1"
-              className={fieldControlClass}
-              value={values.sla_low_response_hours}
-              onChange={(e) => update("sla_low_response_hours", e.target.value)}
+              value={values[slaHoursFieldKey[selectedSlaLevel]]}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (next === "" || /^\d*\.?\d*$/.test(next)) {
+                  update(slaHoursFieldKey[selectedSlaLevel], next);
+                }
+              }}
+              placeholder="Hours"
             />
           </FormField>
           <FormField label="Covered sites / locations" className="sm:col-span-2 lg:col-span-3">

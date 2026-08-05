@@ -45,14 +45,22 @@ export const DEMO_ACCOUNTS = [
 export type NavItem = {
   href: string;
   label: string;
+  children?: NavItem[];
 };
 
 export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   manager: [
     { href: "/dashboard", label: "Executive Dashboard" },
     { href: "/customers", label: "Customers" },
-    { href: "/contracts", label: "Contracts & Agreements" },
-    { href: "/contracts/reports", label: "Contract Reports" },
+    {
+      href: "/contracts",
+      label: "Contracts & Agreements",
+      children: [
+        { href: "/contracts/reports", label: "Reports & Dashboard" },
+        { href: "/contracts/renewals", label: "Renewal & Expiration" },
+        { href: "/contracts/new", label: "New Contract" },
+      ],
+    },
     { href: "/operations", label: "Service Operations" },
     { href: "/profitability", label: "Profitability" },
     { href: "/billing-collections", label: "Billing and Collections" },
@@ -60,7 +68,13 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   ],
   technician: [
     { href: "/dashboard", label: "My Assignments" },
-    { href: "/contracts", label: "Contracts & Agreements" },
+    {
+      href: "/contracts",
+      label: "Contracts & Agreements",
+      children: [
+        { href: "/contracts/renewals", label: "Renewal & Expiration" },
+      ],
+    },
     { href: "/tickets", label: "Support Tickets" },
     { href: "/projects", label: "Project Tasks" },
     { href: "/time-costs", label: "Submit Time and Costs" },
@@ -68,8 +82,14 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   ],
   billing: [
     { href: "/dashboard", label: "Billing Dashboard" },
-    { href: "/contracts", label: "Contracts & Agreements" },
-    { href: "/contracts/reports", label: "Contract Reports" },
+    {
+      href: "/contracts",
+      label: "Contracts & Agreements",
+      children: [
+        { href: "/contracts/reports", label: "Reports & Dashboard" },
+        { href: "/contracts/renewals", label: "Renewal & Expiration" },
+      ],
+    },
     { href: "/billing-review", label: "Billing Review" },
     { href: "/invoices", label: "Invoices" },
     { href: "/payments", label: "Payments" },
