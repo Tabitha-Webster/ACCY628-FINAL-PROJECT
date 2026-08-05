@@ -624,6 +624,12 @@ async function BillingDashboard({ profile }: { profile: Profile }) {
     <div>
       <PageHeader title="Billing Dashboard" description={`Welcome back, ${profile.full_name}. Here's the state of billing and collections.`} />
 
+      <p className="mb-4 text-sm">
+        <Link href="/billing-review" className="link link-primary">
+          Open Billing Review
+        </Link>
+      </p>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Ready to Bill" value={String(readyToBill)} tone={readyToBill > 0 ? "warning" : "default"} />
         <StatCard label="Draft Invoices" value={String(draftInvoices.length)} />

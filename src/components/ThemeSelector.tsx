@@ -1,47 +1,67 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Palette } from "lucide-react";
+
+export const DEFAULT_THEME = "corporate";
+export const THEME_STORAGE_KEY = "servicesync-theme";
 
 const THEMES = [
-  { id: "corporate", label: "Corporate" },
-  { id: "business", label: "Business" },
-  { id: "nord", label: "Nord" },
-  { id: "emerald", label: "Emerald" },
-  { id: "cupcake", label: "Cupcake" },
-  { id: "dim", label: "Dim" },
+  { id: "corporate", label: "Corporate", hint: "Default light business look" },
+  { id: "business", label: "Business", hint: "Dark professional look" },
+  { id: "nord", label: "Nord", hint: "Cool muted palette" },
+  { id: "emerald", label: "Emerald", hint: "Green accent theme" },
+  { id: "cupcake", label: "Cupcake", hint: "Soft light theme" },
+  { id: "dim", label: "Dim", hint: "Low-contrast dark theme" },
 ] as const;
 
-export function ThemeSelector({ compact = false }: { compact?: boolean }) {
-  const [theme, setTheme] = useState("corporate");
+export function ThemeSelector() {
+  const [theme, setTheme] = useState(DEFAULT_THEME);
 
   useEffect(() => {
-    const saved = localStorage.getItem("servicesync-theme") || "corporate";
+    const saved = localStorage.getItem(THEME_STORAGE_KEY) || DEFAULT_THEME;
     setTheme(saved);
     document.documentElement.setAttribute("data-theme", saved);
   }, []);
 
   function onChange(next: string) {
     setTheme(next);
-    localStorage.setItem("servicesync-theme", next);
+    localStorage.setItem(THEME_STORAGE_KEY, next);
     document.documentElement.setAttribute("data-theme", next);
   }
 
   return (
-    <label className={`flex items-center gap-2 ${compact ? "" : "w-full"}`}>
-      {!compact && <Palette className="h-4 w-4 opacity-70" />}
-      <select
-        className={`select select-bordered ${compact ? "select-sm w-36" : "w-full"}`}
-        value={theme}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label="Theme"
-      >
-        {THEMES.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-medium">Theme</legend>
+      <p className="text-xs opacity-70">Corporate is the default. Your choice is saved on this device.</p>
+      <div className="space-y-2">
+        {THEMES.map((item) => {
+          const selected = theme === item.id;
+          return (
+            <label
+              key={item.id}
+              className={`flex cursor-pointer items-start gap-3 rounded-box border px-3 py-2 ${
+                selected ? "border-primary bg-primary/10" : "border-base-300"
+              }`}
+            >
+              <input
+                type="radio"
+                className="radio radio-primary radio-sm mt-0.5"
+                name="servicesync-theme"
+                value={item.id}
+                checked={selected}
+                onChange={() => onChange(item.id)}
+              />
+              <span className="min-w-0">
+                <span className="flex items-center gap-2">
+                  <span className="font-medium">{item.label}</span>
+                  {item.id === DEFAULT_THEME ? <span className="badge badge-ghost badge-sm">Default</span> : null}
+                </span>
+                <span className="block text-xs opacity-60">{item.hint}</span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }

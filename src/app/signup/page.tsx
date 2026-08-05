@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { ThemeSelector } from "@/components/ThemeSelector";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -49,12 +48,9 @@ export default function SignupPage() {
     <div className="flex min-h-screen items-center justify-center bg-base-200 p-4">
       <div className="card w-full max-w-md bg-base-100 shadow-xl">
         <div className="card-body gap-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="card-title">Create account</h1>
-              <p className="text-sm opacity-70">ServiceSync MSP</p>
-            </div>
-            <ThemeSelector compact />
+          <div>
+            <h1 className="card-title">Create account</h1>
+            <p className="text-sm opacity-70">ServiceSync MSP</p>
           </div>
           {error ? <div className="alert alert-error text-sm">{error}</div> : null}
           {message ? <div className="alert alert-success text-sm">{message}</div> : null}
