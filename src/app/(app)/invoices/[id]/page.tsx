@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { canUseBillingTools } from "@/lib/constants";
 import { DataTable, EmptyState, ErrorState, Money, PageHeader, StatusBadge } from "@/components/ui";
 import { InvoiceStatusActions } from "@/components/InvoiceStatusActions";
 import { formatDate, formatHours } from "@/lib/format";
@@ -26,7 +27,7 @@ export default async function InvoiceDetailPage({
 }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!["manager", "billing"].includes(profile.role)) redirect("/dashboard");
+  if (!canUseBillingTools(profile.role)) redirect("/dashboard");
 
   const { id } = await params;
   const supabase = await createClient();

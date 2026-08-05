@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import type { Profile } from "@/lib/constants";
+import { type Profile } from "@/lib/constants";
 import {
   PageHeader,
   StatCard,
@@ -99,6 +99,7 @@ export default async function DashboardPage({
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
 
+  if (profile.role === "admin") redirect("/admin");
   if (profile.role === "manager") return <ManagerDashboard profile={profile} />;
   if (profile.role === "technician") return <TechnicianDashboard profile={profile} />;
   if (profile.role === "billing") {

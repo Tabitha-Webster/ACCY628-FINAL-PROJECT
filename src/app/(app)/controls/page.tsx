@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
+import { isManagerRole } from "@/lib/constants";
 import { PageHeader } from "@/components/ui";
 
 type Control = {
@@ -126,7 +127,7 @@ const CATEGORY_ORDER = ["Access", "Contract", "Work", "Billing", "Payment", "Dat
 export default async function ControlsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (profile.role !== "manager") redirect("/dashboard");
+  if (!isManagerRole(profile.role)) redirect("/dashboard");
 
   return (
     <div className="space-y-6">

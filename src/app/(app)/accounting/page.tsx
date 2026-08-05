@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { canUseBillingTools } from "@/lib/constants";
 import { AccountingExplainer, DataTable, EmptyState, ErrorState, Money, PageHeader, StatCard } from "@/components/ui";
 import { PeriodViewControls } from "@/components/PeriodViewControls";
 import { formatCurrency, statusLabel } from "@/lib/format";
@@ -20,7 +21,7 @@ export default async function AccountingPage({
 }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!["manager", "billing"].includes(profile.role)) redirect("/dashboard");
+  if (!canUseBillingTools(profile.role)) redirect("/dashboard");
 
   const params = await searchParams;
   const period = resolveDashboardPeriod(params.view, params.period);

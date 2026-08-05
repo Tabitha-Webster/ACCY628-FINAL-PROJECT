@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { roleHomePath, type UserRole } from "@/lib/constants";
 import { DemoLoginSelector } from "@/components/DemoLoginSelector";
 
 export default function LoginPage() {
@@ -37,7 +38,14 @@ export default function LoginPage() {
       );
       return;
     }
-    router.push("/dashboard");
+
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("email", email.trim().toLowerCase())
+      .maybeSingle();
+    const role = (profileData?.role as UserRole | undefined) ?? "manager";
+    router.push(roleHomePath(role));
     router.refresh();
   }
 

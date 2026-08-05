@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { isManagerRole } from "@/lib/constants";
 import { PageHeader, DataTable, EmptyState, StatusBadge, Money, Hours, DateText } from "@/components/ui";
 import { TimeCostForm } from "@/components/TimeCostForm";
 import { LARGE_COST_THRESHOLD } from "@/lib/time-cost-config";
@@ -10,7 +11,7 @@ import Link from "next/link";
 export default async function TimeCostsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (profile.role !== "technician" && profile.role !== "manager") redirect("/dashboard");
+  if (profile.role !== "technician" && !isManagerRole(profile.role)) redirect("/dashboard");
 
   const supabase = await createClient();
   const isManager = profile.role === "manager";
