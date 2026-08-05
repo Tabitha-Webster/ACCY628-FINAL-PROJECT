@@ -8,6 +8,10 @@ import { useState } from "react";
 type NavLink = { href: string; label: string };
 
 function pathActive(pathname: string, href: string) {
+  if (href === "/contracts") {
+    // Avoid treating /contracts/reports or /contracts/renewals as Manage Contracts.
+    return pathname === "/contracts" || /^\/contracts\/(?!reports(?:\/|$)|renewals(?:\/|$)|new(?:\/|$)).+/.test(pathname);
+  }
   return pathname === href || pathname.startsWith(href + "/");
 }
 
@@ -26,6 +30,7 @@ export function ContractsAgreementsNavTree({
 }) {
   const pathname = usePathname();
   const links: NavLink[] = [
+    { href: "/contracts", label: "Manage Contracts" },
     ...(showReports ? [{ href: "/contracts/reports", label: "Reports & Dashboard" }] : []),
     { href: "/contracts/renewals", label: "Renewal & Expiration" },
     ...(showNewContract ? [{ href: "/contracts/new", label: "New Contract" }] : []),

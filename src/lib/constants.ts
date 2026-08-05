@@ -61,6 +61,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/customers", label: "Customers" },
     // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
     { href: "/operations", label: "Service Operations" },
+    { href: "/time-cost-approvals", label: "Approve Time & Costs" },
     { href: "/profitability", label: "Profitability" },
     { href: "/billing-collections", label: "Billing and Collections" },
     { href: "/payments", label: "Payment History" },
@@ -154,6 +155,7 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/accounts-receivable",
       "/time-costs",
       "/contracts",
+      "/billing-cost-approvals",
     ],
     technician: ["/contracts", "/customers"],
     billing: [
@@ -163,6 +165,7 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/tickets",
       "/ready-to-bill",
       "/billing-review",
+      "/billing-cost-approvals",
       "/invoices",
       "/payments",
       "/accounts-receivable",

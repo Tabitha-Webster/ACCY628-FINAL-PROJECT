@@ -1,9 +1,16 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { EmptyState, ErrorState, PageHeader, StatusBadge } from "@/components/ui";
 import { ContractMetricsWidgets } from "@/components/ContractMetricsWidgets";
-import { canViewContractReports, fetchContractReportMetrics } from "@/lib/contracts";
+import { ContractPermissionActions } from "@/components/ContractPermissionActions";
+import {
+  canCreateContracts,
+  canViewContractReports,
+  describeContractPermissions,
+  fetchContractReportMetrics,
+} from "@/lib/contracts";
 
 export default async function ContractReportsPage() {
   const profile = await getCurrentProfile();
@@ -12,22 +19,36 @@ export default async function ContractReportsPage() {
 
   const supabase = await createClient();
   const { metrics, error } = await fetchContractReportMetrics(supabase);
+  const permissions = describeContractPermissions(profile.role);
+  const canCreate = canCreateContracts(profile.role);
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href="/contracts" className="btn btn-ghost btn-sm">
+          ← Manage contracts
+        </Link>
+        <Link href="/contracts/renewals" className="btn btn-outline btn-sm">
+          Renewal & Expiration
+        </Link>
+        {canCreate ? (
+          <Link href="/contracts/new" className="btn btn-primary btn-sm">
+            Create
+          </Link>
+        ) : null}
+      </div>
+
       <PageHeader
         title="Reports & Dashboard"
         description="Active agreements, expirations, renewals, MRR/ACV, SLA compliance, and support-hour utilization."
       />
 
+      <ContractPermissionActions items={permissions} showDenied />
+
       {error ? <ErrorState message={error.message} /> : null}
 
       {!error ? (
-        <ContractMetricsWidgets
-          metrics={metrics}
-          title={null}
-          linkToFullReport={false}
-        />
+        <ContractMetricsWidgets metrics={metrics} title={null} linkToFullReport={false} />
       ) : null}
 
       {!error ? (
@@ -37,7 +58,9 @@ export default async function ContractReportsPage() {
           </h2>
           <div className="flex flex-wrap gap-2">
             {Object.entries(metrics.byStatus).map(([status, count]) => (
-              <StatusBadge key={status} status={status} label={`${status.replace(/_/g, " ")}: ${count}`} />
+              <Link key={status} href={`/contracts?status=${status}`} className="link">
+                <StatusBadge status={status} label={`${status.replace(/_/g, " ")}: ${count}`} />
+              </Link>
             ))}
           </div>
           {metrics.activeContracts === 0 ? (

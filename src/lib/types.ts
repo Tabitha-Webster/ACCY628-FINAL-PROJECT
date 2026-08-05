@@ -2,7 +2,7 @@
 // Mirrors the public schema in Supabase; kept hand-written since no generated
 // Database types exist yet in this project.
 
-export type ApprovalStatus = "not_required" | "pending" | "approved" | "rejected";
+export type ApprovalStatus = "not_required" | "pending" | "awaiting_billing" | "approved" | "rejected";
 export type BillingStatus = "unbilled" | "ready" | "billed" | "excluded";
 export type WorkClassification = "included" | "billable" | "out_of_scope";
 export type TicketPriority = "low" | "medium" | "high" | "critical";
@@ -304,6 +304,7 @@ export type TimeEntry = {
   internal_cost_rate: number;
   billing_rate: number | null;
   labor_cost: number | null;
+  unusual_hours_flag?: boolean;
   approval_status: ApprovalStatus;
   billing_status: BillingStatus;
   approved_by: string | null;
@@ -330,7 +331,9 @@ export type DirectCost = {
   receipt_reference: string | null;
   description: string;
   entered_by: string | null;
+  late_entry_flag?: boolean;
   entered_after_invoice?: boolean;
+  approval_threshold_required?: boolean;
   approval_status: ApprovalStatus;
   billing_status: BillingStatus;
   approved_by: string | null;
