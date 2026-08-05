@@ -7,6 +7,7 @@ import type {
   ContractStatus,
   ContractVersion,
 } from "@/lib/types";
+import { CONTRACT_BILLING_SELECT } from "./billing";
 
 export type ContractListRow = Pick<
   Contract,
@@ -20,7 +21,15 @@ export type ContractListRow = Pick<
   | "renewal_type"
   | "payment_terms"
   | "billing_frequency"
+  | "billing_method"
+  | "billing_status"
+  | "next_invoice_date"
+  | "last_invoice_date"
   | "monthly_recurring_fee"
+  | "included_hours_per_month"
+  | "additional_hourly_rate"
+  | "overages_allowed"
+  | "overage_charges"
   | "customer_id"
   | "assigned_manager_id"
 > & {
@@ -52,7 +61,7 @@ export type ContractDetailRow = Contract & {
 };
 
 const LIST_SELECT =
-  "id, customer_id, contract_number, name, status, contract_type, start_date, end_date, renewal_type, payment_terms, billing_frequency, monthly_recurring_fee, assigned_manager_id, customers(id, name), assigned_manager:profiles!contracts_assigned_manager_id_fkey(id, full_name)";
+  "id, customer_id, contract_number, name, status, contract_type, start_date, end_date, renewal_type, payment_terms, billing_frequency, billing_method, billing_status, next_invoice_date, last_invoice_date, monthly_recurring_fee, included_hours_per_month, additional_hourly_rate, overages_allowed, overage_charges, assigned_manager_id, customers(id, name), assigned_manager:profiles!contracts_assigned_manager_id_fkey(id, full_name)";
 
 const DETAIL_SELECT =
   "*, customers(id, name, primary_contact, contact_email, service_address, status), assigned_manager:profiles!contracts_assigned_manager_id_fkey(id, full_name, email), sales_representative:profiles!contracts_sales_representative_id_fkey(id, full_name, email), created_by_profile:profiles!contracts_created_by_fkey(id, full_name, email), updated_by_profile:profiles!contracts_updated_by_fkey(id, full_name, email)";
@@ -103,6 +112,28 @@ export async function listActiveContracts(
     .eq("status", "active" satisfies ContractStatus)
     .order("name");
 
+  if (options?.customerId) {
+    query = query.eq("customer_id", options.customerId);
+  }
+
+  return query;
+}
+
+/** Full billing terms for Ready to Bill / invoice generation (contract-to-cash). */
+export async function listContractsForBilling(
+  supabase: SupabaseClient,
+  options?: { status?: ContractStatus; customerId?: string }
+) {
+  let query = supabase
+    .from("contracts")
+    .select(`${CONTRACT_BILLING_SELECT}, customers(id, name)`)
+    .order("next_invoice_date", { ascending: true });
+
+  if (options?.status) {
+    query = query.eq("status", options.status);
+  } else {
+    query = query.eq("status", "active" satisfies ContractStatus);
+  }
   if (options?.customerId) {
     query = query.eq("customer_id", options.customerId);
   }

@@ -11,7 +11,7 @@ import {
 } from "@/components/ui";
 import { formatDate, formatDateTime, statusLabel } from "@/lib/format";
 import {
-  canManageContracts,
+  canRenewContracts,
   canViewContractsModule,
   daysUntilDate,
   isEligibleForAutoRenew,
@@ -37,7 +37,7 @@ export default async function ContractRenewalsPage() {
   if (!profile) redirect("/login");
   if (!canViewContractsModule(profile.role)) redirect("/dashboard");
 
-  const canManage = canManageContracts(profile.role);
+  const canManage = canRenewContracts(profile.role);
   const supabase = await createClient();
 
   const { data: contractRows, error: contractsError } = await listContracts(supabase);

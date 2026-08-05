@@ -93,6 +93,8 @@ export type Contract = {
   one_time_setup_fee: number | null;
   included_hours_per_month: number;
   additional_hourly_rate: number;
+  overages_allowed: boolean | null;
+  overage_charges: number | null;
   sla_response_hours: number | null;
   sla_resolution_hours: number | null;
   sla_critical_response_hours: number | null;
@@ -110,6 +112,9 @@ export type Contract = {
   billing_timing: BillingTiming | string | null;
   billing_method: string | null;
   payment_terms: string | null;
+  next_invoice_date: string | null;
+  last_invoice_date: string | null;
+  billing_status: BillingStatus | string | null;
   deposit_amount: number | null;
   late_fee_terms: string | null;
   reimbursable_cost_policy: string | null;

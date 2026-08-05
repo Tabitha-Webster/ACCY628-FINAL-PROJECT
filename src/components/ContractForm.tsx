@@ -6,7 +6,10 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   BILLING_FREQUENCIES,
+  BILLING_METHOD_OPTIONS,
   BILLING_TIMINGS,
+  CONTRACT_BILLING_STATUSES,
+  CONTRACT_BILLING_STATUS_LABELS,
   CONTRACT_STATUSES,
   CONTRACT_STATUS_LABELS,
   CONTRACT_TYPE_LABELS,
@@ -443,10 +446,10 @@ export function ContractForm({
 
       <section className="rounded-box border border-base-300 bg-base-100 p-5">
         <h2 className="mb-4 text-center text-sm font-semibold uppercase tracking-wide opacity-60">
-          Fees & support hours
+          Billing integration
         </h2>
         <div className={fieldGridClass}>
-          <FormField label="Monthly recurring fee *" error={fieldErrors.monthly_recurring_fee}>
+          <FormField label="Monthly recurring revenue (MRR) *" error={fieldErrors.monthly_recurring_fee}>
             <input
               type="number"
               min={0}
@@ -487,7 +490,7 @@ export function ContractForm({
             </div>
           </FormField>
           <FormField
-            label={`Additional hourly rate${values.overages_allowed ? " *" : ""}`}
+            label={`Overage hourly rate${values.overages_allowed ? " *" : ""}`}
             error={fieldErrors.additional_hourly_rate}
           >
             <input
@@ -497,6 +500,17 @@ export function ContractForm({
               className={`${fieldControlClass} ${fieldErrors.additional_hourly_rate ? "input-error" : ""}`}
               value={values.additional_hourly_rate}
               onChange={(e) => update("additional_hourly_rate", e.target.value)}
+              disabled={!values.overages_allowed}
+            />
+          </FormField>
+          <FormField label="Overage charges (accrued)" error={fieldErrors.overage_charges}>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              className={`${fieldControlClass} ${fieldErrors.overage_charges ? "input-error" : ""}`}
+              value={values.overage_charges}
+              onChange={(e) => update("overage_charges", e.target.value)}
               disabled={!values.overages_allowed}
             />
           </FormField>
@@ -527,12 +541,19 @@ export function ContractForm({
             </select>
           </FormField>
           <FormField label="Billing method">
-            <input
-              className={fieldControlClass}
+            <select
+              className={selectControlClass}
               value={values.billing_method}
               onChange={(e) => update("billing_method", e.target.value)}
-              placeholder="invoice"
-            />
+            >
+              {Array.from(
+                new Set([values.billing_method, ...BILLING_METHOD_OPTIONS].filter(Boolean))
+              ).map((m) => (
+                <option key={m} value={m}>
+                  {String(m).replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
           </FormField>
           <FormField label="Invoice / payment terms">
             <input
@@ -540,6 +561,35 @@ export function ContractForm({
               value={values.payment_terms}
               onChange={(e) => update("payment_terms", e.target.value)}
               placeholder="Net 30"
+            />
+          </FormField>
+          <FormField label="Billing status" error={fieldErrors.billing_status}>
+            <select
+              className={selectControlClass}
+              value={values.billing_status}
+              onChange={(e) => update("billing_status", e.target.value)}
+            >
+              {CONTRACT_BILLING_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {CONTRACT_BILLING_STATUS_LABELS[s]}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Next invoice date">
+            <input
+              type="date"
+              className={fieldControlClass}
+              value={values.next_invoice_date}
+              onChange={(e) => update("next_invoice_date", e.target.value)}
+            />
+          </FormField>
+          <FormField label="Last invoice date">
+            <input
+              type="date"
+              className={fieldControlClass}
+              value={values.last_invoice_date}
+              onChange={(e) => update("last_invoice_date", e.target.value)}
             />
           </FormField>
         </div>

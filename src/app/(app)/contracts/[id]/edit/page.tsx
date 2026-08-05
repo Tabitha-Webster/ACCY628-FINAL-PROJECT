@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { ContractForm } from "@/components/ContractForm";
 import { ErrorState } from "@/components/ui";
-import { canManageContracts, getContractById, type ContractDetailRow } from "@/lib/contracts";
+import { canEditContracts, getContractById, type ContractDetailRow } from "@/lib/contracts";
 
 function str(value: string | number | null | undefined) {
   if (value == null) return "";
@@ -18,7 +18,7 @@ export default async function EditContractPage({
 }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!canManageContracts(profile.role)) redirect("/contracts");
+  if (!canEditContracts(profile.role)) redirect("/contracts");
 
   const { id } = await params;
   const supabase = await createClient();
@@ -51,7 +51,8 @@ export default async function EditContractPage({
   }
 
   const contract = contractData as ContractDetailRow;
-  const overagesAllowed = Number(contract.additional_hourly_rate ?? 0) > 0;
+  const overagesAllowed =
+    contract.overages_allowed ?? Number(contract.additional_hourly_rate ?? 0) > 0;
 
   return (
     <div>
@@ -89,10 +90,14 @@ export default async function EditContractPage({
           included_hours_per_month: str(contract.included_hours_per_month),
           additional_hourly_rate: str(contract.additional_hourly_rate),
           overages_allowed: overagesAllowed,
+          overage_charges: str(contract.overage_charges ?? 0),
           billing_frequency: contract.billing_frequency ?? "monthly",
           billing_method: contract.billing_method ?? "invoice",
           billing_timing: contract.billing_timing ?? "in_advance",
           payment_terms: contract.payment_terms ?? "",
+          next_invoice_date: contract.next_invoice_date ?? "",
+          last_invoice_date: contract.last_invoice_date ?? "",
+          billing_status: String(contract.billing_status ?? "unbilled"),
           included_services: contract.included_services ?? "",
           excluded_services: contract.excluded_services ?? "",
           supported_locations: contract.supported_locations ?? "",

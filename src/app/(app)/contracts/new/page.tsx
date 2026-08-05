@@ -4,15 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { ContractForm } from "@/components/ContractForm";
 import { ErrorState } from "@/components/ui";
-import {
-  canManageContracts,
-  suggestNextContractNumber,
-} from "@/lib/contracts";
+import { canCreateContracts, suggestNextContractNumber } from "@/lib/contracts";
 
 export default async function NewContractPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!canManageContracts(profile.role)) redirect("/contracts");
+  if (!canCreateContracts(profile.role)) redirect("/contracts");
 
   const supabase = await createClient();
   const [{ data: customers, error: customersError }, { data: managers }, { data: numbers }] =

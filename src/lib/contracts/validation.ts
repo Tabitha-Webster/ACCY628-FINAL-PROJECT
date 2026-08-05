@@ -1,5 +1,9 @@
-import type { ContractStatus, ContractType, RenewalType } from "@/lib/types";
+import type { BillingStatus, ContractStatus, ContractType, RenewalType } from "@/lib/types";
 import { CONTRACT_STATUSES, CONTRACT_TYPES, RENEWAL_TYPES } from "./constants";
+import {
+  CONTRACT_BILLING_STATUSES,
+  defaultNextInvoiceDate,
+} from "./billing";
 
 export type ContractFormValues = {
   contract_number: string;
@@ -23,10 +27,14 @@ export type ContractFormValues = {
   included_hours_per_month: string;
   additional_hourly_rate: string;
   overages_allowed: boolean;
+  overage_charges: string;
   billing_frequency: string;
   billing_method: string;
   billing_timing: string;
   payment_terms: string;
+  next_invoice_date: string;
+  last_invoice_date: string;
+  billing_status: string;
   included_services: string;
   excluded_services: string;
   supported_locations: string;
@@ -87,10 +95,14 @@ export function emptyContractFormValues(overrides?: Partial<ContractFormValues>)
     included_hours_per_month: "0",
     additional_hourly_rate: "0",
     overages_allowed: true,
+    overage_charges: "0",
     billing_frequency: "monthly",
     billing_method: "invoice",
     billing_timing: "in_advance",
     payment_terms: "Net 30",
+    next_invoice_date: "",
+    last_invoice_date: "",
+    billing_status: "unbilled",
     included_services: "",
     excluded_services: "",
     supported_locations: "",
@@ -170,6 +182,18 @@ export function validateContractFormValues(
     fieldErrors.additional_hourly_rate = "Hourly rate cannot be negative.";
   }
 
+  const overageCharges = parseNumber(values.overage_charges);
+  if (values.overage_charges.trim() !== "" && (overageCharges == null || overageCharges < 0)) {
+    fieldErrors.overage_charges = "Overage charges cannot be negative.";
+  }
+
+  if (
+    values.billing_status &&
+    !CONTRACT_BILLING_STATUSES.includes(values.billing_status as BillingStatus)
+  ) {
+    fieldErrors.billing_status = "Select a valid billing status.";
+  }
+
   if (options?.customerExists === false) {
     fieldErrors.customer_id = "Customer must exist before creating a contract.";
   }
@@ -225,11 +249,23 @@ export function contractFormToPayload(
     included_hours_per_month: numOrZero(values.included_hours_per_month),
     additional_hourly_rate: values.overages_allowed
       ? numOrZero(values.additional_hourly_rate)
-      : numOrZero(values.additional_hourly_rate),
+      : 0,
+    overages_allowed: values.overages_allowed,
+    overage_charges: numOrZero(values.overage_charges),
     billing_frequency: nullable(values.billing_frequency),
     billing_method: nullable(values.billing_method),
     billing_timing: nullable(values.billing_timing),
     payment_terms: nullable(values.payment_terms),
+    next_invoice_date:
+      nullable(values.next_invoice_date) ??
+      defaultNextInvoiceDate({
+        startDate: values.start_date,
+        effectiveDate: values.effective_date || values.start_date,
+        billingFrequency: values.billing_frequency || "monthly",
+        billingTiming: values.billing_timing || "in_advance",
+      }),
+    last_invoice_date: nullable(values.last_invoice_date),
+    billing_status: (values.billing_status || "unbilled") as BillingStatus,
     included_services: nullable(values.included_services),
     excluded_services: nullable(values.excluded_services),
     supported_locations: nullable(values.supported_locations),

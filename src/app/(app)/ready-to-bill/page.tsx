@@ -3,6 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { PageHeader } from "@/components/ui";
 import { ReadyToBillClient, type MonthlyFeeInfo, type ReadyItem } from "@/components/ReadyToBillClient";
+import {
+  getContractBillingTerms,
+  isContractReadyForRecurringBilling,
+  listContractsForBilling,
+  recurringAmountForPeriod,
+  type ContractBillingInput,
+} from "@/lib/contracts";
 
 export default async function ReadyToBillPage() {
   const profile = await getCurrentProfile();
@@ -18,7 +25,7 @@ export default async function ReadyToBillPage() {
     { data: timeEntries },
     { data: directCosts },
     { data: projects },
-    { data: activeContracts },
+    { data: billingContracts },
     { data: recurringRevenue },
   ] = await Promise.all([
     supabase
@@ -43,11 +50,7 @@ export default async function ReadyToBillPage() {
       .select("id, customer_id, contract_id, name, fixed_fee, estimated_billing_amount, status, customers(name)")
       .in("status", ["completed", "approved"])
       .in("billing_status", ["unbilled", "ready"]),
-    supabase
-      .from("contracts")
-      .select("id, name, monthly_recurring_fee, customers(name)")
-      .eq("status", "active")
-      .gt("monthly_recurring_fee", 0),
+    listContractsForBilling(supabase, { status: "active" }),
     supabase.from("revenue_records").select("contract_id").eq("revenue_type", "recurring").eq("period_month", periodMonth),
   ]);
 
@@ -101,24 +104,50 @@ export default async function ReadyToBillPage() {
     }),
   ];
 
-  const monthlyFees: MonthlyFeeInfo[] = (activeContracts ?? [])
-    .filter((c) => !contractsWithRevenue.has(c.id))
-    .map((c) => {
-      const customer = Array.isArray(c.customers) ? c.customers[0] : c.customers;
-      return {
-        contractId: c.id,
-        contractName: c.name,
-        customerName: customer?.name ?? "Unknown customer",
-        monthlyFee: Number(c.monthly_recurring_fee ?? 0),
-        periodLabel: now.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+  const monthlyFees: MonthlyFeeInfo[] = (billingContracts ?? [])
+    .map((row) => {
+      const contract = row as ContractBillingInput & {
+        name: string;
+        customers: { name: string } | { name: string }[] | null;
       };
-    });
+      const terms = getContractBillingTerms(contract);
+      const customer = Array.isArray(contract.customers) ? contract.customers[0] : contract.customers;
+      return { contract, terms, customer };
+    })
+    .filter(({ contract, terms }) => {
+      if (contractsWithRevenue.has(contract.id)) return false;
+      if (terms.monthlyRecurringRevenue <= 0 && terms.overageCharges <= 0) return false;
+      return (
+        isContractReadyForRecurringBilling(terms, now) ||
+        terms.billingStatus === "unbilled" ||
+        terms.overageCharges > 0
+      );
+    })
+    .map(({ contract, terms, customer }) => ({
+      contractId: terms.contractId,
+      contractName: contract.name,
+      customerName: customer?.name ?? "Unknown customer",
+      monthlyFee: terms.monthlyRecurringRevenue,
+      periodAmount:
+        recurringAmountForPeriod(terms.monthlyRecurringRevenue, terms.billingFrequency) +
+        terms.overageCharges,
+      billingFrequency: terms.billingFrequency ? String(terms.billingFrequency) : null,
+      billingMethod: terms.billingMethod,
+      invoiceTerms: terms.invoiceTerms,
+      includedHours: terms.includedSupportHours,
+      overageRate: terms.overageHourlyRate,
+      overageCharges: terms.overageCharges,
+      nextInvoiceDate: terms.nextInvoiceDate,
+      lastInvoiceDate: terms.lastInvoiceDate,
+      billingStatus: terms.billingStatus ? String(terms.billingStatus) : null,
+      periodLabel: now.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+    }));
 
   return (
     <div>
       <PageHeader
         title="Ready to Bill"
-        description="Approved, unbilled work waiting to be placed on a customer invoice."
+        description="Approved, unbilled work and contract billing terms waiting for customer invoices."
       />
       <ReadyToBillClient items={readyItems} monthlyFees={monthlyFees} />
     </div>

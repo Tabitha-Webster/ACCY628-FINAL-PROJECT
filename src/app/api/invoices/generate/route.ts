@@ -187,7 +187,13 @@ export async function POST(request: Request) {
 
   let paymentTerms: string | null = null;
   if (contractId) {
-    const { data: contract } = await supabase.from("contracts").select("payment_terms").eq("id", contractId).maybeSingle();
+    const { data: contract } = await supabase
+      .from("contracts")
+      .select(
+        "payment_terms, billing_frequency, billing_method, billing_timing, monthly_recurring_fee, included_hours_per_month, additional_hourly_rate, overages_allowed, overage_charges, next_invoice_date, last_invoice_date, billing_status"
+      )
+      .eq("id", contractId)
+      .maybeSingle();
     paymentTerms = contract?.payment_terms ?? null;
   }
 

@@ -19,13 +19,12 @@ import type { ContractStatus } from "@/lib/types";
 import {
   CONTRACT_STATUS_LABELS,
   CONTRACT_TYPE_LABELS,
-  canManageContracts,
+  CONTRACT_BILLING_STATUS_LABELS,
   canViewContractsModule,
   getContractById,
   getContractRelatedWork,
   getContractRenewalDate,
   getContractWarnings,
-  getLifecycleActions,
   isOperationalStatus,
   listContractChanges,
   listContractDocuments,
@@ -34,7 +33,9 @@ import {
   listContractRenewals,
   listContractServices,
   listContractVersions,
+  recurringAmountForPeriod,
   syncContractReminders,
+  getContractPermissions,
   unwrapAssignedManager,
   unwrapCustomer,
   unwrapProfile,
@@ -44,6 +45,7 @@ import {
 import { ContractDocumentsPanel } from "@/components/ContractDocumentsPanel";
 import { ContractChangesPanel } from "@/components/ContractChangesPanel";
 import { ContractRenewalsPanel } from "@/components/ContractRenewalsPanel";
+import { ContractLifecycleActions } from "@/components/ContractLifecycleActions";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -118,7 +120,8 @@ export default async function ContractDetailPage({
   const updatedBy = unwrapProfile(contract.updated_by_profile);
   const status = contract.status as ContractStatus;
   const statusLabelText = CONTRACT_STATUS_LABELS[status] ?? statusLabel(status);
-  const lifecycleActions = getLifecycleActions(status);
+  const permissions = getContractPermissions(profile.role);
+  const managerCanEdit = permissions.edit;
   const allWarnings = getContractWarnings(contract);
   const warnings = allWarnings.filter((w) => {
     if (["missing_payment_terms", "missing_billing_frequency"].includes(w.code)) return true;
@@ -140,7 +143,6 @@ export default async function ContractDetailPage({
       "renewal_soon",
     ].includes(w.code);
   });
-  const managerCanEdit = canManageContracts(profile.role);
   const renewalDate = getContractRenewalDate(contract);
   const autoRenew = (contract.renewal_type ?? "").toLowerCase() === "auto";
 
@@ -190,10 +192,15 @@ export default async function ContractDetailPage({
         <Link href="/contracts" className="btn btn-ghost btn-sm">
           ← Back to contracts
         </Link>
+        {permissions.report ? (
+          <Link href="/contracts/reports" className="btn btn-ghost btn-sm">
+            Reports
+          </Link>
+        ) : null}
         <Link href="/contracts/renewals" className="btn btn-outline btn-sm">
           Renewal & Expiration
         </Link>
-        {managerCanEdit ? (
+        {permissions.edit ? (
           <Link href={`/contracts/${id}/edit`} className="btn btn-primary btn-sm">
             Edit contract
           </Link>
@@ -240,7 +247,7 @@ export default async function ContractDetailPage({
           tone={usage === "over_limit" ? "error" : usage === "warning" ? "warning" : "default"}
         />
         <StatCard
-          label="Additional Hourly Rate"
+          label="Overage Hourly Rate"
           value={`$${Number(contract.additional_hourly_rate ?? 0).toFixed(2)}/hr`}
         />
       </div>
@@ -260,27 +267,14 @@ export default async function ContractDetailPage({
       >
         <p className="text-sm opacity-70">
           Status values: Draft, Pending Approval, Active, Suspended, Expired, Renewed, Cancelled.
+          Actions respect your role permissions (approve, renew, cancel, edit, delete).
         </p>
-        {lifecycleActions.length > 0 ? (
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {lifecycleActions.map((action) => (
-              <div
-                key={action.to}
-                className="rounded-box border border-dashed border-base-300 bg-base-200/40 p-3"
-              >
-                <p className="text-sm font-medium">{action.label}</p>
-                <p className="mt-1 text-xs opacity-60">{action.description}</p>
-                <p className="mt-2 text-xs opacity-50">
-                  {managerCanEdit
-                    ? "Action UI coming next — transition rules are ready."
-                    : "Managers control status changes."}
-                </p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-3 text-sm opacity-60">No further lifecycle transitions from this status.</p>
-        )}
+        <ContractLifecycleActions
+          contractId={id}
+          status={status}
+          role={profile.role}
+          profileId={profile.id}
+        />
       </Section>
 
       <Section title="Overview">
@@ -349,19 +343,11 @@ export default async function ContractDetailPage({
         </div>
       </Section>
 
-      <Section title="Commercial & Billing Terms">
+      <Section title="Billing Integration (Contract-to-Cash)">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field
-            label="Monthly Recurring Fee (MRR)"
+            label="Monthly Recurring Revenue (MRR)"
             value={<Money value={Number(contract.monthly_recurring_fee ?? 0)} />}
-          />
-          <Field
-            label="One-Time Setup Fee"
-            value={<Money value={Number(contract.one_time_setup_fee ?? contract.deposit_amount ?? 0)} />}
-          />
-          <Field
-            label="Deposit Amount"
-            value={<Money value={Number(contract.deposit_amount ?? 0)} />}
           />
           <Field
             label="Billing Frequency"
@@ -371,11 +357,57 @@ export default async function ContractDetailPage({
             label="Billing Method"
             value={contract.billing_method ? statusLabel(String(contract.billing_method)) : "—"}
           />
+          <Field label="Invoice Terms" value={contract.payment_terms} />
           <Field
             label="Billing Timing"
             value={contract.billing_timing ? statusLabel(String(contract.billing_timing)) : "—"}
           />
-          <Field label="Invoice Terms" value={contract.payment_terms} />
+          <Field
+            label="Billing Status"
+            value={
+              contract.billing_status
+                ? (CONTRACT_BILLING_STATUS_LABELS[
+                    contract.billing_status as keyof typeof CONTRACT_BILLING_STATUS_LABELS
+                  ] ?? statusLabel(String(contract.billing_status)))
+                : "—"
+            }
+          />
+          <Field label="Next Invoice Date" value={formatDate(contract.next_invoice_date)} />
+          <Field label="Last Invoice Date" value={formatDate(contract.last_invoice_date)} />
+          <Field
+            label="Period Recurring Amount"
+            value={
+              <Money
+                value={recurringAmountForPeriod(
+                  Number(contract.monthly_recurring_fee ?? 0),
+                  contract.billing_frequency
+                )}
+              />
+            }
+          />
+          <Field label="Included Support Hours" value={<Hours value={includedHours} />} />
+          <Field
+            label="Overage Hourly Rate"
+            value={
+              contract.overages_allowed === false ? (
+                "Overages not allowed"
+              ) : (
+                <Money value={Number(contract.additional_hourly_rate ?? 0)} />
+              )
+            }
+          />
+          <Field
+            label="Overage Charges (accrued)"
+            value={<Money value={Number(contract.overage_charges ?? 0)} />}
+          />
+          <Field
+            label="One-Time Setup Fee"
+            value={<Money value={Number(contract.one_time_setup_fee ?? contract.deposit_amount ?? 0)} />}
+          />
+          <Field
+            label="Deposit Amount"
+            value={<Money value={Number(contract.deposit_amount ?? 0)} />}
+          />
           <Field label="Tax Status" value={contract.tax_status ? statusLabel(contract.tax_status) : "—"} />
           <Field label="Late Fee Terms" value={contract.late_fee_terms} />
           <Field
@@ -398,8 +430,12 @@ export default async function ContractDetailPage({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Included Support Hours" value={<Hours value={includedHours} />} />
           <Field
-            label="Additional Hourly Rate"
+            label="Overage Hourly Rate"
             value={<Money value={Number(contract.additional_hourly_rate ?? 0)} />}
+          />
+          <Field
+            label="Overages Allowed"
+            value={contract.overages_allowed === false ? "No" : "Yes"}
           />
           <Field label="Remote Support" value={contract.remote_support ? "Included" : "Not included"} />
           <Field label="Onsite Support" value={contract.onsite_support ? "Included" : "Not included"} />
@@ -476,22 +512,24 @@ export default async function ContractDetailPage({
         )}
       </Section>
 
-      <Section title="Renewal & Expiration">
-        <ContractRenewalsPanel
-          contract={{
-            id: contract.id,
-            status: contract.status,
-            start_date: contract.start_date,
-            end_date: contract.end_date,
-            renewal_type: contract.renewal_type,
-            version_number: contract.version_number,
-          }}
-          profileId={profile.id}
-          canManage={managerCanEdit}
-          reminders={reminders as Parameters<typeof ContractRenewalsPanel>[0]["reminders"]}
-          renewals={renewals as Parameters<typeof ContractRenewalsPanel>[0]["renewals"]}
-        />
-      </Section>
+      <div id="renewal-expiration">
+        <Section title="Renewal & Expiration">
+          <ContractRenewalsPanel
+            contract={{
+              id: contract.id,
+              status: contract.status,
+              start_date: contract.start_date,
+              end_date: contract.end_date,
+              renewal_type: contract.renewal_type,
+              version_number: contract.version_number,
+            }}
+            profileId={profile.id}
+            canManage={permissions.renew || permissions.edit}
+            reminders={reminders as Parameters<typeof ContractRenewalsPanel>[0]["reminders"]}
+            renewals={renewals as Parameters<typeof ContractRenewalsPanel>[0]["renewals"]}
+          />
+        </Section>
+      </div>
 
       <Section title="Contract Documents">
         <ContractDocumentsPanel

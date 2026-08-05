@@ -22,6 +22,16 @@ export type MonthlyFeeInfo = {
   contractName: string;
   customerName: string;
   monthlyFee: number;
+  periodAmount: number;
+  billingFrequency: string | null;
+  billingMethod: string | null;
+  invoiceTerms: string | null;
+  includedHours: number;
+  overageRate: number;
+  overageCharges: number;
+  nextInvoiceDate: string | null;
+  lastInvoiceDate: string | null;
+  billingStatus: string | null;
   periodLabel: string;
 };
 
@@ -135,11 +145,11 @@ export function ReadyToBillClient({
       {monthlyFees.length > 0 ? (
         <div className="rounded-box border border-base-300 bg-base-100 p-4">
           <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">
-            Monthly Fees Not Yet Recorded {monthlyFees[0] ? `(${monthlyFees[0].periodLabel})` : ""}
+            Contract billing terms due {monthlyFees[0] ? `(${monthlyFees[0].periodLabel})` : ""}
           </h2>
           <p className="mt-1 text-xs opacity-60">
-            Informational only. These active contracts have a recurring monthly fee that has not yet been recorded
-            as revenue for the current period.
+            Recurring and overage amounts from active contracts that are ready for contract-to-cash invoicing.
+            Terms below are sourced from each agreement for future invoice generation.
           </p>
           <div className="mt-3 overflow-x-auto rounded-box border border-base-300">
             <table className="table table-sm">
@@ -147,7 +157,17 @@ export function ReadyToBillClient({
                 <tr>
                   <th>Contract</th>
                   <th>Customer</th>
-                  <th>Monthly Fee</th>
+                  <th>MRR</th>
+                  <th>Period amount</th>
+                  <th>Frequency</th>
+                  <th>Method</th>
+                  <th>Terms</th>
+                  <th>Included hrs</th>
+                  <th>Overage rate</th>
+                  <th>Overage $</th>
+                  <th>Next invoice</th>
+                  <th>Last invoice</th>
+                  <th>Billing status</th>
                 </tr>
               </thead>
               <tbody>
@@ -157,6 +177,28 @@ export function ReadyToBillClient({
                     <td>{fee.customerName}</td>
                     <td>
                       <Money value={fee.monthlyFee} />
+                    </td>
+                    <td>
+                      <Money value={fee.periodAmount} />
+                    </td>
+                    <td className="text-xs capitalize">
+                      {(fee.billingFrequency ?? "—").replace(/_/g, " ")}
+                    </td>
+                    <td className="text-xs capitalize">
+                      {(fee.billingMethod ?? "—").replace(/_/g, " ")}
+                    </td>
+                    <td className="text-xs">{fee.invoiceTerms ?? "—"}</td>
+                    <td className="text-xs">{fee.includedHours.toFixed(1)}</td>
+                    <td>
+                      <Money value={fee.overageRate} />
+                    </td>
+                    <td>
+                      <Money value={fee.overageCharges} />
+                    </td>
+                    <td className="text-xs whitespace-nowrap">{fee.nextInvoiceDate ?? "—"}</td>
+                    <td className="text-xs whitespace-nowrap">{fee.lastInvoiceDate ?? "—"}</td>
+                    <td className="text-xs capitalize">
+                      {(fee.billingStatus ?? "—").replace(/_/g, " ")}
                     </td>
                   </tr>
                 ))}

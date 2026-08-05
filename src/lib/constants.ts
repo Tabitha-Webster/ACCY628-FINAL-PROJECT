@@ -52,6 +52,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/dashboard", label: "Executive Dashboard" },
     { href: "/customers", label: "Customers" },
     { href: "/contracts", label: "Contracts & Agreements" },
+    { href: "/contracts/reports", label: "Contract Reports" },
     { href: "/operations", label: "Service Operations" },
     { href: "/profitability", label: "Profitability" },
     { href: "/billing-collections", label: "Billing and Collections" },
@@ -68,6 +69,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   billing: [
     { href: "/dashboard", label: "Billing Dashboard" },
     { href: "/contracts", label: "Contracts & Agreements" },
+    { href: "/contracts/reports", label: "Contract Reports" },
     { href: "/ready-to-bill", label: "Ready to Bill" },
     { href: "/invoices", label: "Invoices" },
     { href: "/payments", label: "Payments" },
