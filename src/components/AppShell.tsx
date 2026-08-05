@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Menu } from "lucide-react";
-import { ThemeSelector } from "@/components/ThemeSelector";
 import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
 import { ROLE_NAV, type Profile, type UserRole } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
@@ -55,7 +54,6 @@ export function AppShell({
             <DemoRoleSwitcher currentRole={profile.role as UserRole} />
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <ThemeSelector compact />
             <div className="hidden text-right lg:block">
               <p className="text-sm font-medium">{profile.full_name}</p>
               <p className="text-xs opacity-60">
