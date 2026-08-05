@@ -36,13 +36,16 @@ After changing `.env.local`, stop the server (Ctrl+C) and run `npm run dev` agai
 
 Password for all demo users: `1234`
 
-| Role | Email |
-|------|-------|
-| Admin | admin@servicesync.demo |
-| Manager | manager@servicesync.demo |
-| Technician | tech@servicesync.demo |
-| Billing | billing@servicesync.demo |
-| Customer (Chad Corporation) | customer@apexlegal.demo |
+| Role | Name | Email |
+|------|------|-------|
+| Admin | Tabitha Webster | admin@servicesync.demo |
+| Manager | Emilie Pierson | manager@servicesync.demo |
+| Technician | Jackson Pecunia | tech@servicesync.demo |
+| Billing | Lindsay-Kate Williams | billing@servicesync.demo |
+| HR | Lily Walker | hr@servicesync.demo |
+| Customer (Chad Corporation) | Casey Ortiz | customer@apexlegal.demo |
+
+Mark Ashe (Help Desk) shares the technician login, Carson Kimble (AR) shares billing, and Evan Bean (Account Manager) shares manager. See Admin → Employees for the full staff list.
 
 Use the **Demo Login Selector** on the login page to fill credentials, then click Sign in.
 
