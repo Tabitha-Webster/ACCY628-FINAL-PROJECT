@@ -3,8 +3,15 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { DataTable, EmptyState, ErrorState, Money, PageHeader, StatusBadge } from "@/components/ui";
+import { InvoiceStatusActions } from "@/components/InvoiceStatusActions";
 import { formatDate, formatHours } from "@/lib/format";
-import { lineSourceLabel } from "@/lib/billing";
+import {
+  DEFAULT_SALES_TAX_RATE,
+  deriveInvoiceStatus,
+  invoiceSubtotal,
+  isTaxExempt,
+  lineSourceLabel,
+} from "@/lib/billing";
 
 function unwrap<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
@@ -25,7 +32,7 @@ export default async function InvoiceDetailPage({
 
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
-    .select("*, customers(id, name, contact_email, service_address), contracts(id, name, contract_number, included_hours_per_month, additional_hourly_rate, monthly_recurring_fee)")
+    .select("*, customers(id, name, contact_email, service_address), contracts(id, name, contract_number, included_hours_per_month, additional_hourly_rate, monthly_recurring_fee, payment_terms, tax_status)")
     .eq("id", id)
     .maybeSingle();
 
@@ -51,10 +58,10 @@ export default async function InvoiceDetailPage({
   const monthlyLines = lines.filter((li) => li.source_type === "recurring");
   const hourLines = lines.filter((li) => li.source_type === "hours_included");
   const overageLines = lines.filter((li) => li.source_type === "overage");
-  const projectLines = lines.filter((li) => li.source_type === "project" || li.source_type === "milestone");
+  const projectLines = lines.filter((li) => ["project", "milestone", "project_milestone"].includes(li.source_type ?? ""));
   const equipmentSoftwareLines = lines.filter((li) => li.source_type === "direct_cost");
   const otherLines = lines.filter(
-    (li) => !["recurring", "hours_included", "overage", "project", "milestone", "direct_cost"].includes(li.source_type ?? "")
+    (li) => !["recurring", "hours_included", "overage", "project", "milestone", "project_milestone", "direct_cost"].includes(li.source_type ?? "")
   );
 
   const includedHoursUsed = hourLines.reduce((sum, li) => sum + Number(li.quantity ?? 0), 0);
@@ -64,15 +71,22 @@ export default async function InvoiceDetailPage({
   const monthlyTotal = monthlyLines.reduce((sum, li) => sum + Number(li.line_amount ?? 0), 0);
   const projectTotal = projectLines.reduce((sum, li) => sum + Number(li.line_amount ?? 0), 0);
   const equipmentSoftwareTotal = equipmentSoftwareLines.reduce((sum, li) => sum + Number(li.line_amount ?? 0), 0);
+  const calculatedSubtotal = invoiceSubtotal(lines);
+  const taxExempt = isTaxExempt(contract?.tax_status);
+  const displayStatus = deriveInvoiceStatus({
+    currentStatus: invoice.status,
+    dueDate: invoice.due_date,
+    amountPaid: Number(invoice.amount_paid ?? 0),
+    remainingBalance: Number(invoice.remaining_balance ?? 0),
+    disputed: Boolean(invoice.dispute_status) || invoice.status === "disputed",
+  });
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={`Invoice ${invoice.invoice_number}`}
         description={customer ? `${customer.name}${contract ? ` · ${contract.name}` : ""}` : undefined}
-        actions={
-          <StatusBadge status={invoice.status} />
-        }
+        actions={<StatusBadge status={displayStatus} />}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -98,6 +112,14 @@ export default async function InvoiceDetailPage({
         </div>
       </div>
 
+      <InvoiceStatusActions
+        invoiceId={invoice.id}
+        status={displayStatus}
+        sentAt={invoice.sent_at ?? null}
+        disputeStatus={Boolean(invoice.dispute_status) || invoice.status === "disputed"}
+        remainingBalance={Number(invoice.remaining_balance ?? 0)}
+      />
+
       {customer ? (
         <div className="rounded-box border border-base-300 bg-base-100 p-4">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide opacity-60">Billed To</h2>
@@ -122,6 +144,10 @@ export default async function InvoiceDetailPage({
               Billing period: {formatDate(invoice.billing_period_start)} – {formatDate(invoice.billing_period_end)}
             </p>
           ) : null}
+          <p className="mt-1 text-sm opacity-70">
+            Payment terms: {contract?.payment_terms || "Net 30"} · Due {formatDate(invoice.due_date)} · Status{" "}
+            {displayStatus.replace(/_/g, " ")}
+          </p>
         </div>
       ) : null}
 
@@ -199,10 +225,12 @@ export default async function InvoiceDetailPage({
         <div className="w-full max-w-xs space-y-1 rounded-box border border-base-300 bg-base-100 p-4 text-sm">
           <div className="flex justify-between">
             <span className="opacity-60">Subtotal</span>
-            <Money value={Number(invoice.subtotal ?? 0)} />
+            <Money value={Number(invoice.subtotal ?? calculatedSubtotal)} />
           </div>
           <div className="flex justify-between">
-            <span className="opacity-60">Tax</span>
+            <span className="opacity-60">
+              {taxExempt ? "Tax (exempt)" : `Tax (${(DEFAULT_SALES_TAX_RATE * 100).toFixed(1)}%)`}
+            </span>
             <Money value={Number(invoice.tax_amount ?? 0)} />
           </div>
           <div className="flex justify-between">

@@ -2,25 +2,17 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { EmptyState, ErrorState, PageHeader } from "@/components/ui";
-import { arAgingBucket } from "@/lib/calculations";
+import { AR_AGING_BUCKETS, arAgingBucket } from "@/lib/calculations";
 import { AccountsReceivableClient, type ArAgingRow } from "@/components/AccountsReceivableClient";
 import { ArAgingChart, type ArAgingBucketTotal } from "@/components/ArAgingChart";
 import { ArSummaryHeader } from "@/components/ArSummaryHeader";
 
-const AGING_ORDER = [
-  "Current",
-  "1–30 Days Past Due",
-  "31–60 Days Past Due",
-  "61–90 Days Past Due",
-  "More Than 90 Days Past Due",
-];
-
 const SHORT_LABELS: Record<string, string> = {
   Current: "Current",
-  "1–30 Days Past Due": "1–30",
-  "31–60 Days Past Due": "31–60",
-  "61–90 Days Past Due": "61–90",
-  "More Than 90 Days Past Due": "90+",
+  "1-30 Days": "1–30",
+  "31-60 Days": "31–60",
+  "61-90 Days": "61–90",
+  ">90 Days": "90+",
 };
 
 function daysPastDue(dueDate: string, asOf: Date = new Date()): number {
@@ -67,7 +59,7 @@ export default async function AccountsReceivablePage() {
   });
 
   const totalsByBucket = new Map<string, { count: number; amount: number }>();
-  for (const label of AGING_ORDER) totalsByBucket.set(label, { count: 0, amount: 0 });
+  for (const label of AR_AGING_BUCKETS) totalsByBucket.set(label, { count: 0, amount: 0 });
   for (const row of rows) {
     const bucket = totalsByBucket.get(row.bucket) ?? { count: 0, amount: 0 };
     bucket.count += 1;
@@ -75,7 +67,7 @@ export default async function AccountsReceivablePage() {
     totalsByBucket.set(row.bucket, bucket);
   }
 
-  const agingChartData: ArAgingBucketTotal[] = AGING_ORDER.map((label) => {
+  const agingChartData: ArAgingBucketTotal[] = AR_AGING_BUCKETS.map((label) => {
     const bucket = totalsByBucket.get(label) ?? { count: 0, amount: 0 };
     return {
       bucket: label,

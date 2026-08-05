@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { deriveInvoiceStatus, round2 } from "@/lib/billing";
 
 const VALID_METHODS = ["ach", "check", "credit_card", "wire", "other"];
 const CUSTOMER_METHODS = ["ach", "credit_card"];
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
 
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
-    .select("id, customer_id, status, remaining_balance, amount_paid, due_date")
+    .select("id, customer_id, status, remaining_balance, amount_paid, due_date, total_amount, dispute_status")
     .eq("id", invoiceId)
     .maybeSingle();
 
@@ -87,6 +88,12 @@ export async function POST(request: Request) {
   }
   if (["draft", "canceled"].includes(invoice.status)) {
     return NextResponse.json({ error: "Only issued invoices can receive payments." }, { status: 400 });
+  }
+  if (invoice.status === "disputed" || invoice.dispute_status) {
+    return NextResponse.json(
+      { error: "This invoice is disputed. Resolve the dispute before recording a payment." },
+      { status: 400 }
+    );
   }
 
   const remainingBalance = Number(invoice.remaining_balance ?? 0);
@@ -131,17 +138,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: applicationError.message }, { status: 500 });
   }
 
-  const newAmountPaid = (toCents(Number(invoice.amount_paid ?? 0)) + amountCents) / 100;
-  const newRemainingBalance = Math.max(0, remainingCents - amountCents) / 100;
-  const isPastDue = Boolean(invoice.due_date && invoice.due_date < today);
-  const newStatus =
-    newRemainingBalance === 0
-      ? "paid"
-      : invoice.status === "disputed"
-        ? "disputed"
-        : isPastDue
-          ? "overdue"
-          : "partially_paid";
+  const newAmountPaid = round2(Number(invoice.amount_paid ?? 0) + amount);
+  const newRemainingBalance = round2(Math.max(0, remainingBalance - amount));
+  const newStatus = deriveInvoiceStatus({
+    currentStatus: invoice.status,
+    dueDate: invoice.due_date,
+    amountPaid: newAmountPaid,
+    remainingBalance: newRemainingBalance,
+    disputed: Boolean(invoice.dispute_status) || invoice.status === "disputed",
+  });
 
   const { error: updateError } = await supabase
     .from("invoices")

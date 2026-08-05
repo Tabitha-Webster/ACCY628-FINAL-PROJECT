@@ -4,15 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { DataTable, EmptyState, ErrorState, Money, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import { formatDate } from "@/lib/format";
-import { arAgingBucket } from "@/lib/calculations";
-
-const AGING_ORDER = [
-  "Current",
-  "1–30 Days Past Due",
-  "31–60 Days Past Due",
-  "61–90 Days Past Due",
-  "More Than 90 Days Past Due",
-];
+import { AR_AGING_BUCKETS, arAgingBucket } from "@/lib/calculations";
 
 export default async function BillingCollectionsPage() {
   const profile = await getCurrentProfile();
@@ -48,7 +40,7 @@ export default async function BillingCollectionsPage() {
     (inv) => Number(inv.remaining_balance ?? 0) > 0 && inv.status !== "canceled" && inv.status !== "draft"
   );
   const agingBuckets = new Map<string, number>();
-  for (const label of AGING_ORDER) agingBuckets.set(label, 0);
+  for (const label of AR_AGING_BUCKETS) agingBuckets.set(label, 0);
   for (const inv of openInvoices) {
     const bucket = arAgingBucket(inv.due_date);
     agingBuckets.set(bucket, (agingBuckets.get(bucket) ?? 0) + Number(inv.remaining_balance ?? 0));
@@ -102,9 +94,9 @@ export default async function BillingCollectionsPage() {
 
       <div>
         <h2 className="mb-2 text-lg font-semibold">Accounts Receivable Aging</h2>
-        <DataTable headers={AGING_ORDER}>
+        <DataTable headers={[...AR_AGING_BUCKETS]}>
           <tr>
-            {AGING_ORDER.map((label) => (
+            {AR_AGING_BUCKETS.map((label) => (
               <td key={label} className="font-medium">
                 <Money value={agingBuckets.get(label) ?? 0} />
               </td>

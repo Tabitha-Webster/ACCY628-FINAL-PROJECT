@@ -21,19 +21,13 @@ export type ArAgingRow = {
 type SortKey = "dueDate" | "daysPastDue" | "status" | "bucket" | "warning" | "balance";
 type SortDir = "asc" | "desc";
 
-const AGING_ORDER = [
-  "Current",
-  "1–30 Days Past Due",
-  "31–60 Days Past Due",
-  "61–90 Days Past Due",
-  "More Than 90 Days Past Due",
-];
+const AGING_ORDER = ["Current", "1-30 Days", "31-60 Days", "61-90 Days", ">90 Days"];
 
 const WARNING_ORDER = ["Current", "Overdue", "Follow Up", "Escalate", "Critical"];
 
 function bucketTone(label: string): "default" | "warning" | "error" {
   if (label === "Current") return "default";
-  if (label === "61–90 Days Past Due" || label === "More Than 90 Days Past Due") return "error";
+  if (label === "61-90 Days" || label === ">90 Days") return "error";
   return "warning";
 }
 

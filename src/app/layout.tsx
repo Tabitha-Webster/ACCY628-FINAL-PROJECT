@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import { Source_Sans_3, Source_Serif_4 } from "next/font/google";
+import { ThemeInit } from "@/components/ThemeInit";
 import "./globals.css";
 
 const sans = Source_Sans_3({
@@ -27,10 +27,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
     >
       <body className="min-h-full bg-base-200 font-sans antialiased">
+        <ThemeInit />
         {children}
-        <Script id="servicesync-theme" strategy="beforeInteractive">
-          {`try{var t=localStorage.getItem("servicesync-theme");document.documentElement.setAttribute("data-theme",t||"corporate");}catch(e){}`}
-        </Script>
       </body>
     </html>
   );

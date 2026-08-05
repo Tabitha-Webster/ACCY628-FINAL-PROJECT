@@ -3,8 +3,22 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DataTable, EmptyState, Money, StatusBadge } from "@/components/ui";
+import { X } from "lucide-react";
+import { EmptyState, Money, StatusBadge } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
+import {
+  type CompareOp,
+  CompareFilter,
+  DateFilter,
+  DropdownHeader,
+  FilterOption,
+  StickyFilterTable,
+  TextFilter,
+  matchesCompare,
+  matchesDateSearch,
+  matchesText,
+  useHeaderFilter,
+} from "@/components/table-filters";
 
 export type InvoiceListRow = {
   id: string;
@@ -12,6 +26,8 @@ export type InvoiceListRow = {
   invoice_date: string;
   due_date: string;
   status: string;
+  subtotal: number;
+  tax_amount: number;
   total_amount: number;
   amount_paid: number;
   remaining_balance: number;
@@ -21,25 +37,49 @@ export type InvoiceListRow = {
   contract_name: string | null;
 };
 
+const STATUS_OPTIONS = ["draft", "issued", "sent", "partially_paid", "paid", "overdue", "disputed", "canceled"];
+
+type FilterKey = "invoice" | "customer" | "contract" | "dueDate" | "status" | "total" | "balance";
+
 export function InvoiceListClient({ invoices }: { invoices: InvoiceListRow[] }) {
   const router = useRouter();
-  const [status, setStatus] = useState("all");
-  const [query, setQuery] = useState("");
+  const { openFilter, setOpenFilter, toggleFilter, tableRef } = useHeaderFilter<FilterKey>();
   const [generating, setGenerating] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [invoiceQuery, setInvoiceQuery] = useState("");
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [contractQuery, setContractQuery] = useState("");
+  const [dueDateQuery, setDueDateQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [totalOp, setTotalOp] = useState<CompareOp>("gt");
+  const [totalValue, setTotalValue] = useState("");
+  const [balanceOp, setBalanceOp] = useState<CompareOp>("gt");
+  const [balanceValue, setBalanceValue] = useState("");
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return invoices.filter((invoice) => {
-      if (status !== "all" && invoice.status !== status) return false;
-      if (!q) return true;
-      return (
-        invoice.invoice_number.toLowerCase().includes(q) ||
-        invoice.customer_name.toLowerCase().includes(q) ||
-        (invoice.contract_name ?? "").toLowerCase().includes(q)
-      );
-    });
-  }, [invoices, status, query]);
+  const filtered = useMemo(
+    () =>
+      invoices.filter(
+        (invoice) =>
+          matchesText(invoice.invoice_number, invoiceQuery) &&
+          matchesText(invoice.customer_name, customerQuery) &&
+          matchesText(invoice.contract_name, contractQuery) &&
+          matchesDateSearch(invoice.due_date, dueDateQuery) &&
+          (statusFilter === "all" || invoice.status === statusFilter) &&
+          matchesCompare(invoice.total_amount, totalOp, totalValue) &&
+          matchesCompare(invoice.remaining_balance, balanceOp, balanceValue)
+      ),
+    [invoices, invoiceQuery, customerQuery, contractQuery, dueDateQuery, statusFilter, totalOp, totalValue, balanceOp, balanceValue]
+  );
+
+  const activeCount = [
+    invoiceQuery.trim(),
+    customerQuery.trim(),
+    contractQuery.trim(),
+    dueDateQuery.trim(),
+    statusFilter !== "all" ? statusFilter : "",
+    totalValue.trim(),
+    balanceValue.trim(),
+  ].filter(Boolean).length;
 
   const openBalance = invoices
     .filter((invoice) => !["canceled", "draft", "paid"].includes(invoice.status))
@@ -47,6 +87,19 @@ export function InvoiceListClient({ invoices }: { invoices: InvoiceListRow[] }) 
   const overdueBalance = invoices
     .filter((invoice) => invoice.status === "overdue")
     .reduce((sum, invoice) => sum + invoice.remaining_balance, 0);
+
+  function clearFilters() {
+    setInvoiceQuery("");
+    setCustomerQuery("");
+    setContractQuery("");
+    setDueDateQuery("");
+    setStatusFilter("all");
+    setTotalOp("gt");
+    setTotalValue("");
+    setBalanceOp("gt");
+    setBalanceValue("");
+    setOpenFilter(null);
+  }
 
   async function generateMonthly() {
     setGenerating(true);
@@ -69,12 +122,7 @@ export function InvoiceListClient({ invoices }: { invoices: InvoiceListRow[] }) 
         createdCount > 0
           ? `Created ${createdCount} monthly invoice(s) for ${body.periodLabel}.`
           : `No new monthly invoices were created for ${body.periodLabel}.`;
-      const extra = [
-        skipCount ? `${skipCount} skipped.` : "",
-        errorCount ? `${errorCount} error(s).` : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
+      const extra = [skipCount ? `${skipCount} skipped.` : "", errorCount ? `${errorCount} error(s).` : ""].filter(Boolean).join(" ");
       setMessage({
         type: createdCount > 0 && errorCount === 0 ? "success" : errorCount ? "error" : "success",
         text: `${createdText} ${extra}`.trim(),
@@ -104,30 +152,17 @@ export function InvoiceListClient({ invoices }: { invoices: InvoiceListRow[] }) 
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-box border border-base-300 bg-base-100 p-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="grid flex-1 gap-3 sm:grid-cols-2">
-          <label className="form-control">
-            <span className="label-text mb-1">Search</span>
-            <input
-              className="input input-bordered input-sm w-full"
-              placeholder="Invoice #, customer, or contract"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </label>
-          <label className="form-control">
-            <span className="label-text mb-1">Status</span>
-            <select className="select select-bordered select-sm w-full" value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="all">All statuses</option>
-              <option value="draft">Draft</option>
-              <option value="issued">Issued</option>
-              <option value="partially_paid">Partially paid</option>
-              <option value="paid">Paid</option>
-              <option value="overdue">Overdue</option>
-              <option value="disputed">Disputed</option>
-              <option value="canceled">Canceled</option>
-            </select>
-          </label>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="opacity-60">
+            Showing {filtered.length} of {invoices.length}
+          </span>
+          {activeCount > 0 ? (
+            <button type="button" className="btn btn-ghost btn-xs" onClick={clearFilters}>
+              <X className="h-3.5 w-3.5" />
+              Clear filters
+            </button>
+          ) : null}
         </div>
         <button className="btn btn-primary btn-sm" type="button" onClick={generateMonthly} disabled={generating}>
           {generating ? "Generating…" : "Generate monthly contract invoices"}
@@ -140,52 +175,105 @@ export function InvoiceListClient({ invoices }: { invoices: InvoiceListRow[] }) 
         </div>
       ) : null}
 
-      {filtered.length === 0 ? (
+      {invoices.length === 0 ? (
         <EmptyState
           title="No invoices match this view"
           description="Generate monthly contract invoices or create one from Billing Review."
         />
       ) : (
-        <DataTable
-          headers={["Invoice", "Customer", "Contract", "Period", "Status", "Total", "Paid", "Balance", ""]}
-        >
-          {filtered.map((invoice) => (
-            <tr key={invoice.id}>
-              <td>
-                <div className="font-medium">{invoice.invoice_number}</div>
-                <div className="text-xs opacity-60">
-                  {formatDate(invoice.invoice_date)} · due {formatDate(invoice.due_date)}
-                </div>
-              </td>
-              <td>{invoice.customer_name}</td>
-              <td className="text-sm">{invoice.contract_name ?? "—"}</td>
-              <td className="text-xs">
-                {invoice.billing_period_start
-                  ? `${formatDate(invoice.billing_period_start)} – ${formatDate(invoice.billing_period_end)}`
-                  : "—"}
-              </td>
-              <td>
-                <StatusBadge status={invoice.status} />
-              </td>
-              <td>
-                <Money value={invoice.total_amount} />
-              </td>
-              <td>
-                <Money value={invoice.amount_paid} />
-              </td>
-              <td className="font-medium">
-                <Money value={invoice.remaining_balance} />
-              </td>
-              <td className="text-right">
-                <div className="flex justify-end gap-1">
-                  <Link href={`/invoices/${invoice.id}`} className="btn btn-ghost btn-xs">
-                    View
-                  </Link>
-                </div>
-              </td>
+        <StickyFilterTable tableRef={tableRef}>
+          <colgroup>
+            <col className="w-[12%]" />
+            <col className="w-[20%]" />
+            <col className="w-[20%]" />
+            <col className="w-[12%]" />
+            <col className="w-[14%]" />
+            <col className="w-[11%]" />
+            <col className="w-[11%]" />
+          </colgroup>
+          <thead>
+            <tr>
+              <DropdownHeader label="Invoice" active={Boolean(invoiceQuery.trim())} open={openFilter === "invoice"} onToggle={() => toggleFilter("invoice")}>
+                <TextFilter value={invoiceQuery} onChange={setInvoiceQuery} placeholder="Search invoice #" />
+              </DropdownHeader>
+              <DropdownHeader label="Customer" active={Boolean(customerQuery.trim())} open={openFilter === "customer"} onToggle={() => toggleFilter("customer")}>
+                <TextFilter value={customerQuery} onChange={setCustomerQuery} placeholder="Search customer" />
+              </DropdownHeader>
+              <DropdownHeader label="Contract" active={Boolean(contractQuery.trim())} open={openFilter === "contract"} onToggle={() => toggleFilter("contract")}>
+                <TextFilter value={contractQuery} onChange={setContractQuery} placeholder="Search contract" />
+              </DropdownHeader>
+              <DropdownHeader label="Due Date" active={Boolean(dueDateQuery.trim())} open={openFilter === "dueDate"} onToggle={() => toggleFilter("dueDate")}>
+                <DateFilter value={dueDateQuery} onChange={setDueDateQuery} />
+              </DropdownHeader>
+              <DropdownHeader label="Status" active={statusFilter !== "all"} open={openFilter === "status"} onToggle={() => toggleFilter("status")}>
+                <FilterOption selected={statusFilter === "all"} onClick={() => setStatusFilter("all")}>
+                  (All)
+                </FilterOption>
+                {STATUS_OPTIONS.map((status) => (
+                  <FilterOption
+                    key={status}
+                    selected={statusFilter === status}
+                    onClick={() => {
+                      setStatusFilter(status);
+                      setOpenFilter(null);
+                    }}
+                  >
+                    {status.replace(/_/g, " ")}
+                  </FilterOption>
+                ))}
+              </DropdownHeader>
+              <DropdownHeader
+                label="Total"
+                active={Boolean(totalValue.trim())}
+                open={openFilter === "total"}
+                align="right"
+                onToggle={() => toggleFilter("total")}
+              >
+                <CompareFilter op={totalOp} value={totalValue} onOpChange={setTotalOp} onValueChange={setTotalValue} />
+              </DropdownHeader>
+              <DropdownHeader
+                label="Balance"
+                active={Boolean(balanceValue.trim())}
+                open={openFilter === "balance"}
+                align="right"
+                onToggle={() => toggleFilter("balance")}
+              >
+                <CompareFilter op={balanceOp} value={balanceValue} onOpChange={setBalanceOp} onValueChange={setBalanceValue} />
+              </DropdownHeader>
             </tr>
-          ))}
-        </DataTable>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="py-8 text-center opacity-70">
+                  No invoices match these filters.
+                </td>
+              </tr>
+            ) : (
+              filtered.map((invoice) => (
+                <tr key={invoice.id}>
+                  <td>
+                    <Link href={`/invoices/${invoice.id}`} className="link link-hover font-medium">
+                      {invoice.invoice_number}
+                    </Link>
+                  </td>
+                  <td>{invoice.customer_name}</td>
+                  <td>{invoice.contract_name ?? "—"}</td>
+                  <td className="text-xs">{formatDate(invoice.due_date)}</td>
+                  <td>
+                    <StatusBadge status={invoice.status} />
+                  </td>
+                  <td>
+                    <Money value={invoice.total_amount} />
+                  </td>
+                  <td className="font-medium">
+                    <Money value={invoice.remaining_balance} />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </StickyFilterTable>
       )}
     </div>
   );
