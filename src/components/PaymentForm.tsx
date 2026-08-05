@@ -61,7 +61,10 @@ export function PaymentForm({
       setMessage({ type: "error", text: "Enter a payment amount greater than zero." });
       return;
     }
-    if (selectedInvoice && amountValue > selectedInvoice.remainingBalance + 0.01) {
+    if (
+      selectedInvoice &&
+      Math.round(amountValue * 100) > Math.round(selectedInvoice.remainingBalance * 100)
+    ) {
       setMessage({
         type: "error",
         text: `Payment cannot exceed the remaining balance of ${formatCurrency(selectedInvoice.remainingBalance)}.`,
@@ -150,6 +153,7 @@ export function PaymentForm({
               type="number"
               step="0.01"
               min="0.01"
+              max={selectedInvoice?.remainingBalance}
               className="input input-bordered w-full"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}

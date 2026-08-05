@@ -4,6 +4,10 @@ import { getCurrentProfile } from "@/lib/auth";
 
 const VALID_METHODS = ["ach", "check", "credit_card", "wire", "other"];
 
+function toCents(value: number): number {
+  return Math.round(value * 100);
+}
+
 function isValidDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
@@ -41,9 +45,10 @@ export async function POST(request: Request) {
   }
 
   const invoiceId = body.invoiceId;
-  const amount = Math.round(Number(body.amount) * 100) / 100;
+  const amountCents = toCents(Number(body.amount));
+  const amount = amountCents / 100;
 
-  if (!invoiceId || !Number.isFinite(amount) || amount <= 0) {
+  if (!invoiceId || !Number.isFinite(amountCents) || amountCents <= 0) {
     return NextResponse.json({ error: "Enter a valid invoice and a payment amount greater than zero." }, { status: 400 });
   }
 
@@ -75,10 +80,11 @@ export async function POST(request: Request) {
   }
 
   const remainingBalance = Number(invoice.remaining_balance ?? 0);
-  if (remainingBalance <= 0.01) {
+  const remainingCents = toCents(remainingBalance);
+  if (remainingCents <= 0) {
     return NextResponse.json({ error: "This invoice is already paid in full." }, { status: 400 });
   }
-  if (amount > remainingBalance + 0.01) {
+  if (amountCents > remainingCents) {
     return NextResponse.json(
       { error: `Payment amount cannot exceed the remaining balance of $${remainingBalance.toFixed(2)}.` },
       { status: 400 }
@@ -115,9 +121,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: applicationError.message }, { status: 500 });
   }
 
-  const newAmountPaid = Number(invoice.amount_paid ?? 0) + amount;
-  const newRemainingBalance = Math.max(0, remainingBalance - amount);
-  const newStatus = newRemainingBalance <= 0.01 ? "paid" : "partially_paid";
+  const newAmountPaid = (toCents(Number(invoice.amount_paid ?? 0)) + amountCents) / 100;
+  const newRemainingBalance = Math.max(0, remainingCents - amountCents) / 100;
+  const newStatus = newRemainingBalance === 0 ? "paid" : "partially_paid";
 
   const { error: updateError } = await supabase
     .from("invoices")

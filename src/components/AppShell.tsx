@@ -40,9 +40,16 @@ export function AppShell({
       <div className="drawer-content flex flex-col">
         <header className="flex flex-wrap items-center gap-3 border-b border-base-300 bg-base-100 px-4 py-2">
           <div className="flex min-w-0 items-center gap-2">
-            <label htmlFor="app-drawer" className="btn btn-square btn-ghost lg:hidden" onClick={() => setOpen(true)}>
+            <button
+              type="button"
+              className="btn btn-square btn-ghost lg:hidden"
+              aria-label="Toggle navigation menu"
+              aria-expanded={open}
+              aria-controls="app-drawer"
+              onClick={() => setOpen((value) => !value)}
+            >
               <Menu className="h-5 w-5" />
-            </label>
+            </button>
             <div>
               <p className="text-sm font-semibold leading-tight">ServiceSync MSP</p>
               <p className="hidden text-xs opacity-60 sm:block">
@@ -70,7 +77,12 @@ export function AppShell({
       </div>
 
       <div className="drawer-side z-40">
-        <label htmlFor="app-drawer" className="drawer-overlay" onClick={() => setOpen(false)} />
+        <button
+          type="button"
+          className="drawer-overlay"
+          aria-label="Close navigation menu"
+          onClick={() => setOpen(false)}
+        />
         <aside className="flex min-h-full w-72 flex-col bg-base-100 text-base-content">
           <div className="border-b border-base-300 p-4">
             <p className="text-lg font-semibold">ServiceSync MSP</p>
@@ -79,21 +91,23 @@ export function AppShell({
               <span className="badge badge-primary badge-outline">{statusLabel(profile.role)}</span>
             </div>
           </div>
-          <nav className="menu flex-1 p-3">
-            {nav.map((item) => {
-              const active = pathname === item.href || pathname.startsWith(item.href + "/");
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    className={active ? "active" : ""}
-                    onClick={() => setOpen(false)}
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
+          <nav className="flex-1 p-3">
+            <ul className="menu w-full">
+              {nav.map((item) => {
+                const active = pathname === item.href || pathname.startsWith(item.href + "/");
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className={active ? "active" : ""}
+                      onClick={() => setOpen(false)}
+                    >
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
           </nav>
           <div className="border-t border-base-300 p-4 text-xs opacity-70">
             Use the Demo Role Switcher to change perspectives. A password is required for each role. Log out still ends the session completely.
