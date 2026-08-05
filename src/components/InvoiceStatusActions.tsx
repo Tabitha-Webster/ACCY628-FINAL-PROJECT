@@ -8,25 +8,53 @@ export function InvoiceStatusActions({
   invoiceId,
   status,
   sentAt,
+  reviewedAt,
   disputeStatus,
   remainingBalance,
 }: {
   invoiceId: string;
   status: string;
   sentAt: string | null;
+  reviewedAt: string | null;
   disputeStatus: boolean;
   remainingBalance: number;
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<"sent" | "dispute" | "resolve" | null>(null);
+  const [busy, setBusy] = useState<"review" | "sent" | "dispute" | "resolve" | null>(null);
   const [reason, setReason] = useState("");
+  const [reviewNotes, setReviewNotes] = useState("");
   const [amount, setAmount] = useState(remainingBalance > 0 ? remainingBalance.toFixed(2) : "");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [showDispute, setShowDispute] = useState(false);
 
-  const canMarkSent = !["canceled", "draft", "paid"].includes(status);
+  const isDraft = status === "draft";
+  const canReview = isDraft && !reviewedAt;
+  const canMarkSent = !["canceled", "draft", "paid"].includes(status) && Boolean(reviewedAt);
   const alreadySent = Boolean(sentAt) || status === "sent";
   const isDisputed = disputeStatus || status === "disputed";
+
+  async function reviewInvoice() {
+    setBusy("review");
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: reviewNotes }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setMessage({ type: "error", text: body.error ?? "Could not review this invoice." });
+        return;
+      }
+      setMessage({ type: "success", text: "Invoice reviewed and issued. It can now be marked sent." });
+      router.refresh();
+    } catch {
+      setMessage({ type: "error", text: "Something went wrong reviewing this invoice." });
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function markSent() {
     setBusy("sent");
@@ -95,16 +123,32 @@ export function InvoiceStatusActions({
     }
   }
 
-  if (["canceled", "draft"].includes(status) && !isDisputed) return null;
+  if (status === "canceled" && !isDisputed) return null;
 
   return (
     <div className="rounded-box border border-base-300 bg-base-100 p-4 space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">Invoice actions</h2>
-          {sentAt ? <p className="mt-1 text-sm">Sent {formatDateTime(sentAt)}</p> : <p className="mt-1 text-sm opacity-70">Not marked sent yet.</p>}
+          {isDraft ? (
+            <p className="mt-1 text-sm opacity-70">This is a draft. Review and issue it before sending.</p>
+          ) : reviewedAt ? (
+            <p className="mt-1 text-sm">Reviewed {formatDateTime(reviewedAt)}</p>
+          ) : (
+            <p className="mt-1 text-sm opacity-70">Not reviewed yet.</p>
+          )}
+          {sentAt ? (
+            <p className="mt-1 text-sm">Sent {formatDateTime(sentAt)}</p>
+          ) : isDraft ? null : (
+            <p className="mt-1 text-sm opacity-70">Not marked sent yet.</p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
+          {canReview ? (
+            <button type="button" className="btn btn-primary btn-sm" onClick={reviewInvoice} disabled={busy !== null}>
+              {busy === "review" ? "Saving…" : "Review and issue"}
+            </button>
+          ) : null}
           {canMarkSent ? (
             <button type="button" className="btn btn-outline btn-sm" onClick={markSent} disabled={busy !== null || alreadySent}>
               {busy === "sent" ? "Saving…" : alreadySent ? "Marked sent" : "Mark as sent"}
@@ -114,13 +158,26 @@ export function InvoiceStatusActions({
             <button type="button" className="btn btn-outline btn-sm" onClick={resolveDispute} disabled={busy !== null}>
               {busy === "resolve" ? "Saving…" : "Resolve dispute"}
             </button>
-          ) : status !== "canceled" ? (
+          ) : status !== "canceled" && !isDraft ? (
             <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowDispute((open) => !open)}>
               Mark as disputed
             </button>
           ) : null}
         </div>
       </div>
+
+      {canReview ? (
+        <label className="form-control">
+          <span className="label-text mb-1">Review notes (optional)</span>
+          <textarea
+            className="textarea textarea-bordered textarea-sm"
+            rows={2}
+            value={reviewNotes}
+            onChange={(e) => setReviewNotes(e.target.value)}
+            placeholder="Confirm amounts, period, and customer before issuing."
+          />
+        </label>
+      ) : null}
 
       {showDispute && !isDisputed ? (
         <div className="grid gap-3 sm:grid-cols-2">

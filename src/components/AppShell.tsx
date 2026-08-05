@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronRight, Menu } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
 import { BillingStaffNavTree } from "@/components/BillingStaffNavTree";
 import { ContractsAgreementsNavTree } from "@/components/ContractsAgreementsNavTree";
@@ -13,6 +13,7 @@ import { ROLE_NAV, type Profile, type UserRole } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
 import { applyPreferencesToDom, loadPreferences } from "@/lib/user-preferences";
+import type { CustomerStatus } from "@/lib/types";
 import { Fragment, useEffect, useState } from "react";
 
 function SideNav({
@@ -21,17 +22,22 @@ function SideNav({
   onNavigate,
   showSettings,
   onOpenSettings,
+  restrictedCustomer = false,
 }: {
   profile: Profile;
   pathname: string;
   onNavigate?: () => void;
   showSettings?: boolean;
   onOpenSettings?: () => void;
+  restrictedCustomer?: boolean;
 }) {
-  const nav = ROLE_NAV[profile.role as UserRole] ?? [];
+  const nav = restrictedCustomer
+    ? [{ href: "/pending-approval", label: "Pending Approval" }]
+    : (ROLE_NAV[profile.role as UserRole] ?? []);
   const isCustomer = profile.role === "customer";
   const isBilling = profile.role === "billing";
   const isManager = profile.role === "manager";
+  const isTechnician = profile.role === "technician";
 
   return (
     <>
@@ -60,7 +66,10 @@ function SideNav({
                 <CustomerBillingNavTree onNavigate={onNavigate} />
               ) : null}
               {isManager && item.href === "/customers" ? (
-                <ContractsAgreementsNavTree showReports onNavigate={onNavigate} />
+                <ContractsAgreementsNavTree showReports showNewContract onNavigate={onNavigate} />
+              ) : null}
+              {isTechnician && item.href === "/dashboard" ? (
+                <ContractsAgreementsNavTree showReports={false} onNavigate={onNavigate} />
               ) : null}
               {isBilling && item.href === "/dashboard" ? (
                 <>
@@ -99,23 +108,31 @@ function SideNav({
 
 export function AppShell({
   profile,
+  customerStatus = null,
   children,
 }: {
   profile: Profile;
+  customerStatus?: CustomerStatus | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  // null means "follow the breakpoint default"; the sidebar is docked at lg and up.
-  const [navOverride, setNavOverride] = useState<"open" | "closed" | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsPathname, setSettingsPathname] = useState(pathname);
 
-  // Dismiss the settings panel when the route changes.
-  if (settingsPathname !== pathname) {
-    setSettingsPathname(pathname);
+  const restrictedCustomer =
+    profile.role === "customer" &&
+    (customerStatus === "pending_approval" || customerStatus === "rejected");
+
+  useEffect(() => {
+    if (!restrictedCustomer) return;
+    if (pathname !== "/pending-approval" && !pathname.startsWith("/profile")) {
+      router.replace("/pending-approval");
+    }
+  }, [restrictedCustomer, pathname, router]);
+
+  useEffect(() => {
     setSettingsOpen(false);
-  }
+  }, [pathname]);
 
   useEffect(() => {
     applyPreferencesToDom(loadPreferences());
@@ -136,21 +153,6 @@ export function AppShell({
     };
   }, [settingsOpen]);
 
-  function isDesktop() {
-    return window.matchMedia("(min-width: 1024px)").matches;
-  }
-
-  function toggleNav() {
-    setNavOverride((prev) => {
-      if (prev) return prev === "open" ? "closed" : "open";
-      return isDesktop() ? "closed" : "open";
-    });
-  }
-
-  function handleNavigate() {
-    if (!isDesktop()) setNavOverride("closed");
-  }
-
   async function logout() {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -158,19 +160,14 @@ export function AppShell({
     router.refresh();
   }
 
-  const navVisibility =
-    navOverride === "open" ? "flex" : navOverride === "closed" ? "hidden" : "hidden lg:flex";
-
   return (
     <div className="flex min-h-screen bg-base-200">
-      {/* Docked sidebar — sits in flow, so the rest of the page stays clickable. */}
-      <aside
-        className={`sticky top-0 h-screen w-72 shrink-0 flex-col border-r border-base-300 bg-base-100 ${navVisibility}`}
-      >
+      {/* Docked sidebar — always visible in the layout flow. */}
+      <aside className="sticky top-0 flex h-screen w-72 shrink-0 flex-col border-r border-base-300 bg-base-100">
         <SideNav
           profile={profile}
           pathname={pathname}
-          onNavigate={handleNavigate}
+          restrictedCustomer={restrictedCustomer}
           showSettings
           onOpenSettings={() => setSettingsOpen(true)}
         />
@@ -179,14 +176,6 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex flex-wrap items-center gap-3 border-b border-base-300 bg-base-100 px-4 py-2">
           <div className="flex min-w-0 items-center gap-2">
-            <button
-              type="button"
-              className="btn btn-square btn-ghost"
-              aria-label="Toggle navigation"
-              onClick={toggleNav}
-            >
-              <Menu className="h-5 w-5" />
-            </button>
             <div>
               <p className="text-sm font-semibold leading-tight">ServiceSync MSP</p>
               <p className="hidden text-xs opacity-60 sm:block">

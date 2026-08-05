@@ -1,0 +1,118 @@
+"use client";
+
+import { useState, type ReactNode } from "react";
+import Link from "next/link";
+import { ChevronDown } from "lucide-react";
+import { ExplainNumber, type MetricExplanation } from "@/components/ExplainNumber";
+
+export function DashboardSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">{title}</h2>
+        {description ? <p className="mt-1 text-sm opacity-70">{description}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+export function DashboardMetricAccordion({
+  label,
+  value,
+  hint,
+  tone = "default",
+  explanation,
+  href,
+  hrefLabel = "View details",
+  defaultOpen = false,
+  children,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "default" | "success" | "warning" | "error" | "info";
+  explanation?: MetricExplanation;
+  href?: string;
+  hrefLabel?: string;
+  defaultOpen?: boolean;
+  children?: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const border =
+    tone === "success"
+      ? "border-success/40"
+      : tone === "warning"
+        ? "border-warning/40"
+        : tone === "error"
+          ? "border-error/40"
+          : tone === "info"
+            ? "border-info/40"
+            : "border-base-300";
+
+  return (
+    <div className={`rounded-box border ${border} bg-base-100 shadow-sm`}>
+      <button
+        type="button"
+        className="flex w-full items-start justify-between gap-3 p-4 text-left"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide opacity-60">{label}</p>
+          <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
+          {hint ? <p className="mt-1 text-xs opacity-60">{hint}</p> : null}
+        </div>
+        <ChevronDown className={`mt-1 size-4 shrink-0 opacity-50 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? (
+        <div className="space-y-3 border-t border-base-300 px-4 py-3">
+          {children}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {explanation ? <ExplainNumber explanation={explanation} /> : <span />}
+            {href ? (
+              <Link href={href} className="link link-hover text-sm" onClick={(event) => event.stopPropagation()}>
+                {hrefLabel}
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function DashboardCollapse({
+  title,
+  defaultOpen = false,
+  actions,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div className="rounded-box border border-base-300 bg-base-100 shadow-sm">
+      <div className="flex items-center justify-between gap-3 p-4">
+        <button type="button" className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+          <h3 className="text-sm font-semibold">{title}</h3>
+          <ChevronDown className={`size-4 shrink-0 opacity-50 transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+        {actions ? <div className="shrink-0">{actions}</div> : null}
+      </div>
+      {open ? <div className="border-t border-base-300 px-4 py-3">{children}</div> : null}
+    </div>
+  );
+}

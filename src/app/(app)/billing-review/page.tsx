@@ -21,7 +21,7 @@ export default async function BillingReviewPage({
   const supabase = await createClient();
   const { packages, items, exceptions, billingPeriodStart, billingPeriodEnd, periodLabel } = await loadBillingReviewData(
     supabase,
-    { start: period.start, end: period.end, label: period.label },
+    { start: period.start, end: period.end, label: period.label, unbounded: period.unbounded },
     { includeOpenOneTime: periodOverlapsToday(period) }
   );
 
@@ -29,7 +29,11 @@ export default async function BillingReviewPage({
     <div>
       <PageHeader
         title="Overview"
-        description={`Preview ${period.label} monthly contract charges, included hours, overage, approved projects, and equipment or software before generating invoices.`}
+        description={
+          period.view === "all"
+            ? "Preview monthly contract charges, included hours, overage, approved projects, and equipment or software across the life of the company."
+            : `Preview ${period.label} monthly contract charges, included hours, overage, approved projects, and equipment or software before generating invoices.`
+        }
         actions={<PeriodViewControls {...periodViewControlProps(period)} />}
       />
       <BillingReviewClient

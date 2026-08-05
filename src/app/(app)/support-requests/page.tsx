@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/auth";
+import { getCurrentProfile, requireApprovedCustomer } from "@/lib/auth";
 import { PageHeader, EmptyState, ErrorState } from "@/components/ui";
 import { SupportRequestForm } from "@/components/SupportRequestForm";
 import { TicketListClient, type TicketListItem } from "@/components/TicketListClient";
@@ -9,6 +9,7 @@ export default async function SupportRequestsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
   if (profile.role !== "customer" || !profile.customer_id) redirect("/tickets");
+  await requireApprovedCustomer(profile);
 
   const supabase = await createClient();
   const customerId = profile.customer_id;

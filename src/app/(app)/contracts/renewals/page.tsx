@@ -84,12 +84,6 @@ export default async function ContractRenewalsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <Link href="/contracts" className="btn btn-ghost btn-sm">
-          ← Back to contracts
-        </Link>
-      </div>
-
       <PageHeader
         title="Renewal & Expiration"
         description="Automatic 90 / 60 / 30-day renewal reminders, expiration warnings, auto-renew processing, and renewal history."
@@ -132,15 +126,15 @@ export default async function ContractRenewalsPage() {
           />
         ) : (
           <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
-            <table className="table table-sm">
+            <table className="table table-sm text-center">
               <thead>
                 <tr>
-                  <th>Contract</th>
-                  <th>Customer</th>
-                  <th>Type</th>
-                  <th>Days left</th>
-                  <th>Message</th>
-                  <th>End date</th>
+                  <th className="text-center">Contract</th>
+                  <th className="text-center">Customer</th>
+                  <th className="text-center">Status</th>
+                  <th className="text-center">Days left</th>
+                  <th className="text-center">Message</th>
+                  <th className="text-center">End date</th>
                 </tr>
               </thead>
               <tbody>
@@ -178,12 +172,14 @@ export default async function ContractRenewalsPage() {
                         ) : (
                           "—"
                         )}
-                        <div className="text-xs opacity-60">{contract?.name}</div>
+                        {contract?.name ? (
+                          <div className="text-xs opacity-60">{contract.name}</div>
+                        ) : null}
                       </td>
                       <td className="text-sm">{customer?.name ?? "—"}</td>
                       <td>
                         <span
-                          className={`badge badge-sm ${reminderBadgeClass(row.reminder_kind as ReminderKind)}`}
+                          className={`badge h-auto min-h-6 whitespace-nowrap px-2.5 py-1.5 leading-none ${reminderBadgeClass(row.reminder_kind as ReminderKind)}`}
                         >
                           {reminderKindLabel(row.reminder_kind as ReminderKind)}
                         </span>

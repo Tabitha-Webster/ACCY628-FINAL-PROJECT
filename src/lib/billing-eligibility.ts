@@ -40,6 +40,10 @@ export function timeEntryBillingBlockReason(entry: {
   if (!isBillableTimeClassification(entry.classification)) {
     return `${label} is not classified as billable.`;
   }
+  // Out-of-scope / additional work must be explicitly approved before invoicing.
+  if (entry.classification === "out_of_scope" && entry.approval_status !== "approved") {
+    return `${label} is out-of-scope additional work and is not approved for billing.`;
+  }
   if (!isApprovedForBilling(entry.approval_status)) {
     return `${label} is not approved for billing.`;
   }
@@ -47,6 +51,15 @@ export function timeEntryBillingBlockReason(entry: {
     return `${label} has already been invoiced.`;
   }
   return null;
+}
+
+/** Blocks invoicing when a linked additional-work / change request is still pending. */
+export function pendingAdditionalWorkBlockReason(opts: {
+  hasPendingAdditionalWork: boolean;
+  contextLabel: string;
+}) {
+  if (!opts.hasPendingAdditionalWork) return null;
+  return `${opts.contextLabel} has unapproved additional work and cannot be invoiced yet.`;
 }
 
 export function directCostBillingBlockReason(cost: {

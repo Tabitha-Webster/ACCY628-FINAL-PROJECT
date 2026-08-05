@@ -12,6 +12,59 @@ body {
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Application layout tokens — reuse across authenticated pages */
+:root {
+  --app-space-1: 0.5rem;
+  --app-space-2: 0.75rem;
+  --app-space-3: 1rem;
+  --app-space-4: 1.5rem;
+  --app-space-5: 2rem;
+  --app-content-gap: var(--app-space-4);
+}
+
+.app-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-content-gap);
+}
+
+.app-page-header {
+  padding-bottom: var(--app-space-2);
+  border-bottom: 1px solid color-mix(in oklab, var(--color-base-300) 80%, transparent);
+}
+
+/* PageHeader keeps mb-6 when used alone; nested under PageLayout the margin is cleared. */
+.app-page-header .app-page-header-row {
+  margin-bottom: 0;
+}
+
+.app-page-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-4);
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --app-content-gap: var(--app-space-5);
+  }
+}
+
+/* Login page — light geometric SaaS background (scoped) */
+.login-page-geo {
+  background-color: transparent;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    linear-gradient(135deg, rgba(56, 189, 248, 0.07) 1px, transparent 1px);
+  background-size:
+    48px 48px,
+    48px 48px,
+    24px 24px;
+  mask-image: radial-gradient(ellipse at center, black 40%, transparent 88%);
+}
+
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }

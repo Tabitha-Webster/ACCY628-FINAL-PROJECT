@@ -9,8 +9,8 @@ type NavLink = { href: string; label: string };
 
 function pathActive(pathname: string, href: string) {
   if (href === "/contracts") {
-    // Avoid treating /contracts/reports as the manage-contracts page.
-    return pathname === "/contracts" || /^\/contracts\/(?!reports(?:\/|$)).+/.test(pathname);
+    // Avoid treating /contracts/reports or /contracts/renewals as Manage Contracts.
+    return pathname === "/contracts" || /^\/contracts\/(?!reports(?:\/|$)|renewals(?:\/|$)|new(?:\/|$)).+/.test(pathname);
   }
   return pathname === href || pathname.startsWith(href + "/");
 }
@@ -21,17 +21,21 @@ function sectionActive(pathname: string, links: NavLink[]) {
 
 export function ContractsAgreementsNavTree({
   showReports = true,
+  showNewContract = false,
   onNavigate,
 }: {
   showReports?: boolean;
+  showNewContract?: boolean;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const links: NavLink[] = [
     { href: "/contracts", label: "Manage Contracts" },
-    ...(showReports ? [{ href: "/contracts/reports", label: "Reports" }] : []),
+    ...(showReports ? [{ href: "/contracts/reports", label: "Reports & Dashboard" }] : []),
+    { href: "/contracts/renewals", label: "Renewal & Expiration" },
+    ...(showNewContract ? [{ href: "/contracts/new", label: "New Contract" }] : []),
   ];
-  const [open, setOpen] = useState(() => sectionActive(pathname, links));
+  const [open, setOpen] = useState(() => sectionActive(pathname, links) || pathname.startsWith("/contracts"));
 
   return (
     <div className="space-y-1">

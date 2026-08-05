@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { canUseBillingTools } from "@/lib/constants";
 import { DataTable, EmptyState, ErrorState, Money, PageHeader, StatusBadge } from "@/components/ui";
 import { InvoiceStatusActions } from "@/components/InvoiceStatusActions";
 import { formatDate, formatHours } from "@/lib/format";
@@ -9,6 +10,7 @@ import {
   DEFAULT_SALES_TAX_RATE,
   deriveInvoiceStatus,
   invoiceSubtotal,
+  invoiceTotalsMatchLines,
   isTaxExempt,
   lineSourceLabel,
 } from "@/lib/billing";
@@ -25,7 +27,7 @@ export default async function InvoiceDetailPage({
 }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!["manager", "billing"].includes(profile.role)) redirect("/dashboard");
+  if (!canUseBillingTools(profile.role)) redirect("/dashboard");
 
   const { id } = await params;
   const supabase = await createClient();
@@ -116,9 +118,16 @@ export default async function InvoiceDetailPage({
         invoiceId={invoice.id}
         status={displayStatus}
         sentAt={invoice.sent_at ?? null}
+        reviewedAt={invoice.reviewed_at ?? null}
         disputeStatus={Boolean(invoice.dispute_status) || invoice.status === "disputed"}
         remainingBalance={Number(invoice.remaining_balance ?? 0)}
       />
+
+      {!invoiceTotalsMatchLines(invoice, lines) ? (
+        <div className="alert alert-error">
+          <span>Invoice total does not equal the sum of its lines. This invoice cannot be issued or sent until the totals are corrected.</span>
+        </div>
+      ) : null}
 
       {customer ? (
         <div className="rounded-box border border-base-300 bg-base-100 p-4">

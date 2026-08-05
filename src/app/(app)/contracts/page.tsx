@@ -5,10 +5,12 @@ import { getCurrentProfile } from "@/lib/auth";
 import { CONTRACTS_NAV_COPY } from "@/lib/constants";
 import { ContractsListClient } from "@/components/ContractsListClient";
 import { ContractMetricsWidgets } from "@/components/ContractMetricsWidgets";
+import { ContractPermissionActions } from "@/components/ContractPermissionActions";
 import { EmptyState, ErrorState, PageHeader, StatCard } from "@/components/ui";
 import type { ContractStatus } from "@/lib/types";
 import {
   canCreateContracts,
+  canEditContracts,
   canViewContractReports,
   canViewContractsModule,
   describeContractPermissions,
@@ -19,13 +21,19 @@ import {
   type ContractListRow,
 } from "@/lib/contracts";
 
-export default async function ContractsPage() {
+type SearchParams = Promise<{ status?: string }>;
+
+export default async function ContractsPage({ searchParams }: { searchParams: SearchParams }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
   if (!canViewContractsModule(profile.role)) redirect("/dashboard");
 
+  const params = await searchParams;
+  const statusFilter = typeof params.status === "string" ? params.status : "";
+
   const copy = CONTRACTS_NAV_COPY[profile.role];
   const canCreate = canCreateContracts(profile.role);
+  const canEdit = canEditContracts(profile.role);
   const canReport = canViewContractReports(profile.role);
   const supabase = await createClient();
   const { data, error } = await listContracts(supabase);
@@ -46,7 +54,7 @@ export default async function ContractsPage() {
 
   const statusCounts = summarizeContractsByStatus(contracts);
   const reportBundle = canReport ? await fetchContractReportMetrics(supabase) : null;
-  const permissionChips = describeContractPermissions(profile.role).filter((p) => p.allowed);
+  const permissionItems = describeContractPermissions(profile.role);
 
   return (
     <div className="space-y-6">
@@ -57,7 +65,7 @@ export default async function ContractsPage() {
           <div className="flex flex-wrap gap-2">
             {canReport ? (
               <Link href="/contracts/reports" className="btn btn-outline">
-                Reports
+                Reporting & Dashboard
               </Link>
             ) : null}
             <Link href="/contracts/renewals" className="btn btn-outline">
@@ -65,20 +73,14 @@ export default async function ContractsPage() {
             </Link>
             {canCreate ? (
               <Link href="/contracts/new" className="btn btn-primary">
-                New contract
+                Create
               </Link>
             ) : null}
           </div>
         }
       />
 
-      <div className="flex flex-wrap gap-2">
-        {permissionChips.map((item) => (
-          <span key={item.permission} className="badge badge-sm badge-outline">
-            {item.label}
-          </span>
-        ))}
-      </div>
+      <ContractPermissionActions items={permissionItems} />
 
       {error ? <ErrorState message={error.message} /> : null}
 
@@ -93,7 +95,9 @@ export default async function ContractsPage() {
       {!error ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
           {(Object.entries(statusCounts) as [ContractStatus, number][]).map(([status, count]) => (
-            <StatCard key={status} label={status.replace(/_/g, " ")} value={String(count)} />
+            <Link key={status} href={`/contracts?status=${status}`} className="block">
+              <StatCard label={status.replace(/_/g, " ")} value={String(count)} />
+            </Link>
           ))}
         </div>
       ) : null}
@@ -105,7 +109,13 @@ export default async function ContractsPage() {
         />
       ) : null}
 
-      {!error && contracts.length > 0 ? <ContractsListClient contracts={contracts} /> : null}
+      {!error && contracts.length > 0 ? (
+        <ContractsListClient
+          contracts={contracts}
+          initialStatus={statusFilter}
+          canEdit={canEdit}
+        />
+      ) : null}
     </div>
   );
 }

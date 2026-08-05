@@ -89,6 +89,12 @@ export async function POST(request: Request) {
   if (["draft", "canceled"].includes(invoice.status)) {
     return NextResponse.json({ error: "Only issued invoices can receive payments." }, { status: 400 });
   }
+  if (invoice.status === "draft") {
+    return NextResponse.json(
+      { error: "Draft invoices must be reviewed and issued before they can receive payments." },
+      { status: 400 }
+    );
+  }
   if (invoice.status === "disputed" || invoice.dispute_status) {
     return NextResponse.json(
       { error: "This invoice is disputed. Resolve the dispute before recording a payment." },

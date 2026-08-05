@@ -37,6 +37,7 @@ type Props = {
   customers: FilterOption[];
   technicians: FilterOption[];
   categories: string[];
+  initialPriority?: string;
 };
 
 const STATUSES = [
@@ -68,10 +69,19 @@ function liveSla(ticket: TicketListItem) {
   return evaluateTicketSla(ticket);
 }
 
-export function TicketListClient({ tickets, role, customers, technicians, categories }: Props) {
+export function TicketListClient({
+  tickets,
+  role,
+  customers,
+  technicians,
+  categories,
+  initialPriority = "",
+}: Props) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
-  const [priority, setPriority] = useState("");
+  const [priority, setPriority] = useState(
+    PRIORITIES.includes(initialPriority as (typeof PRIORITIES)[number]) ? initialPriority : ""
+  );
   const [category, setCategory] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [technicianId, setTechnicianId] = useState("");
@@ -124,6 +134,11 @@ export function TicketListClient({ tickets, role, customers, technicians, catego
 
   return (
     <div className="space-y-4">
+      {priority === "critical" ? (
+        <div className="alert alert-error text-sm" role="alert">
+          <span>Showing critical-priority tickets only. Treat these as highest urgency.</span>
+        </div>
+      ) : null}
       <div className="flex flex-col gap-3 rounded-box border border-base-300 bg-base-100 p-4 sm:flex-row sm:flex-wrap sm:items-end">
         <label className="form-control w-full sm:max-w-xs">
           <span className="label-text text-xs">Search</span>

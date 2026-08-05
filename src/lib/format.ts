@@ -70,6 +70,7 @@ export function statusBadgeClass(status: string) {
     [
       "pending",
       "pending_approval",
+      "awaiting_billing",
       "draft",
       "warning",
       "at_risk",
@@ -80,6 +81,8 @@ export function statusBadgeClass(status: string) {
       "on_hold",
       "medium",
       "not_yet_due",
+      "replacement_parts",
+      "reimbursable_expenses",
     ].includes(s)
   )
     return "badge-warning";

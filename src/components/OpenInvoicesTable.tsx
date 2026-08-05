@@ -8,14 +8,16 @@ import { AR_AGING_BUCKETS } from "@/lib/calculations";
 import { formatDate } from "@/lib/format";
 import {
   type CompareOp,
+  type MultiFilter,
   CompareFilter,
-  DateFilter,
+  DatePeriodFilter,
   DropdownHeader,
-  FilterOption,
+  MultiSelectFilter,
   StickyFilterTable,
   TextFilter,
+  matchesAnySelected,
   matchesCompare,
-  matchesDateSearch,
+  matchesDatePeriod,
   matchesText,
   useHeaderFilter,
 } from "@/components/table-filters";
@@ -46,9 +48,10 @@ export function OpenInvoicesTable({ invoices }: { invoices: OpenInvoiceRow[] }) 
   const { openFilter, setOpenFilter, toggleFilter, tableRef } = useHeaderFilter<FilterKey>();
   const [invoiceQuery, setInvoiceQuery] = useState("");
   const [customerQuery, setCustomerQuery] = useState("");
-  const [dueDateQuery, setDueDateQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [agingFilter, setAgingFilter] = useState("all");
+  const [dueYears, setDueYears] = useState<MultiFilter>(null);
+  const [dueMonths, setDueMonths] = useState<MultiFilter>(null);
+  const [statusFilter, setStatusFilter] = useState<MultiFilter>(null);
+  const [agingFilter, setAgingFilter] = useState<MultiFilter>(null);
   const [balanceOp, setBalanceOp] = useState<CompareOp>("gt");
   const [balanceValue, setBalanceValue] = useState("");
 
@@ -58,29 +61,30 @@ export function OpenInvoicesTable({ invoices }: { invoices: OpenInvoiceRow[] }) 
         (row) =>
           matchesText(row.invoice_number, invoiceQuery) &&
           matchesText(row.customer_name, customerQuery) &&
-          matchesDateSearch(row.due_date, dueDateQuery) &&
-          (statusFilter === "all" || row.status === statusFilter) &&
-          (agingFilter === "all" || row.aging_bucket === agingFilter) &&
+          matchesDatePeriod(row.due_date, dueYears, dueMonths) &&
+          matchesAnySelected(row.status, statusFilter) &&
+          matchesAnySelected(row.aging_bucket, agingFilter) &&
           matchesCompare(row.balance, balanceOp, balanceValue)
       ),
-    [invoices, invoiceQuery, customerQuery, dueDateQuery, statusFilter, agingFilter, balanceOp, balanceValue]
+    [invoices, invoiceQuery, customerQuery, dueYears, dueMonths, statusFilter, agingFilter, balanceOp, balanceValue]
   );
 
   const activeCount = [
     invoiceQuery.trim(),
     customerQuery.trim(),
-    dueDateQuery.trim(),
-    statusFilter !== "all" ? statusFilter : "",
-    agingFilter !== "all" ? agingFilter : "",
+    dueYears == null && dueMonths == null ? "" : "dueDate",
+    statusFilter == null ? "" : "status",
+    agingFilter == null ? "" : "aging",
     balanceValue.trim(),
   ].filter(Boolean).length;
 
   function clearFilters() {
     setInvoiceQuery("");
     setCustomerQuery("");
-    setDueDateQuery("");
-    setStatusFilter("all");
-    setAgingFilter("all");
+    setDueYears(null);
+    setDueMonths(null);
+    setStatusFilter(null);
+    setAgingFilter(null);
     setBalanceOp("gt");
     setBalanceValue("");
     setOpenFilter(null);
@@ -115,48 +119,36 @@ export function OpenInvoicesTable({ invoices }: { invoices: OpenInvoiceRow[] }) 
               <DropdownHeader label="Customer" active={Boolean(customerQuery.trim())} open={openFilter === "customer"} onToggle={() => toggleFilter("customer")}>
                 <TextFilter value={customerQuery} onChange={setCustomerQuery} placeholder="Search customer" />
               </DropdownHeader>
-              <DropdownHeader label="Due Date" active={Boolean(dueDateQuery.trim())} open={openFilter === "dueDate"} onToggle={() => toggleFilter("dueDate")}>
-                <DateFilter value={dueDateQuery} onChange={setDueDateQuery} />
+              <DropdownHeader
+                label="Due Date"
+                active={dueYears != null || dueMonths != null}
+                open={openFilter === "dueDate"}
+                onToggle={() => toggleFilter("dueDate")}
+              >
+                <DatePeriodFilter
+                  dates={invoices.map((invoice) => invoice.due_date)}
+                  years={dueYears}
+                  months={dueMonths}
+                  onYearsChange={setDueYears}
+                  onMonthsChange={setDueMonths}
+                />
               </DropdownHeader>
-              <DropdownHeader label="Status" active={statusFilter !== "all"} open={openFilter === "status"} onToggle={() => toggleFilter("status")}>
-                <FilterOption selected={statusFilter === "all"} onClick={() => setStatusFilter("all")}>
-                  (All)
-                </FilterOption>
-                {STATUS_OPTIONS.map((status) => (
-                  <FilterOption
-                    key={status}
-                    selected={statusFilter === status}
-                    onClick={() => {
-                      setStatusFilter(status);
-                      setOpenFilter(null);
-                    }}
-                  >
-                    {status.replace(/_/g, " ")}
-                  </FilterOption>
-                ))}
+              <DropdownHeader label="Status" active={statusFilter != null} open={openFilter === "status"} onToggle={() => toggleFilter("status")}>
+                <MultiSelectFilter
+                  options={STATUS_OPTIONS}
+                  selected={statusFilter}
+                  onChange={setStatusFilter}
+                  formatLabel={(status) => status.replace(/_/g, " ")}
+                />
               </DropdownHeader>
               <DropdownHeader
                 label="Aging Bucket"
-                active={agingFilter !== "all"}
+                active={agingFilter != null}
                 open={openFilter === "aging"}
                 align="right"
                 onToggle={() => toggleFilter("aging")}
               >
-                <FilterOption selected={agingFilter === "all"} onClick={() => setAgingFilter("all")}>
-                  (All)
-                </FilterOption>
-                {AR_AGING_BUCKETS.map((bucket) => (
-                  <FilterOption
-                    key={bucket}
-                    selected={agingFilter === bucket}
-                    onClick={() => {
-                      setAgingFilter(bucket);
-                      setOpenFilter(null);
-                    }}
-                  >
-                    {bucket}
-                  </FilterOption>
-                ))}
+                <MultiSelectFilter options={AR_AGING_BUCKETS} selected={agingFilter} onChange={setAgingFilter} />
               </DropdownHeader>
               <DropdownHeader
                 label="Balance"

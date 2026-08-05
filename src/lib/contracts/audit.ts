@@ -49,6 +49,49 @@ export const CONTRACT_CHANGE_FIELD_LABELS: Record<string, string> = {
   sla_resolution_hours: "Resolution SLA",
 };
 
+/** Commercial / price fields that require manager approval on active contracts. */
+export const CONTRACT_PRICE_FIELDS = [
+  "monthly_recurring_fee",
+  "one_time_setup_fee",
+  "included_hours_per_month",
+  "additional_hourly_rate",
+  "overages_allowed",
+  "overage_charges",
+] as const satisfies ReadonlyArray<keyof ContractFormValues>;
+
+export type ContractPriceField = (typeof CONTRACT_PRICE_FIELDS)[number];
+
+/** Major commercial terms highlighted in change history. */
+export const CONTRACT_MAJOR_TERM_FIELDS = [
+  ...CONTRACT_PRICE_FIELDS,
+  "status",
+  "start_date",
+  "end_date",
+  "effective_date",
+  "renewal_type",
+  "billing_frequency",
+  "billing_method",
+  "billing_timing",
+  "payment_terms",
+  "sla_critical_response_hours",
+  "sla_high_response_hours",
+  "sla_medium_response_hours",
+  "sla_low_response_hours",
+  "sla_response_hours",
+  "sla_resolution_hours",
+] as const;
+
+const PRICE_FIELD_SET = new Set<string>(CONTRACT_PRICE_FIELDS);
+const MAJOR_TERM_SET = new Set<string>(CONTRACT_MAJOR_TERM_FIELDS);
+
+export function isContractPriceField(field: string): field is ContractPriceField {
+  return PRICE_FIELD_SET.has(field);
+}
+
+export function isContractMajorTermField(field: string): boolean {
+  return MAJOR_TERM_SET.has(field);
+}
+
 const TRACKED_FIELDS: Array<keyof ContractFormValues> = [
   "contract_number",
   "name",
@@ -120,6 +163,17 @@ export function diffContractFormValues(
     }
   }
   return changes;
+}
+
+export function splitPriceAndOtherChanges(changes: ContractFieldChange[]) {
+  const priceChanges = changes.filter((c) => isContractPriceField(c.field_name));
+  const otherChanges = changes.filter((c) => !isContractPriceField(c.field_name));
+  return { priceChanges, otherChanges };
+}
+
+/** Active contracts require manager approval before price fields are applied. */
+export function priceChangesRequireManagerApproval(status: string | null | undefined) {
+  return status === "active";
 }
 
 export function formatBytes(bytes: number | null | undefined) {

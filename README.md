@@ -38,10 +38,11 @@ Password for all demo users: `1234`
 
 | Role | Email |
 |------|-------|
+| Admin | admin@servicesync.demo |
 | Manager | manager@servicesync.demo |
 | Technician | tech@servicesync.demo |
 | Billing | billing@servicesync.demo |
-| Customer (Apex Legal) | customer@apexlegal.demo |
+| Customer (Chad Corporation) | customer@apexlegal.demo |
 
 Use the **Demo Login Selector** on the login page to fill credentials, then click Sign in.
 

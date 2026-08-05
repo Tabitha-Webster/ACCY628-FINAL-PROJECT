@@ -160,7 +160,7 @@ export async function listContractModifications(supabase: SupabaseClient, contra
   return supabase
     .from("contract_modifications")
     .select(
-      "id, contract_id, modification_summary, effective_date, approval_status, approved_by, created_by, created_at, updated_at, created_by_profile:profiles!contract_modifications_created_by_fkey(full_name), approved_by_profile:profiles!contract_modifications_approved_by_fkey(full_name)"
+      "id, contract_id, modification_summary, effective_date, approval_status, approved_by, created_by, created_at, updated_at, proposed_changes, created_by_profile:profiles!contract_modifications_created_by_fkey(full_name), approved_by_profile:profiles!contract_modifications_approved_by_fkey(full_name)"
     )
     .eq("contract_id", contractId)
     .order("effective_date", { ascending: false });
@@ -269,7 +269,7 @@ export async function getContractRelatedWork(supabase: SupabaseClient, contractI
   const [monthEntries, tickets, projects, invoices] = await Promise.all([
     supabase
       .from("time_entries")
-      .select("hours_worked")
+      .select("hours_worked, work_date, description")
       .eq("contract_id", contractId)
       .eq("classification", "included")
       .gte("work_date", monthStart)

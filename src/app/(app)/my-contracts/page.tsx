@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/auth";
+import { getCurrentProfile, requireApprovedCustomer } from "@/lib/auth";
 import { CONTRACTS_NAV_COPY } from "@/lib/constants";
 import { PageHeader, EmptyState, StatusBadge, Money, Hours, DateText, ErrorState } from "@/components/ui";
 import type { Contract, ContractService } from "@/lib/types";
@@ -10,6 +10,7 @@ export default async function MyContractsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
   if (profile.role !== "customer" || !profile.customer_id) redirect("/contracts");
+  await requireApprovedCustomer(profile);
 
   const copy = CONTRACTS_NAV_COPY.customer;
   const supabase = await createClient();

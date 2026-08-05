@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth";
+import { isManagerRole } from "@/lib/constants";
 import { PageHeader } from "@/components/ui";
 
 type Control = {
@@ -22,17 +23,37 @@ const CONTROLS: Control[] = [
   {
     category: "Contract",
     risk: "work could be performed or billed without an active, approved service agreement in place",
-    control: "role-based contract permissions control view, create, edit, delete, approve, renew, cancel, and reporting; managers own lifecycle writes while billing can view reports and technicians can view agreements",
+    control: "billing and Ready-to-Bill eligibility require an active contract within its term dates; draft, on-hold, expired, and canceled agreements cannot be billed",
+  },
+  {
+    category: "Contract",
+    risk: "price or commercial terms on a live agreement could change without manager oversight",
+    control: "price changes on active contracts are held as pending modifications until a manager explicitly approves them; they do not update the live contract until approved",
+  },
+  {
+    category: "Contract",
+    risk: "contract terms could be edited without an audit trail explaining why",
+    control: "every contract edit requires a change reason, and field-level history records previous value, new value, user, date, and reason, with major commercial terms highlighted",
+  },
+  {
+    category: "Contract",
+    risk: "someone could edit an active agreement without realizing it affects live billing and SLA",
+    control: "editing an active contract shows a warning dialog and requires an on-form acknowledgment before changes can be saved",
   },
   {
     category: "Contract",
     risk: "a contract could lapse or auto-renew on unfavorable terms without anyone noticing",
-    control: "the contracts list and Renewal & Expiration page generate 90/60/30-day renewal reminders and expiration warnings, support auto-renew processing, and keep a renewal history so managers can act before a term lapses",
+    control: "the Renewal & Expiration page generates 90/60/30-day renewal reminders and expiration warnings, supports auto-renew processing, and keeps a renewal history so managers can act before a term lapses",
   },
   {
     category: "Work",
     risk: "technicians could perform unapproved or out-of-scope work that the company cannot recover the cost of",
     control: "additional work requests and out-of-scope classifications require manager or customer approval before the associated hours can be billed",
+  },
+  {
+    category: "Work",
+    risk: "an approved time entry, cost, project, milestone, ticket, or contract change could be edited afterward and billed under the old approval",
+    control: "changing an approved record clears its approval so it must be reviewed again; billed records cannot be edited and reviewed invoices return to draft if their charges change",
   },
   {
     category: "Work",
@@ -42,7 +63,12 @@ const CONTROLS: Control[] = [
   {
     category: "Billing",
     risk: "completed work could be forgotten and never invoiced, or the same work could be billed twice",
-    control: "Ready to Bill uses ticket eligibility views so only billable, approved, unbilled work with completion notes, valid contracts, and clear ticket/customer/technician links can be selected; once placed on an invoice the source row is marked billed with invoice_id and billed_at so it cannot be selected again",
+    control: "Ready to Bill uses ticket eligibility views so only billable, approved, unbilled work with completion notes, an active in-term contract, and clear ticket/customer/technician links can be selected; once placed on an invoice the source row is marked billed with invoice_id and billed_at so it cannot be selected again",
+  },
+  {
+    category: "Billing",
+    risk: "the same time entry could be placed on more than one invoice, double-charging the customer",
+    control: "invoice generation refuses any time entry that is already billed, linked to an invoice, or present on another non-canceled invoice line; monthly usage skips those hours so they are not billed again as overage; Ready to Bill also hides already-invoiced ticket time; the database blocks a second active time-entry line for that same source and will not mark an already-invoiced time entry as billed again",
   },
   {
     category: "Billing",
@@ -50,9 +76,29 @@ const CONTROLS: Control[] = [
     control: "only manager and billing roles can generate invoices, and every invoice line item is linked back to the specific time entry, cost, or project it was billed from",
   },
   {
+    category: "Billing",
+    risk: "a draft invoice could be sent to a customer before anyone checks the charges",
+    control: "new invoices are created as drafts; they must be reviewed and issued before they can be marked sent, receive payment, or appear in accounts receivable",
+  },
+  {
+    category: "Billing",
+    risk: "unapproved extra work, costs, or project changes could be billed to the customer",
+    control: "invoice generation and the database both refuse unapproved billable or out-of-scope time, unapproved direct costs, unapproved projects, and incomplete or unapproved milestones",
+  },
+  {
+    category: "Billing",
+    risk: "an invoice header total could be changed so it no longer matches the line items the customer was charged",
+    control: "the stored invoice total must equal the sum of its line amounts plus tax minus credits; review and send are blocked if the totals do not match, and the database rejects mismatched issued invoices",
+  },
+  {
     category: "Payment",
     risk: "a payment could be recorded for more than a customer actually owes, or applied to an invoice that was already canceled",
-    control: "the payment recording form validates that the payment amount does not exceed the invoice's remaining balance and blocks payments against canceled invoices",
+    control: "the payment recording form validates that the payment amount does not exceed the invoice's remaining balance",
+  },
+  {
+    category: "Payment",
+    risk: "cash could be applied to a canceled invoice, making the customer look paid when the invoice is no longer valid",
+    control: "canceled invoices are hidden from the payment screen, the payment API refuses them, and the database blocks any payment application against a canceled invoice",
   },
   {
     category: "Payment",
@@ -62,7 +108,7 @@ const CONTROLS: Control[] = [
   {
     category: "Data Integrity",
     risk: "manually re-typed totals could drift from the underlying detail records over time",
-    control: "invoice totals, accounts receivable, and profitability figures are always calculated directly from time entries, direct costs, and revenue records rather than stored as separate hand-entered numbers",
+    control: "invoice header totals are calculated from line items when the invoice is created and must stay equal to the sum of those lines plus tax minus credits; accounts receivable and profitability figures are calculated from invoice, payment, cost, and labor records rather than re-typed by hand",
   },
   {
     category: "Accounting",
@@ -81,7 +127,7 @@ const CATEGORY_ORDER = ["Access", "Contract", "Work", "Billing", "Payment", "Dat
 export default async function ControlsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (profile.role !== "manager") redirect("/dashboard");
+  if (!isManagerRole(profile.role)) redirect("/dashboard");
 
   return (
     <div className="space-y-6">

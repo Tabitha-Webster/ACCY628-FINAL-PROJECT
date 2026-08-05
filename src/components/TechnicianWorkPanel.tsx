@@ -218,7 +218,7 @@ export function TechnicianWorkPanel({
       }
     } else if (scope === "included" && classification === "out_of_scope") {
       statusPatch.classification = "out_of_scope";
-      statusPatch.billable_approval_status = billableApprovalStatus === "approved" ? "approved" : "pending";
+      statusPatch.billable_approval_status = "pending";
     } else if (scope === "included") {
       statusPatch.classification = "included";
       statusPatch.billable_approval_status = "not_required";

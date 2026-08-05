@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { isManagerRole } from "@/lib/constants";
 import { DataTable, EmptyState, ErrorState, Hours, PageHeader, StatCard, StatusBadge } from "@/components/ui";
 import { formatDate, statusLabel } from "@/lib/format";
 import { slaStatus, usagePercentage, usageStatus } from "@/lib/calculations";
@@ -18,7 +19,7 @@ function slaBadgeClass(status: "met" | "at_risk" | "missed" | "pending") {
 export default async function OperationsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (profile.role !== "manager") redirect("/dashboard");
+  if (!isManagerRole(profile.role)) redirect("/dashboard");
 
   const supabase = await createClient();
 
@@ -89,21 +90,76 @@ export default async function OperationsPage() {
       {error ? <ErrorState message={error.message} /> : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Open Tickets" value={String(openTickets?.length ?? 0)} />
+        <StatCard
+          label="Open Tickets"
+          value={String(openTickets?.length ?? 0)}
+          explanation={{
+            title: "Open Tickets",
+            result: String(openTickets?.length ?? 0),
+            formula: "Count of tickets in new, assigned, in progress, waiting on customer, or waiting on approval",
+            lines: (openTickets ?? []).map((ticket) => {
+              const customer = Array.isArray(ticket.customers) ? ticket.customers[0] : ticket.customers;
+              return {
+                label: ticket.ticket_number,
+                value: ticket.status.replace(/_/g, " "),
+                detail: `${customer?.name ?? "Unknown customer"} · ${ticket.title}`,
+              };
+            }),
+          }}
+        />
         <StatCard
           label="SLA At Risk / Missed"
           value={String(atRiskOrMissed.length)}
           tone={atRiskOrMissed.length > 0 ? "error" : "default"}
+          explanation={{
+            title: "SLA At Risk / Missed",
+            result: String(atRiskOrMissed.length),
+            formula: "Count of open tickets whose resolution SLA is at risk or already missed",
+            lines: atRiskOrMissed.map((ticket) => {
+              const customer = Array.isArray(ticket.customers) ? ticket.customers[0] : ticket.customers;
+              return {
+                label: ticket.ticket_number,
+                value: ticket.sla.replace(/_/g, " "),
+                detail: `${customer?.name ?? "Unknown customer"} · ${ticket.title}`,
+              };
+            }),
+          }}
         />
         <StatCard
           label="Pending Work Requests"
           value={String(pendingWork?.length ?? 0)}
           tone={(pendingWork?.length ?? 0) > 0 ? "warning" : "default"}
+          explanation={{
+            title: "Pending Work Requests",
+            result: String(pendingWork?.length ?? 0),
+            formula: "Count of additional work requests where approval_status = pending",
+            lines: (pendingWork ?? []).map((request) => {
+              const customer = Array.isArray(request.customers) ? request.customers[0] : request.customers;
+              return {
+                label: request.title,
+                value: request.estimated_amount ? `$${Number(request.estimated_amount).toFixed(2)}` : "—",
+                detail: customer?.name ?? "Unknown customer",
+              };
+            }),
+          }}
         />
         <StatCard
           label="Contracts Over Hours"
           value={String(contractsOverHours.length)}
           tone={contractsOverHours.length > 0 ? "error" : "default"}
+          explanation={{
+            title: "Contracts Over Hours",
+            result: String(contractsOverHours.length),
+            formula: "Count of active contracts where included hours used this month exceed included hours per month",
+            lines: contractsOverHours.map((contract) => {
+              const customer = Array.isArray(contract.customers) ? contract.customers[0] : contract.customers;
+              return {
+                label: contract.name,
+                value: `${contract.used.toFixed(1)} / ${contract.included.toFixed(1)} hrs`,
+                detail: `${customer?.name ?? "Unknown customer"} · ${contract.pct.toFixed(0)}% used`,
+              };
+            }),
+          }}
         />
       </div>
 
