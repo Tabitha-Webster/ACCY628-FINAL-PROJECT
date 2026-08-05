@@ -346,11 +346,39 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
                     label="Hours used this month"
                     value={`${usedHours.toFixed(1)} / ${includedHours.toFixed(1)}`}
                     hint={`${usagePct.toFixed(0)}% of included hours`}
+                    explanation={{
+                      title: "Hours used this month",
+                      result: `${usedHours.toFixed(1)} / ${includedHours.toFixed(1)}`,
+                      formula: "Sum of included-classification time entries on this contract this month ÷ included hours per month",
+                      lines: [
+                        { label: "Included hours this month", value: `${includedHours.toFixed(1)} hrs` },
+                        { label: "Included hours used", value: `${usedHours.toFixed(1)} hrs` },
+                      ],
+                    }}
                   />
-                  <StatCard label="Hours remaining" value={`${remainingHours.toFixed(1)} hrs`} />
+                  <StatCard
+                    label="Hours remaining"
+                    value={`${remainingHours.toFixed(1)} hrs`}
+                    explanation={{
+                      title: "Hours remaining",
+                      result: `${remainingHours.toFixed(1)} hrs`,
+                      formula: "Included hours per month − included hours used this month",
+                      lines: [
+                        { label: "Included hours this month", value: `${includedHours.toFixed(1)} hrs` },
+                        { label: "Hours used", value: `${usedHours.toFixed(1)} hrs` },
+                        { label: "Hours remaining", value: `${remainingHours.toFixed(1)} hrs` },
+                      ],
+                    }}
+                  />
                   <StatCard
                     label="Additional hourly rate"
                     value={`$${Number(contract.additional_hourly_rate ?? 0).toFixed(2)}/hr`}
+                    explanation={{
+                      title: "Additional hourly rate",
+                      result: `$${Number(contract.additional_hourly_rate ?? 0).toFixed(2)}/hr`,
+                      formula: "Contract additional_hourly_rate charged after included hours are used",
+                      lines: [{ label: contract.name, value: `$${Number(contract.additional_hourly_rate ?? 0).toFixed(2)}/hr` }],
+                    }}
                   />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">

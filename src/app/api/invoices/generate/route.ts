@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { makeInvoiceLine, summarizeInvoice } from "@/lib/billing";
+import { invoiceTotalsMismatchReason, makeInvoiceLine, summarizeInvoice } from "@/lib/billing";
 import {
   ONE_TIME_BILLING_SOURCES,
   directCostBillingBlockReason,
@@ -136,8 +136,6 @@ export async function POST(request: Request) {
     if (entry.customer_id !== customerId) conflicts.push(`Time entry ${entry.id} belongs to a different customer.`);
     const reason = timeEntryBillingBlockReason(entry);
     if (reason) conflicts.push(reason);
-    if (entry.invoice_id || entry.invoice_line_item_id || entry.billed_at)
-      conflicts.push(`Time entry on ${entry.work_date} has already been billed.`);
     if (entry.support_ticket_id) {
       const { data: eligible, error: eligError } = await supabase.rpc("time_entry_ticket_billing_eligible", {
         p_entry_id: entry.id,
@@ -200,7 +198,11 @@ export async function POST(request: Request) {
     for (const line of existingSourceLines ?? []) {
       const invoice = Array.isArray(line.invoices) ? line.invoices[0] : line.invoices;
       if (invoice && invoice.status !== "canceled") {
-        conflicts.push("One or more selected time or cost items were already billed on another invoice.");
+        conflicts.push(
+          line.source_type === "time_entry"
+            ? "A selected time entry is already on another invoice and cannot be billed again."
+            : "One or more selected time or cost items were already billed on another invoice."
+        );
         break;
       }
     }
@@ -325,7 +327,7 @@ export async function POST(request: Request) {
   const totals = summarizeInvoice(drafts, {
     taxStatus,
     paymentTerms,
-    currentStatus: "issued",
+    currentStatus: "draft",
   });
 
   if (totals.subtotal <= 0) {
@@ -375,10 +377,24 @@ export async function POST(request: Request) {
     .select();
 
   if (lineItemsError || !lineItems) {
+    const duplicateTimeEntry =
+      /already been invoiced|invoice_line_items_unique_source|duplicate key/i.test(lineItemsError?.message ?? "");
+    const unapproved = /unapproved/i.test(lineItemsError?.message ?? "");
     return NextResponse.json(
-      { error: lineItemsError?.message ?? "Invoice created, but line items failed to save." },
-      { status: 500 }
+      {
+        error: duplicateTimeEntry
+          ? "A selected time entry is already invoiced and cannot be billed again."
+          : unapproved
+            ? "Unapproved changes cannot be billed."
+            : (lineItemsError?.message ?? "Invoice created, but line items failed to save."),
+      },
+      { status: 400 }
     );
+  }
+
+  const totalsMismatch = invoiceTotalsMismatchReason(invoice, lineItems);
+  if (totalsMismatch) {
+    return NextResponse.json({ error: totalsMismatch }, { status: 500 });
   }
 
   const lineItemBySource = new Map<string, string>(lineItems.map((li) => [`${li.source_type}:${li.source_id}`, li.id]));
@@ -446,7 +462,12 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({
-    invoice: { id: invoice.id, invoiceNumber: invoice.invoice_number, totalAmount: invoice.total_amount },
+    invoice: {
+      id: invoice.id,
+      invoiceNumber: invoice.invoice_number,
+      totalAmount: invoice.total_amount,
+      status: invoice.status,
+    },
     warnings: updateErrors.length > 0 ? updateErrors : undefined,
   });
 }

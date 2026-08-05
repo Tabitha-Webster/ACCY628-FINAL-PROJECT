@@ -14,6 +14,7 @@ import {
 } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { grossMarginPct, grossProfit } from "@/lib/calculations";
+import { todayDateString, withDerivedInvoiceStatus } from "@/lib/billing";
 
 const OPEN_TICKET_STATUSES = ["new", "assigned", "in_progress", "waiting_on_customer", "waiting_on_approval"];
 
@@ -59,7 +60,7 @@ export default async function CustomerDetailPage({
       .limit(10),
     supabase
       .from("invoices")
-      .select("id, invoice_number, invoice_date, due_date, status, total_amount, remaining_balance")
+      .select("id, invoice_number, invoice_date, due_date, status, total_amount, remaining_balance, amount_paid, dispute_status")
       .eq("customer_id", id)
       .order("invoice_date", { ascending: false }),
     supabase
@@ -71,13 +72,18 @@ export default async function CustomerDetailPage({
     supabase.from("direct_costs").select("internal_cost").eq("customer_id", id).gte("cost_date", yearStart),
   ]);
 
-  const activeContracts = (contracts ?? []).filter((c) => c.status === "active").length;
-  const openTickets = (tickets ?? []).filter((t) => OPEN_TICKET_STATUSES.includes(t.status)).length;
-  const nonCanceledInvoices = (invoices ?? []).filter((inv) => inv.status !== "canceled");
-  const totalAr = nonCanceledInvoices.reduce((sum, inv) => sum + Number(inv.remaining_balance ?? 0), 0);
-  const overdueAmount = (invoices ?? [])
-    .filter((inv) => inv.status === "overdue")
-    .reduce((sum, inv) => sum + Number(inv.remaining_balance ?? 0), 0);
+  const derivedInvoices = (invoices ?? []).map((inv) => withDerivedInvoiceStatus(inv));
+  const activeContractsList = (contracts ?? []).filter((c) => c.status === "active");
+  const activeContracts = activeContractsList.length;
+  const openTicketRows = (tickets ?? []).filter((t) => OPEN_TICKET_STATUSES.includes(t.status));
+  const openTickets = openTicketRows.length;
+  const openReceivables = derivedInvoices.filter(
+    (inv) => !["draft", "canceled", "paid"].includes(inv.status) && inv.remaining_balance > 0.01
+  );
+  const totalAr = openReceivables.reduce((sum, inv) => sum + inv.remaining_balance, 0);
+  const today = todayDateString();
+  const overdueInvoices = openReceivables.filter((inv) => inv.due_date < today);
+  const overdueAmount = overdueInvoices.reduce((sum, inv) => sum + inv.remaining_balance, 0);
 
   const ytdRevenue = (revenueYtd ?? []).reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
   const ytdCost = (costsYtd ?? []).reduce((sum, c) => sum + Number(c.internal_cost ?? 0), 0);
@@ -97,13 +103,63 @@ export default async function CustomerDetailPage({
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Active Contracts" value={String(activeContracts)} />
-        <StatCard label="Open Tickets" value={String(openTickets)} tone={openTickets > 0 ? "warning" : "default"} />
-        <StatCard label="Accounts Receivable" value={formatCurrency(totalAr)} />
+        <StatCard
+          label="Active Contracts"
+          value={String(activeContracts)}
+          explanation={{
+            title: "Active Contracts",
+            result: String(activeContracts),
+            formula: "Count of this customer's contracts where status = active",
+            lines: activeContractsList.map((contract) => ({
+              label: contract.name,
+              value: contract.contract_number,
+              detail: contract.contract_type?.replace(/_/g, " "),
+            })),
+          }}
+        />
+        <StatCard
+          label="Open Tickets"
+          value={String(openTickets)}
+          tone={openTickets > 0 ? "warning" : "default"}
+          explanation={{
+            title: "Open Tickets",
+            result: String(openTickets),
+            formula: "Count of this customer's tickets that are still open",
+            lines: openTicketRows.map((ticket) => ({
+              label: ticket.ticket_number,
+              value: ticket.status.replace(/_/g, " "),
+              detail: ticket.title,
+            })),
+          }}
+        />
+        <StatCard
+          label="Accounts Receivable"
+          value={formatCurrency(totalAr)}
+          explanation={{
+            title: "Accounts Receivable",
+            result: formatCurrency(totalAr),
+            formula: "Sum of remaining_balance on this customer's open invoices",
+            lines: openReceivables.map((invoice) => ({
+              label: invoice.invoice_number,
+              value: formatCurrency(invoice.remaining_balance),
+              detail: invoice.status.replace(/_/g, " "),
+            })),
+          }}
+        />
         <StatCard
           label="Overdue Amount"
           value={formatCurrency(overdueAmount)}
           tone={overdueAmount > 0 ? "error" : "default"}
+          explanation={{
+            title: "Overdue Amount",
+            result: formatCurrency(overdueAmount),
+            formula: "Sum of remaining_balance on this customer's open invoices that are past due",
+            lines: overdueInvoices.map((invoice) => ({
+              label: invoice.invoice_number,
+              value: formatCurrency(invoice.remaining_balance),
+              detail: `due ${invoice.due_date} · ${invoice.status.replace(/_/g, " ")}`,
+            })),
+          }}
         />
       </div>
 
@@ -192,9 +248,9 @@ export default async function CustomerDetailPage({
 
       <div>
         <h2 className="mb-2 text-lg font-semibold">Invoices</h2>
-        {invoices && invoices.length > 0 ? (
+        {derivedInvoices.length > 0 ? (
           <DataTable headers={["Invoice", "Date", "Due", "Status", "Total", "Balance", ""]}>
-            {invoices.map((invoice) => (
+            {derivedInvoices.map((invoice) => (
               <tr key={invoice.id}>
                 <td className="font-medium">{invoice.invoice_number}</td>
                 <td className="text-xs">{formatDate(invoice.invoice_date)}</td>

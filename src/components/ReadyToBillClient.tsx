@@ -123,9 +123,9 @@ export function ReadyToBillClient({
       }
       setMessage({
         type: "success",
-        text: `Invoice ${body.invoice.invoiceNumber} created for ${group.customerName} (${formatCurrency(
+        text: `Draft invoice ${body.invoice.invoiceNumber} created for ${group.customerName} (${formatCurrency(
           body.invoice.totalAmount
-        )}).`,
+        )}). Review it before sending.`,
       });
       clearGroup(group.items);
       router.refresh();

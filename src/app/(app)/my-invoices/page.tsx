@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { PageHeader, DataTable, EmptyState, StatusBadge, Money, DateText, ErrorState, StatCard } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
-import type { Dispute, Invoice, Payment } from "@/lib/types";
+import { withDerivedInvoiceStatus } from "@/lib/billing";
+import type { Dispute, Payment } from "@/lib/types";
 
 export default async function MyInvoicesPage() {
   const profile = await getCurrentProfile();
@@ -36,14 +37,12 @@ export default async function MyInvoicesPage() {
     );
   }
 
-  const invoices = (invoicesRes.data ?? []) as Pick<
-    Invoice,
-    "id" | "invoice_number" | "invoice_date" | "due_date" | "status" | "total_amount" | "amount_paid" | "remaining_balance" | "billing_period_start" | "billing_period_end"
-  >[];
+  const invoices = (invoicesRes.data ?? []).map((invoice) => withDerivedInvoiceStatus(invoice));
   const payments = (paymentsRes.data ?? []) as (Pick<Payment, "payment_number" | "payment_date" | "payment_amount" | "payment_method" | "reference_number"> & { id: string })[];
   const disputes = (disputesRes.data ?? []) as (Pick<Dispute, "invoice_id" | "dispute_date" | "dispute_reason" | "disputed_amount" | "resolution_status"> & { id: string })[];
 
-  const balanceDue = invoices.filter((i) => !["draft", "canceled"].includes(i.status)).reduce((sum, i) => sum + Number(i.remaining_balance), 0);
+  const openInvoices = invoices.filter((i) => !["draft", "canceled", "paid"].includes(i.status) && i.remaining_balance > 0.01);
+  const balanceDue = openInvoices.reduce((sum, i) => sum + i.remaining_balance, 0);
   const totalPaid = payments.reduce((sum, p) => sum + Number(p.payment_amount), 0);
   const invoiceNumberById = new Map(invoices.map((i) => [i.id, i.invoice_number]));
 
@@ -52,9 +51,50 @@ export default async function MyInvoicesPage() {
       <PageHeader title="Invoices and Payments" description="Your billing history and current balance." />
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Balance Due" value={formatCurrency(balanceDue)} tone={balanceDue > 0 ? "warning" : "success"} />
-        <StatCard label="Total Invoices" value={String(invoices.length)} />
-        <StatCard label="Total Paid to Date" value={formatCurrency(totalPaid)} tone="success" />
+        <StatCard
+          label="Balance Due"
+          value={formatCurrency(balanceDue)}
+          tone={balanceDue > 0 ? "warning" : "success"}
+          explanation={{
+            title: "Balance Due",
+            result: formatCurrency(balanceDue),
+            formula: "Sum of remaining_balance on your open invoices that are not draft, canceled, or paid",
+            lines: openInvoices.map((invoice) => ({
+              label: invoice.invoice_number,
+              value: formatCurrency(invoice.remaining_balance),
+              detail: invoice.status.replace(/_/g, " "),
+            })),
+          }}
+        />
+        <StatCard
+          label="Total Invoices"
+          value={String(invoices.length)}
+          explanation={{
+            title: "Total Invoices",
+            result: String(invoices.length),
+            formula: "Count of all invoices issued to your account",
+            lines: invoices.map((invoice) => ({
+              label: invoice.invoice_number,
+              value: formatCurrency(Number(invoice.total_amount ?? 0)),
+              detail: invoice.status.replace(/_/g, " "),
+            })),
+          }}
+        />
+        <StatCard
+          label="Total Paid to Date"
+          value={formatCurrency(totalPaid)}
+          tone="success"
+          explanation={{
+            title: "Total Paid to Date",
+            result: formatCurrency(totalPaid),
+            formula: "Sum of all payment_amount values recorded for your account",
+            lines: payments.map((payment) => ({
+              label: payment.payment_number,
+              value: formatCurrency(Number(payment.payment_amount)),
+              detail: `${payment.payment_method.replace(/_/g, " ")} · ${payment.payment_date}`,
+            })),
+          }}
+        />
       </div>
 
       <div className="mt-6">

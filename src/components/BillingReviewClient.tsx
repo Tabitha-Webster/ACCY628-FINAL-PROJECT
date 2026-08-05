@@ -34,6 +34,7 @@ export type ReviewException = {
 
 export type MonthlyPackage = {
   contractId: string;
+  periodStart?: string;
   contractName: string;
   customerId: string;
   customerName: string;
@@ -53,23 +54,31 @@ function itemKey(item: ReviewItem) {
   return `${item.type}:${item.id}`;
 }
 
+function packageSelectKey(pkg: MonthlyPackage) {
+  return pkg.periodStart ? `${pkg.contractId}:${pkg.periodStart}` : pkg.contractId;
+}
+
 export function BillingReviewClient({
   packages,
   items,
   exceptions,
   periodLabel,
   periodRange,
+  canGenerateMonthly = true,
+  billingPeriodStart,
 }: {
   packages: MonthlyPackage[];
   items: ReviewItem[];
   exceptions: ReviewException[];
   periodLabel: string;
   periodRange: string;
+  canGenerateMonthly?: boolean;
+  billingPeriodStart?: string;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedContracts, setSelectedContracts] = useState<Set<string>>(
-    () => new Set(packages.filter((pkg) => !pkg.alreadyInvoiced && pkg.estimatedTotal > 0).map((pkg) => pkg.contractId))
+    () => new Set(packages.filter((pkg) => !pkg.alreadyInvoiced && pkg.estimatedTotal > 0).map(packageSelectKey))
   );
   const [submittingCustomerId, setSubmittingCustomerId] = useState<string | null>(null);
   const [generatingMonthly, setGeneratingMonthly] = useState(false);
@@ -90,7 +99,7 @@ export function BillingReviewClient({
   }, [items]);
 
   const packageTotal = packages
-    .filter((pkg) => selectedContracts.has(pkg.contractId))
+    .filter((pkg) => selectedContracts.has(packageSelectKey(pkg)))
     .reduce((sum, pkg) => sum + pkg.estimatedTotal, 0);
 
   function toggleContract(contractId: string) {
@@ -129,7 +138,9 @@ export function BillingReviewClient({
   }
 
   async function generateMonthly() {
-    const contractIds = Array.from(selectedContracts);
+    const contractIds = Array.from(
+      new Set(Array.from(selectedContracts).map((key) => key.split(":")[0]))
+    );
     if (contractIds.length === 0) return;
 
     setGeneratingMonthly(true);
@@ -138,7 +149,7 @@ export function BillingReviewClient({
       const res = await fetch("/api/invoices/generate-monthly", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contractIds }),
+        body: JSON.stringify({ contractIds, periodStart: billingPeriodStart }),
       });
       const body = await res.json();
       if (!res.ok) {
@@ -150,7 +161,7 @@ export function BillingReviewClient({
       const errorCount = body.errors?.length ?? 0;
       setMessage({
         type: errorCount ? "error" : "success",
-        text: `Created ${createdCount} monthly invoice(s) for ${body.periodLabel}. ${skipCount ? `${skipCount} skipped.` : ""} ${
+        text: `Created ${createdCount} draft monthly invoice(s) for ${body.periodLabel}. Review each draft before sending. ${skipCount ? `${skipCount} skipped.` : ""} ${
           errorCount ? `${errorCount} error(s).` : ""
         }`.trim(),
       });
@@ -186,9 +197,9 @@ export function BillingReviewClient({
       }
       setMessage({
         type: "success",
-        text: `Invoice ${body.invoice.invoiceNumber} created for ${group.customerName} (${formatCurrency(
+        text: `Draft invoice ${body.invoice.invoiceNumber} created for ${group.customerName} (${formatCurrency(
           body.invoice.totalAmount
-        )}).`,
+        )}). Review it before sending.`,
       });
       clearGroup(group.items);
       router.refresh();
@@ -232,14 +243,20 @@ export function BillingReviewClient({
               charges, and approved equipment or software charges.
             </p>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            disabled={selectedContracts.size === 0 || generatingMonthly}
-            onClick={generateMonthly}
-          >
-            {generatingMonthly ? "Generating…" : "Generate selected monthly invoices"}
-          </button>
+          <div className="text-right">
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={!canGenerateMonthly || selectedContracts.size === 0 || generatingMonthly}
+              onClick={generateMonthly}
+              title={canGenerateMonthly ? undefined : "Switch to monthly view to generate invoices."}
+            >
+              {generatingMonthly ? "Generating…" : "Generate selected monthly invoices"}
+            </button>
+            {!canGenerateMonthly ? (
+              <p className="mt-1 text-xs opacity-60">Switch to monthly view to generate invoices.</p>
+            ) : null}
+          </div>
         </div>
 
         {packages.length === 0 ? (
@@ -249,15 +266,15 @@ export function BillingReviewClient({
           />
         ) : (
           packages.map((pkg) => (
-            <div key={pkg.contractId} className="card border border-base-300 bg-base-100 shadow-sm">
+            <div key={packageSelectKey(pkg)} className="card border border-base-300 bg-base-100 shadow-sm">
               <div className="card-body gap-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <label className="flex items-start gap-3">
                     <input
                       type="checkbox"
                       className="checkbox checkbox-sm mt-1"
-                      checked={selectedContracts.has(pkg.contractId)}
-                      onChange={() => toggleContract(pkg.contractId)}
+                      checked={selectedContracts.has(packageSelectKey(pkg))}
+                      onChange={() => toggleContract(packageSelectKey(pkg))}
                     />
                     <span>
                       <span className="block font-semibold">{pkg.customerName}</span>

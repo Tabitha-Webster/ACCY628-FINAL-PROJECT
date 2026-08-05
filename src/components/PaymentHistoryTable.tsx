@@ -6,14 +6,16 @@ import { EmptyState, Money } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import {
   type CompareOp,
+  type MultiFilter,
   CompareFilter,
-  DateFilter,
+  DatePeriodFilter,
   DropdownHeader,
-  FilterOption,
+  MultiSelectFilter,
   StickyFilterTable,
   TextFilter,
+  matchesAnySelected,
   matchesCompare,
-  matchesDateSearch,
+  matchesDatePeriod,
   matchesText,
   useHeaderFilter,
 } from "@/components/table-filters";
@@ -36,8 +38,9 @@ export function PaymentHistoryTable({ payments }: { payments: PaymentHistoryRow[
   const { openFilter, setOpenFilter, toggleFilter, tableRef } = useHeaderFilter<FilterKey>();
   const [paymentQuery, setPaymentQuery] = useState("");
   const [customerQuery, setCustomerQuery] = useState("");
-  const [dateQuery, setDateQuery] = useState("");
-  const [methodFilter, setMethodFilter] = useState("all");
+  const [dateYears, setDateYears] = useState<MultiFilter>(null);
+  const [dateMonths, setDateMonths] = useState<MultiFilter>(null);
+  const [methodFilter, setMethodFilter] = useState<MultiFilter>(null);
   const [referenceQuery, setReferenceQuery] = useState("");
   const [amountOp, setAmountOp] = useState<CompareOp>("gt");
   const [amountValue, setAmountValue] = useState("");
@@ -48,19 +51,19 @@ export function PaymentHistoryTable({ payments }: { payments: PaymentHistoryRow[
         (row) =>
           matchesText(row.payment_number, paymentQuery) &&
           matchesText(row.customer_name, customerQuery) &&
-          matchesDateSearch(row.payment_date, dateQuery) &&
-          (methodFilter === "all" || row.payment_method === methodFilter) &&
+          matchesDatePeriod(row.payment_date, dateYears, dateMonths) &&
+          matchesAnySelected(row.payment_method, methodFilter) &&
           matchesText(row.reference_number, referenceQuery) &&
           matchesCompare(row.payment_amount, amountOp, amountValue)
       ),
-    [payments, paymentQuery, customerQuery, dateQuery, methodFilter, referenceQuery, amountOp, amountValue]
+    [payments, paymentQuery, customerQuery, dateYears, dateMonths, methodFilter, referenceQuery, amountOp, amountValue]
   );
 
   const activeCount = [
     paymentQuery.trim(),
     customerQuery.trim(),
-    dateQuery.trim(),
-    methodFilter !== "all" ? methodFilter : "",
+    dateYears == null && dateMonths == null ? "" : "date",
+    methodFilter == null ? "" : "method",
     referenceQuery.trim(),
     amountValue.trim(),
   ].filter(Boolean).length;
@@ -68,8 +71,9 @@ export function PaymentHistoryTable({ payments }: { payments: PaymentHistoryRow[
   function clearFilters() {
     setPaymentQuery("");
     setCustomerQuery("");
-    setDateQuery("");
-    setMethodFilter("all");
+    setDateYears(null);
+    setDateMonths(null);
+    setMethodFilter(null);
     setReferenceQuery("");
     setAmountOp("gt");
     setAmountValue("");
@@ -105,25 +109,27 @@ export function PaymentHistoryTable({ payments }: { payments: PaymentHistoryRow[
               <DropdownHeader label="Customer" active={Boolean(customerQuery.trim())} open={openFilter === "customer"} onToggle={() => toggleFilter("customer")}>
                 <TextFilter value={customerQuery} onChange={setCustomerQuery} placeholder="Search customer" />
               </DropdownHeader>
-              <DropdownHeader label="Date" active={Boolean(dateQuery.trim())} open={openFilter === "date"} onToggle={() => toggleFilter("date")}>
-                <DateFilter value={dateQuery} onChange={setDateQuery} />
+              <DropdownHeader
+                label="Date"
+                active={dateYears != null || dateMonths != null}
+                open={openFilter === "date"}
+                onToggle={() => toggleFilter("date")}
+              >
+                <DatePeriodFilter
+                  dates={payments.map((payment) => payment.payment_date)}
+                  years={dateYears}
+                  months={dateMonths}
+                  onYearsChange={setDateYears}
+                  onMonthsChange={setDateMonths}
+                />
               </DropdownHeader>
-              <DropdownHeader label="Method" active={methodFilter !== "all"} open={openFilter === "method"} onToggle={() => toggleFilter("method")}>
-                <FilterOption selected={methodFilter === "all"} onClick={() => setMethodFilter("all")}>
-                  (All)
-                </FilterOption>
-                {METHOD_OPTIONS.map((method) => (
-                  <FilterOption
-                    key={method}
-                    selected={methodFilter === method}
-                    onClick={() => {
-                      setMethodFilter(method);
-                      setOpenFilter(null);
-                    }}
-                  >
-                    {method.replace(/_/g, " ")}
-                  </FilterOption>
-                ))}
+              <DropdownHeader label="Method" active={methodFilter != null} open={openFilter === "method"} onToggle={() => toggleFilter("method")}>
+                <MultiSelectFilter
+                  options={METHOD_OPTIONS}
+                  selected={methodFilter}
+                  onChange={setMethodFilter}
+                  formatLabel={(method) => method.replace(/_/g, " ")}
+                />
               </DropdownHeader>
               <DropdownHeader
                 label="Reference"

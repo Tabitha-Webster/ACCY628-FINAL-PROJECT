@@ -8,6 +8,21 @@ export function isOpenBillingStatus(status: string | null | undefined) {
   return status === "unbilled" || status === "ready" || status == null;
 }
 
+export function isTimeEntryAlreadyInvoiced(entry: {
+  billing_status?: string | null;
+  invoice_id?: string | null;
+  invoice_line_item_id?: string | null;
+  billed_at?: string | null;
+}) {
+  return (
+    entry.billing_status === "billed" ||
+    entry.billing_status === "excluded" ||
+    Boolean(entry.invoice_id) ||
+    Boolean(entry.invoice_line_item_id) ||
+    Boolean(entry.billed_at)
+  );
+}
+
 export function isBillableTimeClassification(classification: string | null | undefined) {
   return classification === "billable" || classification === "out_of_scope";
 }
@@ -17,6 +32,9 @@ export function timeEntryBillingBlockReason(entry: {
   approval_status: string;
   billing_status: string;
   work_date?: string;
+  invoice_id?: string | null;
+  invoice_line_item_id?: string | null;
+  billed_at?: string | null;
 }) {
   const label = entry.work_date ? `Time entry on ${entry.work_date}` : "Time entry";
   if (!isBillableTimeClassification(entry.classification)) {
@@ -25,8 +43,8 @@ export function timeEntryBillingBlockReason(entry: {
   if (!isApprovedForBilling(entry.approval_status)) {
     return `${label} is not approved for billing.`;
   }
-  if (!isOpenBillingStatus(entry.billing_status)) {
-    return `${label} has already been billed.`;
+  if (isTimeEntryAlreadyInvoiced(entry) || !isOpenBillingStatus(entry.billing_status)) {
+    return `${label} has already been invoiced.`;
   }
   return null;
 }
@@ -53,7 +71,10 @@ export function projectBillingBlockReason(project: {
   customer_approval_status?: string | null;
 }) {
   const label = project.name ? `Project "${project.name}"` : "Project";
-  if (["pending", "rejected"].includes(project.customer_approval_status ?? "")) {
+  if (
+    project.status === "awaiting_customer_approval" ||
+    ["pending", "rejected"].includes(project.customer_approval_status ?? "")
+  ) {
     return `${label} is not approved for billing.`;
   }
   if (!["completed", "approved"].includes(project.status)) {
