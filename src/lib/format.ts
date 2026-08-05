@@ -44,6 +44,12 @@ export function formatDateTime(value: string | Date | null | undefined) {
 }
 
 export function statusLabel(status: string) {
+  if (status === "overdue") return "Overdue";
+  if (status === "at_risk") return "At Risk";
+  if (status === "not_yet_due") return "Not Yet Due";
+  if (status === "not_defined") return "SLA Not Defined";
+  if (status === "missed") return "Missed";
+  if (status === "met") return "Met";
   return status
     .split("_")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
@@ -55,9 +61,18 @@ export function statusBadgeClass(status: string) {
   if (["active", "paid", "approved", "resolved", "closed", "met", "normal", "sent"].includes(s))
     return "badge-success";
   if (["issued", "current"].includes(s)) return "badge-info";
-  if (["pending", "draft", "warning", "at_risk", "partially_paid", "in_progress", "assigned"].includes(s))
+  if (
+    ["pending", "draft", "warning", "at_risk", "partially_paid", "in_progress", "assigned", "medium", "not_yet_due"].includes(
+      s
+    )
+  )
     return "badge-warning";
-  if (["overdue", "disputed", "rejected", "canceled", "missed", "over_limit", "unprofitable"].includes(s))
+  if (
+    ["overdue", "disputed", "rejected", "canceled", "missed", "over_limit", "unprofitable", "critical", "high"].includes(
+      s
+    )
+  )
     return "badge-error";
+  if (["low", "new", "not_defined"].includes(s)) return "badge-ghost";
   return "badge-ghost";
 }
