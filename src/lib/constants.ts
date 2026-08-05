@@ -58,8 +58,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   manager: [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/customers", label: "Customers" },
-    { href: "/contracts", label: "Contracts & Agreements" },
-    { href: "/contracts/reports", label: "Contract Reports" },
+    // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
     { href: "/operations", label: "Service Operations" },
     { href: "/profitability", label: "Profitability" },
     { href: "/billing-collections", label: "Billing and Collections" },
@@ -76,15 +75,8 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/additional-work", label: "Additional Work Requests" },
   ],
   billing: [
-    { href: "/dashboard", label: "Billing Dashboard" },
-    { href: "/contracts", label: "Contracts & Agreements" },
-    { href: "/contracts/reports", label: "Contract Reports" },
-    { href: "/billing-review", label: "Billing Review" },
-    { href: "/invoices", label: "Invoices" },
-    { href: "/payments", label: "Payment History" },
-    { href: "/accounts-receivable", label: "Accounts Receivable" },
-    { href: "/accounting", label: "Accounting Review" },
-    { href: "/hr-analytics", label: "HR Cost Analytics" },
+    { href: "/dashboard", label: "Dashboard" },
+    // Contracts & Agreements + Billing/Collections/Accounting trees render in AppShell
   ],
   hr: [
     { href: "/dashboard", label: "HR Home" },
@@ -107,7 +99,7 @@ export const CONTRACTS_NAV_COPY: Record<
 > = {
   manager: {
     href: "/contracts",
-    title: "Contracts & Agreements",
+    title: "Manage Contracts",
     description:
       "Manage the full agreement lifecycle — draft, approval, active service, holds, renewals, and cancellations.",
   },
@@ -119,7 +111,7 @@ export const CONTRACTS_NAV_COPY: Record<
   },
   billing: {
     href: "/contracts",
-    title: "Contracts & Agreements",
+    title: "Manage Contracts",
     description:
       "Confirm recurring fees, billing frequency, payment terms, and rates before generating invoices.",
   },
@@ -160,9 +152,22 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/accounting",
       "/accounts-receivable",
       "/time-costs",
+      "/contracts",
     ],
     technician: ["/contracts", "/customers"],
-    billing: ["/customers", "/contracts", "/projects", "/tickets", "/ready-to-bill"],
+    billing: [
+      "/customers",
+      "/contracts",
+      "/projects",
+      "/tickets",
+      "/ready-to-bill",
+      "/billing-review",
+      "/invoices",
+      "/payments",
+      "/accounts-receivable",
+      "/accounting",
+      "/hr-analytics",
+    ],
     customer: ["/my-invoices", "/make-payment", "/tickets"],
   };
 

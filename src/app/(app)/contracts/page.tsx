@@ -57,7 +57,7 @@ export default async function ContractsPage() {
           <div className="flex flex-wrap gap-2">
             {canReport ? (
               <Link href="/contracts/reports" className="btn btn-outline">
-                Reports & Dashboard
+                Reports
               </Link>
             ) : null}
             <Link href="/contracts/renewals" className="btn btn-outline">
