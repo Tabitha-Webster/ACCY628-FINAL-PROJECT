@@ -420,6 +420,11 @@ export type Invoice = {
   remaining_balance: number;
   dispute_status: boolean;
   notes: string | null;
+  generated_by?: string | null;
+  generated_at?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_notes?: string | null;
   sent_at: string | null;
   sent_by: string | null;
   created_at: string;

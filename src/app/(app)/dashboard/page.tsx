@@ -26,12 +26,22 @@ import { AR_AGING_BUCKETS, arAgingBucket, usagePercentage, usageStatus, hoursRem
 import { evaluateTicketSla } from "@/lib/sla";
 import { formatCurrency } from "@/lib/format";
 import { fetchContractReportMetrics } from "@/lib/contracts";
+import { round2, withDerivedInvoiceStatus } from "@/lib/billing";
+import { loadBillingReviewData } from "@/lib/billing-review-data";
+import {
+  dateInDashboardPeriod,
+  monthKeyInDashboardPeriod,
+  periodOverlapsToday,
+  periodViewControlProps,
+  resolveDashboardPeriod,
+} from "@/lib/dashboard-period";
+import { PeriodViewControls } from "@/components/PeriodViewControls";
+import { ExplainNumber } from "@/components/ExplainNumber";
 import type {
   AdditionalWorkRequest,
   Contract,
   DirectCost,
   Dispute,
-  Invoice,
   Payment,
   Project,
   RevenueRecord,
@@ -81,13 +91,20 @@ function ticketSlaSeverity(t: {
   return "on_track";
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
 
   if (profile.role === "manager") return <ManagerDashboard profile={profile} />;
   if (profile.role === "technician") return <TechnicianDashboard profile={profile} />;
-  if (profile.role === "billing") return <BillingDashboard profile={profile} />;
+  if (profile.role === "billing") {
+    const params = await searchParams;
+    return <BillingDashboard profile={profile} searchParams={params} />;
+  }
   if (profile.role === "hr") return <HrDashboard profile={profile} />;
   if (profile.role === "customer") return <CustomerDashboard profile={profile} />;
   redirect("/login");
@@ -176,13 +193,15 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
       .select("contract_id, customer_id, hours_worked, labor_cost, classification, work_date")
       .gte("work_date", rangeStart),
     supabase.from("direct_costs").select("internal_cost, cost_date").gte("cost_date", rangeStart),
-    supabase.from("invoices").select("id, customer_id, status, remaining_balance, due_date"),
+    supabase
+      .from("invoices")
+      .select("id, customer_id, invoice_number, status, remaining_balance, due_date, amount_paid, dispute_status"),
     supabase.from("revenue_records").select("period_month, recognition, amount").gte("period_month", rangeStart),
     supabase
       .from("contracts")
       .select("id, name, contract_number, customer_id, included_hours_per_month")
       .eq("status", "active"),
-    supabase.from("customers").select("id, name"),
+    supabase.from("customers").select("id, name, status"),
     fetchContractReportMetrics(supabase),
   ]);
 
@@ -198,10 +217,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
     "contract_id" | "customer_id" | "hours_worked" | "labor_cost" | "classification" | "work_date"
   >[];
   const directCosts = (directCostsRes.data ?? []) as Pick<DirectCost, "internal_cost" | "cost_date">[];
-  const invoices = (invoicesRes.data ?? []) as Pick<
-    Invoice,
-    "id" | "customer_id" | "status" | "remaining_balance" | "due_date"
-  >[];
+  const invoices = (invoicesRes.data ?? []).map((invoice) => withDerivedInvoiceStatus(invoice));
   const revenue = (revenueRes.data ?? []) as Pick<RevenueRecord, "period_month" | "recognition" | "amount">[];
   const activeContracts = (activeContractsRes.data ?? []) as Pick<
     Contract,
@@ -290,38 +306,191 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Active Customers" value={String(customersCountRes.count ?? 0)} />
-        <StatCard label="Active Contracts" value={String(contractsCountRes.count ?? 0)} />
-        <StatCard label="Open Tickets" value={String(tickets.length)} />
+        <StatCard
+          label="Active Customers"
+          value={String(customersCountRes.count ?? 0)}
+          explanation={{
+            title: "Active Customers",
+            result: String(customersCountRes.count ?? 0),
+            formula: "Count of customers where status = active",
+            lines: (customersRes.data ?? [])
+              .filter((customer) => customer.status === "active" && customer.name)
+              .map((customer) => ({ label: customer.name as string, value: "Active" })),
+          }}
+        />
+        <StatCard
+          label="Active Contracts"
+          value={String(contractsCountRes.count ?? 0)}
+          explanation={{
+            title: "Active Contracts",
+            result: String(contractsCountRes.count ?? 0),
+            formula: "Count of contracts where status = active",
+            lines: activeContracts.map((contract) => ({
+              label: contract.name,
+              value: contract.contract_number,
+              detail: customerName.get(contract.customer_id) ?? "Unknown customer",
+            })),
+          }}
+        />
+        <StatCard
+          label="Open Tickets"
+          value={String(tickets.length)}
+          explanation={{
+            title: "Open Tickets",
+            result: String(tickets.length),
+            formula: "Count of support tickets in new, assigned, in progress, waiting on customer, or waiting on approval",
+            lines: tickets.slice(0, 20).map((ticket) => ({
+              label: ticket.ticket_number,
+              value: ticket.status.replace(/_/g, " "),
+              detail: ticket.title,
+            })),
+          }}
+        />
         <StatCard
           label="SLA At Risk / Missed"
           value={`${slaAtRisk.length} / ${slaMissed.length}`}
           tone={slaMissed.length > 0 ? "error" : slaAtRisk.length > 0 ? "warning" : "success"}
+          explanation={{
+            title: "SLA At Risk / Missed",
+            result: `${slaAtRisk.length} / ${slaMissed.length}`,
+            formula: "At-risk tickets + missed tickets among currently open tickets",
+            description: "At risk means a response or resolution deadline is close. Missed means a deadline has already passed.",
+            lines: [
+              ...slaMissed.map((ticket) => ({ label: ticket.ticket_number, value: "Missed", detail: ticket.title })),
+              ...slaAtRisk.map((ticket) => ({ label: ticket.ticket_number, value: "At risk", detail: ticket.title })),
+            ],
+          }}
         />
         <StatCard
           label="Contracts Over Included Hours"
           value={String(contractsOverHours.length)}
           tone={contractsOverHours.length > 0 ? "warning" : "success"}
+          explanation={{
+            title: "Contracts Over Included Hours",
+            result: String(contractsOverHours.length),
+            formula: "Count of active contracts where included hours used this month > included hours per month",
+            lines: contractsOverHours.map((contract) => ({
+              label: contract.name,
+              value: `${contract.used.toFixed(1)} / ${Number(contract.included_hours_per_month).toFixed(1)} hrs`,
+              detail: `${contract.pct.toFixed(0)}% of included hours`,
+            })),
+          }}
         />
         <StatCard
           label="Pending Additional Work"
           value={String(additionalWork.length)}
           tone={additionalWork.length > 0 ? "warning" : "default"}
+          explanation={{
+            title: "Pending Additional Work",
+            result: String(additionalWork.length),
+            formula: "Count of additional work requests where approval_status = pending",
+            lines: additionalWork.map((request) => ({
+              label: request.title,
+              value: formatCurrency(Number(request.estimated_amount ?? 0)),
+              detail: customerName.get(request.customer_id) ?? "Unknown customer",
+            })),
+          }}
         />
-        <StatCard label="Monthly Revenue" value={formatCurrency(revenueThisMonth)} hint="Earned this month" />
+        <StatCard
+          label="Monthly Revenue"
+          value={formatCurrency(revenueThisMonth)}
+          hint="Earned this month"
+          explanation={{
+            title: "Monthly Revenue",
+            result: formatCurrency(revenueThisMonth),
+            formula: `Sum of revenue_records.amount where recognition = earned and period is ${monthLabel(currentMonthKey)}`,
+            lines: revenue
+              .filter((row) => row.recognition === "earned" && monthKey(row.period_month) === currentMonthKey)
+              .map((row) => ({
+                label: row.period_month,
+                value: formatCurrency(Number(row.amount)),
+                detail: "Earned revenue",
+              })),
+          }}
+        />
         <StatCard
           label="Monthly Profit"
           value={formatCurrency(profitThisMonth)}
           tone={profitThisMonth >= 0 ? "success" : "error"}
           hint={`Cost: ${formatCurrency(costThisMonth)}`}
+          explanation={{
+            title: "Monthly Profit",
+            result: formatCurrency(profitThisMonth),
+            formula: "Earned revenue this month − (labor cost this month + direct cost this month)",
+            lines: [
+              { label: "Earned revenue", value: formatCurrency(revenueThisMonth) },
+              { label: "Labor cost", value: formatCurrency(laborCostThisMonth), detail: "Internal labor cost on time entries this month" },
+              { label: "Direct cost", value: formatCurrency(directCostThisMonth), detail: "Internal cost on direct cost entries this month" },
+              { label: "Total cost", value: formatCurrency(costThisMonth) },
+              { label: "Profit", value: formatCurrency(profitThisMonth), detail: "Revenue minus total cost" },
+            ],
+          }}
         />
       </div>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Accounts Receivable" value={formatCurrency(ar)} />
-        <StatCard label="Overdue Balance" value={formatCurrency(overdue)} tone={overdue > 0 ? "error" : "success"} />
-        <StatCard label="Deferred Revenue" value={formatCurrency(deferred)} />
-        <StatCard label="Unbilled Revenue" value={formatCurrency(unbilled)} />
+        <StatCard
+          label="Accounts Receivable"
+          value={formatCurrency(ar)}
+          explanation={{
+            title: "Accounts Receivable",
+            result: formatCurrency(ar),
+            formula: "Sum of remaining_balance on invoices that are not draft, canceled, or paid and still have a balance",
+            lines: invoices
+              .filter((invoice) => !["draft", "canceled", "paid"].includes(invoice.status) && Number(invoice.remaining_balance) > 0)
+              .map((invoice) => ({
+                label: invoice.invoice_number,
+                value: formatCurrency(Number(invoice.remaining_balance)),
+                detail: customerName.get(invoice.customer_id) ?? "Unknown customer",
+              })),
+          }}
+        />
+        <StatCard
+          label="Overdue Balance"
+          value={formatCurrency(overdue)}
+          tone={overdue > 0 ? "error" : "success"}
+          explanation={{
+            title: "Overdue Balance",
+            result: formatCurrency(overdue),
+            formula: "Sum of remaining_balance on open invoices with due date before today",
+            lines: invoices
+              .filter(
+                (invoice) =>
+                  !["draft", "canceled", "paid"].includes(invoice.status) &&
+                  Number(invoice.remaining_balance) > 0 &&
+                  invoice.due_date < todayStr
+              )
+              .map((invoice) => ({
+                label: invoice.invoice_number,
+                value: formatCurrency(Number(invoice.remaining_balance)),
+                detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} · due ${invoice.due_date}`,
+              })),
+          }}
+        />
+        <StatCard
+          label="Deferred Revenue"
+          value={formatCurrency(deferred)}
+          explanation={{
+            title: "Deferred Revenue",
+            result: formatCurrency(deferred),
+            formula: "Sum of revenue_records.amount where recognition = deferred",
+            lines: revenue
+              .filter((row) => row.recognition === "deferred")
+              .map((row) => ({ label: row.period_month, value: formatCurrency(Number(row.amount)) })),
+          }}
+        />
+        <StatCard
+          label="Unbilled Revenue"
+          value={formatCurrency(unbilled)}
+          explanation={{
+            title: "Unbilled Revenue",
+            result: formatCurrency(unbilled),
+            formula: "Sum of revenue_records.amount where recognition = unbilled",
+            lines: revenue
+              .filter((row) => row.recognition === "unbilled")
+              .map((row) => ({ label: row.period_month, value: formatCurrency(Number(row.amount)) })),
+          }}
+        />
       </div>
 
       <div className="mt-6">
@@ -637,69 +806,87 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
 // Billing
 // ---------------------------------------------------------------------------
 
-async function BillingDashboard({ profile }: { profile: Profile }) {
+async function BillingDashboard({
+  profile,
+  searchParams,
+}: {
+  profile: Profile;
+  searchParams: { [key: string]: string | string[] | undefined };
+}) {
+  const period = resolveDashboardPeriod(searchParams.view, searchParams.period);
+  const includeOpenOneTime = periodOverlapsToday(period);
   const supabase = await createClient();
 
-  const [
-    readyTimeRes,
-    readyCostsRes,
-    readyMilestonesRes,
-    invoicesRes,
-    paymentsRes,
-    revenueRes,
-    customersRes,
-    contractReportRes,
-  ] = await Promise.all([
-    supabase.from("time_entries").select("id", { count: "exact", head: true }).eq("billing_status", "ready"),
-    supabase.from("direct_costs").select("id", { count: "exact", head: true }).eq("billing_status", "ready"),
-    supabase.from("project_milestones").select("id", { count: "exact", head: true }).eq("billing_status", "ready"),
-    supabase.from("invoices").select("id, customer_id, invoice_number, status, remaining_balance, due_date, total_amount"),
-    supabase.from("payments").select("payment_amount, payment_date"),
-    supabase.from("revenue_records").select("recognition, amount"),
+  const [review, invoicesRes, paymentsRes, revenueRes, customersRes, contractReportRes] = await Promise.all([
+    loadBillingReviewData(
+      supabase,
+      { start: period.start, end: period.end, label: period.label },
+      { includeOpenOneTime }
+    ),
+    supabase
+      .from("invoices")
+      .select(
+        "id, customer_id, invoice_number, status, remaining_balance, due_date, total_amount, amount_paid, dispute_status, invoice_date, billing_period_start"
+      ),
+    supabase.from("payments").select("payment_number, payment_amount, payment_date, customer_id"),
+    supabase.from("revenue_records").select("recognition, amount, period_month, revenue_type, description"),
     supabase.from("customers").select("id, name"),
     fetchContractReportMetrics(supabase),
   ]);
 
   const customerName = new Map((customersRes.data ?? []).map((c) => [c.id, c.name as string]));
   const contractMetrics = contractReportRes.metrics;
-  const invoices = (invoicesRes.data ?? []) as Pick<
-    Invoice,
-    "id" | "customer_id" | "invoice_number" | "status" | "remaining_balance" | "due_date" | "total_amount"
-  >[];
-  const payments = (paymentsRes.data ?? []) as Pick<Payment, "payment_amount" | "payment_date">[];
-  const revenue = (revenueRes.data ?? []) as Pick<RevenueRecord, "recognition" | "amount">[];
+  const invoices = (invoicesRes.data ?? [])
+    .map((invoice) => withDerivedInvoiceStatus(invoice))
+    .filter((invoice) => dateInDashboardPeriod(invoice.billing_period_start || invoice.invoice_date, period));
+  const payments = ((paymentsRes.data ?? []) as Pick<Payment, "payment_number" | "payment_amount" | "payment_date" | "customer_id">[]).filter(
+    (payment) => dateInDashboardPeriod(payment.payment_date, period)
+  );
+  const revenue = ((revenueRes.data ?? []) as Pick<RevenueRecord, "recognition" | "amount" | "period_month" | "revenue_type" | "description">[]).filter(
+    (row) => monthKeyInDashboardPeriod(row.period_month, period)
+  );
 
-  const readyToBill = (readyTimeRes.count ?? 0) + (readyCostsRes.count ?? 0) + (readyMilestonesRes.count ?? 0);
+  const packagesReady = review.packages.filter((pkg) => pkg.estimatedTotal > 0);
+  const readyItems = includeOpenOneTime ? review.items : [];
+  const readyToBill = packagesReady.length + readyItems.length;
+  const readyToBillAmount = round2(
+    packagesReady.reduce((sum, pkg) => sum + pkg.estimatedTotal, 0) + readyItems.reduce((sum, item) => sum + item.amount, 0)
+  );
+  const issuedInvoices = invoices.filter((invoice) => !["draft", "canceled"].includes(invoice.status));
+  const issuedTotal = issuedInvoices.reduce((sum, invoice) => sum + Number(invoice.total_amount ?? 0), 0);
   const draftInvoices = invoices.filter((i) => i.status === "draft");
   const overdueInvoices = invoices.filter((i) => i.status === "overdue");
   const partialInvoices = invoices.filter((i) => i.status === "partially_paid");
   const disputedInvoices = invoices.filter((i) => i.status === "disputed");
+  const openReceivables = invoices.filter((i) => !["draft", "canceled", "paid"].includes(i.status) && i.remaining_balance > 0.01);
+  const totalAr = openReceivables.reduce((sum, invoice) => sum + invoice.remaining_balance, 0);
 
-  const monthKeyNow = lastNMonthKeys(1)[0];
-  const paymentsThisMonth = payments
-    .filter((p) => monthKey(p.payment_date) === monthKeyNow)
-    .reduce((sum, p) => sum + Number(p.payment_amount), 0);
+  const paymentsInPeriod = payments.reduce((sum, p) => sum + Number(p.payment_amount), 0);
 
   const agingBuckets = AR_AGING_BUCKETS;
-  const agingSummary = agingBuckets.map((bucket) => ({
-    bucket,
-    total: invoices
-      .filter((i) => Number(i.remaining_balance) > 0 && !["draft", "canceled"].includes(i.status) && arAgingBucket(i.due_date) === bucket)
-      .reduce((sum, i) => sum + Number(i.remaining_balance), 0),
-  }));
+  const agingSummary = agingBuckets.map((bucket) => {
+    const bucketInvoices = openReceivables.filter((i) => arAgingBucket(i.due_date) === bucket);
+    return {
+      bucket,
+      total: bucketInvoices.reduce((sum, i) => sum + i.remaining_balance, 0),
+      invoices: bucketInvoices,
+    };
+  });
 
-  const deferred = revenue.filter((r) => r.recognition === "deferred").reduce((sum, r) => sum + Number(r.amount), 0);
-  const unbilled = revenue.filter((r) => r.recognition === "unbilled").reduce((sum, r) => sum + Number(r.amount), 0);
+  const deferredRows = revenue.filter((r) => r.recognition === "deferred");
+  const unbilledRows = revenue.filter((r) => r.recognition === "unbilled");
+  const deferred = deferredRows.reduce((sum, r) => sum + Number(r.amount), 0);
+  const unbilled = unbilledRows.reduce((sum, r) => sum + Number(r.amount), 0);
+  const partialPaidTotal = partialInvoices.reduce((sum, invoice) => sum + invoice.amount_paid, 0);
+  const partialBalanceTotal = partialInvoices.reduce((sum, invoice) => sum + invoice.remaining_balance, 0);
 
   return (
     <div>
-      <PageHeader title="Billing Dashboard" description={`Welcome back, ${profile.full_name}. Here's the state of billing and collections.`} />
-
-      <p className="mb-4 text-sm">
-        <Link href="/billing-review" className="link link-primary">
-          Open Billing Review
-        </Link>
-      </p>
+      <PageHeader
+        title="Billing Dashboard"
+        description={`Welcome back, ${profile.full_name}. Showing ${period.label} in ${period.view} view.`}
+        actions={<PeriodViewControls {...periodViewControlProps(period)} />}
+      />
 
       <div className="mb-6">
         <ContractMetricsWidgets
@@ -710,22 +897,201 @@ async function BillingDashboard({ profile }: { profile: Profile }) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Ready to Bill" value={String(readyToBill)} tone={readyToBill > 0 ? "warning" : "default"} />
-        <StatCard label="Draft Invoices" value={String(draftInvoices.length)} />
-        <StatCard label="Overdue Invoices" value={String(overdueInvoices.length)} tone={overdueInvoices.length > 0 ? "error" : "success"} />
-        <StatCard label="Partially Paid" value={String(partialInvoices.length)} />
-        <StatCard label="Disputed Invoices" value={String(disputedInvoices.length)} tone={disputedInvoices.length > 0 ? "error" : "default"} />
-        <StatCard label="Payments This Month" value={formatCurrency(paymentsThisMonth)} tone="success" />
-        <StatCard label="Deferred Revenue" value={formatCurrency(deferred)} />
-        <StatCard label="Unbilled Revenue" value={formatCurrency(unbilled)} />
+        <StatCard
+          label="Ready to Bill"
+          value={String(readyToBill)}
+          hint={`${formatCurrency(readyToBillAmount)} · ${period.label}`}
+          tone={readyToBill > 0 ? "warning" : "default"}
+          explanation={{
+            title: "Ready to Bill",
+            result: String(readyToBill),
+            formula: "Uninvoiced monthly packages in this period + approved one-time costs still open if the period includes today",
+            description: includeOpenOneTime
+              ? `Open one-time costs are included because ${period.label} includes the current date. Total waiting to invoice: ${formatCurrency(readyToBillAmount)}.`
+              : `Historical view shows uninvoiced monthly fees and overage for ${period.label} only. Total: ${formatCurrency(readyToBillAmount)}.`,
+            lines: [
+              ...packagesReady.map((pkg) => ({
+                label: `${pkg.customerName} · ${pkg.contractName}`,
+                value: formatCurrency(pkg.estimatedTotal),
+                detail: [
+                  pkg.alreadyInvoiced ? "Monthly fee already invoiced" : `Monthly fee ${formatCurrency(pkg.monthlyFee)}`,
+                  pkg.overageCharge > 0 ? `overage ${formatCurrency(pkg.overageCharge)}` : null,
+                  pkg.projectCharges.length > 0 ? `${pkg.projectCharges.length} project/milestone charge(s)` : null,
+                  pkg.equipmentSoftwareCharges.length > 0 ? `${pkg.equipmentSoftwareCharges.length} equipment/software item(s)` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
+              })),
+              ...readyItems.map((item) => ({
+                label: `${item.customerName} · ${item.description}`,
+                value: formatCurrency(item.amount),
+                detail: item.categoryLabel,
+              })),
+            ],
+          }}
+        />
+        <StatCard
+          label="Invoices Issued"
+          value={String(issuedInvoices.length)}
+          hint={formatCurrency(issuedTotal)}
+          explanation={{
+            title: "Invoices Issued",
+            result: String(issuedInvoices.length),
+            formula: `Count of invoices whose billing period or invoice date falls in ${period.label}, excluding drafts and canceled invoices`,
+            description: `Total billed in this period: ${formatCurrency(issuedTotal)}.`,
+            lines: issuedInvoices.map((invoice) => ({
+              label: invoice.invoice_number,
+              value: formatCurrency(Number(invoice.total_amount ?? 0)),
+              detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} · ${invoice.status.replace(/_/g, " ")}`,
+            })),
+          }}
+        />
+        <StatCard
+          label="Draft Invoices"
+          value={String(draftInvoices.length)}
+          explanation={{
+            title: "Draft Invoices",
+            result: String(draftInvoices.length),
+            formula: `Count of draft invoices in ${period.label}`,
+            lines: draftInvoices.map((invoice) => ({
+              label: invoice.invoice_number,
+              value: formatCurrency(Number(invoice.total_amount ?? 0)),
+              detail: customerName.get(invoice.customer_id) ?? "Unknown customer",
+            })),
+          }}
+        />
+        <StatCard
+          label="Overdue Invoices"
+          value={String(overdueInvoices.length)}
+          tone={overdueInvoices.length > 0 ? "error" : "success"}
+          explanation={{
+            title: "Overdue Invoices",
+            result: String(overdueInvoices.length),
+            formula: `Count of unpaid invoices from ${period.label} with no payment yet, past due date, and not disputed`,
+            description: "Invoices with a partial payment are shown under Partially Paid instead of Overdue.",
+            lines: overdueInvoices.map((invoice) => ({
+              label: invoice.invoice_number,
+              value: formatCurrency(invoice.remaining_balance),
+              detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} · due ${invoice.due_date}`,
+            })),
+          }}
+        />
+        <StatCard
+          label="Partially Paid"
+          value={String(partialInvoices.length)}
+          tone={partialInvoices.length > 0 ? "warning" : "default"}
+          explanation={{
+            title: "Partially Paid Invoices",
+            result: String(partialInvoices.length),
+            formula: `Count of invoices from ${period.label} where amount paid > 0 and remaining balance > 0`,
+            description: `Total paid on these invoices: ${formatCurrency(partialPaidTotal)}. Remaining balance: ${formatCurrency(partialBalanceTotal)}.`,
+            lines: partialInvoices.map((invoice) => ({
+              label: invoice.invoice_number,
+              value: formatCurrency(invoice.remaining_balance),
+              detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} · paid ${formatCurrency(invoice.amount_paid)}`,
+            })),
+          }}
+        />
+        <StatCard
+          label="Disputed Invoices"
+          value={String(disputedInvoices.length)}
+          tone={disputedInvoices.length > 0 ? "error" : "default"}
+          explanation={{
+            title: "Disputed Invoices",
+            result: String(disputedInvoices.length),
+            formula: `Count of invoices from ${period.label} marked disputed or with an open dispute flag`,
+            lines: disputedInvoices.map((invoice) => ({
+              label: invoice.invoice_number,
+              value: formatCurrency(invoice.remaining_balance),
+              detail: customerName.get(invoice.customer_id) ?? "Unknown customer",
+            })),
+          }}
+        />
+        <StatCard
+          label="Payments"
+          value={formatCurrency(paymentsInPeriod)}
+          hint={period.label}
+          tone="success"
+          explanation={{
+            title: "Payments",
+            result: formatCurrency(paymentsInPeriod),
+            formula: `Sum of payment_amount where payment date is in ${period.label}`,
+            lines: payments.map((payment) => ({
+              label: payment.payment_number,
+              value: formatCurrency(Number(payment.payment_amount)),
+              detail: `${customerName.get(payment.customer_id) ?? "Unknown customer"} · ${payment.payment_date}`,
+            })),
+          }}
+        />
+        <StatCard
+          label="Accounts Receivable"
+          value={formatCurrency(totalAr)}
+          explanation={{
+            title: "Accounts Receivable",
+            result: formatCurrency(totalAr),
+            formula: `Sum of remaining_balance on open invoices from ${period.label}`,
+            description: "Draft, canceled, and fully paid invoices are excluded.",
+            lines: openReceivables.map((invoice) => ({
+              label: invoice.invoice_number,
+              value: formatCurrency(invoice.remaining_balance),
+              detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} · ${invoice.status.replace(/_/g, " ")}`,
+            })),
+          }}
+        />
+        <StatCard
+          label="Deferred Revenue"
+          value={formatCurrency(deferred)}
+          explanation={{
+            title: "Deferred Revenue",
+            result: formatCurrency(deferred),
+            formula: `Sum of deferred revenue_records in ${period.label}`,
+            description: "Money billed or collected before the service period is fully earned.",
+            lines: deferredRows.map((row) => ({
+              label: row.description || row.revenue_type.replace(/_/g, " "),
+              value: formatCurrency(Number(row.amount)),
+              detail: row.period_month,
+            })),
+          }}
+        />
+        <StatCard
+          label="Unbilled Revenue"
+          value={formatCurrency(unbilled)}
+          explanation={{
+            title: "Unbilled Revenue",
+            result: formatCurrency(unbilled),
+            formula: `Sum of unbilled revenue_records in ${period.label}`,
+            description: "Earned work that has not yet been placed on an invoice.",
+            lines: unbilledRows.map((row) => ({
+              label: row.description || row.revenue_type.replace(/_/g, " "),
+              value: formatCurrency(Number(row.amount)),
+              detail: row.period_month,
+            })),
+          }}
+        />
       </div>
 
       <div className="mt-6">
-        <h2 className="mb-2 text-sm font-semibold">Accounts Receivable Aging</h2>
-        <DataTable headers={["Bucket", "Balance"]}>
+        <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+          <h2 className="text-sm font-semibold">Accounts Receivable Aging · {period.label}</h2>
+          <ExplainNumber
+            explanation={{
+              title: "Accounts Receivable Aging",
+              result: formatCurrency(totalAr),
+              formula: `For each bucket, sum remaining_balance of open invoices from ${period.label} whose due date falls in that aging range`,
+              description: "Current means not yet due. Past-due buckets are based on days after the due date.",
+              lines: agingSummary.map((row) => ({
+                label: row.bucket,
+                value: formatCurrency(row.total),
+                detail: `${row.invoices.length} invoice${row.invoices.length === 1 ? "" : "s"}`,
+              })),
+            }}
+          />
+        </div>
+        <DataTable headers={["Bucket", "Invoices", "Balance"]}>
           {agingSummary.map((row) => (
             <tr key={row.bucket}>
               <td>{row.bucket}</td>
+              <td>{row.invoices.length}</td>
               <td>
                 <Money value={row.total} />
               </td>
@@ -736,7 +1102,7 @@ async function BillingDashboard({ profile }: { profile: Profile }) {
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <div>
-          <h2 className="mb-2 text-sm font-semibold">Overdue Invoices</h2>
+          <h2 className="mb-2 text-sm font-semibold">Overdue Invoices · {period.label}</h2>
           {overdueInvoices.length === 0 ? (
             <EmptyState title="Nothing overdue" description="All invoices are within terms." />
           ) : (
@@ -744,7 +1110,7 @@ async function BillingDashboard({ profile }: { profile: Profile }) {
               {overdueInvoices.slice(0, 8).map((i) => (
                 <tr key={i.id}>
                   <td>
-                    <Link className="link link-hover" href="/invoices">
+                    <Link className="link link-hover" href={`/invoices/${i.id}`}>
                       {i.invoice_number}
                     </Link>
                   </td>
@@ -762,7 +1128,33 @@ async function BillingDashboard({ profile }: { profile: Profile }) {
         </div>
 
         <div>
-          <h2 className="mb-2 text-sm font-semibold">Disputed Invoices</h2>
+          <h2 className="mb-2 text-sm font-semibold">Partially Paid Invoices · {period.label}</h2>
+          {partialInvoices.length === 0 ? (
+            <EmptyState title="No partial payments" description="No open invoices have a partial payment applied." />
+          ) : (
+            <DataTable headers={["Invoice", "Customer", "Paid", "Balance"]}>
+              {partialInvoices.slice(0, 8).map((i) => (
+                <tr key={i.id}>
+                  <td>
+                    <Link className="link link-hover" href={`/invoices/${i.id}`}>
+                      {i.invoice_number}
+                    </Link>
+                  </td>
+                  <td>{customerName.get(i.customer_id) ?? "—"}</td>
+                  <td>
+                    <Money value={Number(i.amount_paid)} />
+                  </td>
+                  <td>
+                    <Money value={Number(i.remaining_balance)} />
+                  </td>
+                </tr>
+              ))}
+            </DataTable>
+          )}
+        </div>
+
+        <div>
+          <h2 className="mb-2 text-sm font-semibold">Disputed Invoices · {period.label}</h2>
           {disputedInvoices.length === 0 ? (
             <EmptyState title="No open disputes" />
           ) : (
@@ -770,7 +1162,7 @@ async function BillingDashboard({ profile }: { profile: Profile }) {
               {disputedInvoices.slice(0, 8).map((i) => (
                 <tr key={i.id}>
                   <td>
-                    <Link className="link link-hover" href="/invoices">
+                    <Link className="link link-hover" href={`/invoices/${i.id}`}>
                       {i.invoice_number}
                     </Link>
                   </td>
@@ -821,7 +1213,10 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
       supabase.from("contracts").select("id, name, contract_number, status, included_hours_per_month").eq("customer_id", customerId).eq("status", "active"),
       supabase.from("support_tickets").select("id, ticket_number, title, priority, status").eq("customer_id", customerId).in("status", OPEN_TICKET_STATUSES),
       supabase.from("projects").select("id, name, status").eq("customer_id", customerId),
-      supabase.from("invoices").select("id, remaining_balance, status").eq("customer_id", customerId),
+      supabase
+        .from("invoices")
+        .select("id, invoice_number, remaining_balance, status, due_date, amount_paid, dispute_status")
+        .eq("customer_id", customerId),
       supabase
         .from("payments")
         .select("id, payment_number, payment_amount, payment_date, payment_method")
@@ -843,7 +1238,7 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
   >[];
   const tickets = (ticketsRes.data ?? []) as Pick<SupportTicket, "id" | "ticket_number" | "title" | "priority" | "status">[];
   const projects = (projectsRes.data ?? []) as Pick<Project, "id" | "name" | "status">[];
-  const invoices = (invoicesRes.data ?? []) as Pick<Invoice, "id" | "remaining_balance" | "status">[];
+  const invoices = (invoicesRes.data ?? []).map((invoice) => withDerivedInvoiceStatus(invoice));
   const payments = (paymentsRes.data ?? []) as (Pick<Payment, "payment_number" | "payment_amount" | "payment_date" | "payment_method"> & { id: string })[];
   const disputes = (disputesRes.data ?? []) as Pick<Dispute, "id" | "dispute_reason" | "disputed_amount" | "resolution_status">[];
   const timeEntries = (timeEntriesRes.data ?? []) as Pick<TimeEntry, "contract_id" | "hours_worked" | "classification" | "work_date">[];
@@ -862,8 +1257,8 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
   });
 
   const invoiceBalance = invoices
-    .filter((i) => !["draft", "canceled"].includes(i.status))
-    .reduce((sum, i) => sum + Number(i.remaining_balance), 0);
+    .filter((i) => !["draft", "canceled", "paid"].includes(i.status) && i.remaining_balance > 0.01)
+    .reduce((sum, i) => sum + i.remaining_balance, 0);
   const openDisputes = disputes.filter((d) => d.resolution_status !== "resolved" && d.resolution_status !== "rejected");
 
   const currentMonthKey = lastNMonthKeys(1)[0];
@@ -876,12 +1271,86 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
       <PageHeader title="Customer Home" description={`Welcome back, ${profile.full_name}. Here's your account at a glance.`} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Active Contracts" value={String(contracts.length)} />
-        <StatCard label="Open Support Requests" value={String(tickets.length)} />
-        <StatCard label="Active Projects" value={String(projects.filter((p) => !["closed", "canceled"].includes(p.status)).length)} />
-        <StatCard label="Invoice Balance Due" value={formatCurrency(invoiceBalance)} tone={invoiceBalance > 0 ? "warning" : "success"} />
-        <StatCard label="Open Disputes" value={String(openDisputes.length)} tone={openDisputes.length > 0 ? "error" : "default"} />
-        <StatCard label="This Month's Service Charges" value={formatCurrency(monthlyAmount)} />
+        <StatCard
+          label="Active Contracts"
+          value={String(contracts.length)}
+          explanation={{
+            title: "Active Contracts",
+            result: String(contracts.length),
+            formula: "Count of your contracts with status = active",
+            lines: contracts.map((contract) => ({ label: contract.name, value: contract.contract_number })),
+          }}
+        />
+        <StatCard
+          label="Open Support Requests"
+          value={String(tickets.length)}
+          explanation={{
+            title: "Open Support Requests",
+            result: String(tickets.length),
+            formula: "Count of your tickets that are still open",
+            lines: tickets.map((ticket) => ({
+              label: ticket.ticket_number,
+              value: ticket.status.replace(/_/g, " "),
+              detail: ticket.title,
+            })),
+          }}
+        />
+        <StatCard
+          label="Active Projects"
+          value={String(projects.filter((p) => !["closed", "canceled"].includes(p.status)).length)}
+          explanation={{
+            title: "Active Projects",
+            result: String(projects.filter((p) => !["closed", "canceled"].includes(p.status)).length),
+            formula: "Count of your projects that are not closed or canceled",
+            lines: projects
+              .filter((project) => !["closed", "canceled"].includes(project.status))
+              .map((project) => ({ label: project.name, value: project.status.replace(/_/g, " ") })),
+          }}
+        />
+        <StatCard
+          label="Invoice Balance Due"
+          value={formatCurrency(invoiceBalance)}
+          tone={invoiceBalance > 0 ? "warning" : "success"}
+          explanation={{
+            title: "Invoice Balance Due",
+            result: formatCurrency(invoiceBalance),
+            formula: "Sum of remaining_balance on your open invoices that are not draft, canceled, or paid",
+            lines: invoices
+              .filter((invoice) => !["draft", "canceled", "paid"].includes(invoice.status) && invoice.remaining_balance > 0.01)
+              .map((invoice) => ({
+                label: invoice.invoice_number,
+                value: formatCurrency(invoice.remaining_balance),
+                detail: invoice.status.replace(/_/g, " "),
+              })),
+          }}
+        />
+        <StatCard
+          label="Open Disputes"
+          value={String(openDisputes.length)}
+          tone={openDisputes.length > 0 ? "error" : "default"}
+          explanation={{
+            title: "Open Disputes",
+            result: String(openDisputes.length),
+            formula: "Count of your disputes that are not resolved or rejected",
+            lines: openDisputes.map((dispute) => ({
+              label: dispute.dispute_reason,
+              value: formatCurrency(Number(dispute.disputed_amount)),
+              detail: dispute.resolution_status.replace(/_/g, " "),
+            })),
+          }}
+        />
+        <StatCard
+          label="This Month's Service Charges"
+          value={formatCurrency(monthlyAmount)}
+          explanation={{
+            title: "This Month's Service Charges",
+            result: formatCurrency(monthlyAmount),
+            formula: `Sum of earned revenue records for ${monthLabel(currentMonthKey)}`,
+            lines: revenue
+              .filter((row) => row.recognition === "earned" && monthKey(row.period_month) === currentMonthKey)
+              .map((row) => ({ label: row.period_month, value: formatCurrency(Number(row.amount)) })),
+          }}
+        />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">

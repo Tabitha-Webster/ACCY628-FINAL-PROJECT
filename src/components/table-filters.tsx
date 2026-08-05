@@ -29,6 +29,46 @@ export function matchesCompare(value: number, op: CompareOp, raw: string) {
   return Math.abs(value - amount) <= 0.009;
 }
 
+export type MultiFilter = string[] | null;
+
+export function matchesAnySelected(value: string | null | undefined, selected: MultiFilter) {
+  if (selected == null) return true;
+  if (selected.length === 0) return false;
+  const current = (value ?? "").trim().toLowerCase();
+  return selected.some((item) => item.trim().toLowerCase() === current);
+}
+
+const MONTH_LABELS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+export function parseDateParts(value: string | Date | null | undefined): { year: string; month: string } | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const iso = value.match(/(\d{4})-(\d{2})(?:-\d{2})?/);
+    if (iso) return { year: iso[1], month: iso[2] };
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return { year: String(parsed.getFullYear()), month: String(parsed.getMonth() + 1).padStart(2, "0") };
+  }
+  if (Number.isNaN(value.getTime())) return null;
+  return { year: String(value.getFullYear()), month: String(value.getMonth() + 1).padStart(2, "0") };
+}
+
+export function matchesDatePeriod(
+  value: string | Date | null | undefined,
+  years: MultiFilter,
+  months: MultiFilter
+) {
+  if (years == null && months == null) return true;
+  const parts = parseDateParts(value);
+  if (!parts) return false;
+  return matchesAnySelected(parts.year, years) && matchesAnySelected(parts.month, months);
+}
+
+export function monthLabel(month: string) {
+  const index = Number(month) - 1;
+  return MONTH_LABELS[index] ?? month;
+}
+
 export function useHeaderFilter<T extends string>() {
   const [openFilter, setOpenFilter] = useState<T | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
@@ -169,6 +209,63 @@ export function FilterOption({
   );
 }
 
+export function MultiSelectFilter({
+  options,
+  selected,
+  onChange,
+  formatLabel = (value) => value,
+}: {
+  options: readonly string[];
+  selected: MultiFilter;
+  onChange: (next: MultiFilter) => void;
+  formatLabel?: (value: string) => string;
+}) {
+  const allSelected = selected == null || (selected.length > 0 && selected.length === options.length);
+
+  function toggleAll() {
+    onChange(allSelected ? [] : null);
+  }
+
+  function toggleOption(option: string) {
+    if (selected == null || (selected.length > 0 && selected.length === options.length)) {
+      onChange(options.filter((item) => item.toLowerCase() !== option.toLowerCase()));
+      return;
+    }
+
+    const exists = selected.some((item) => item.toLowerCase() === option.toLowerCase());
+    const next = exists
+      ? selected.filter((item) => item.toLowerCase() !== option.toLowerCase())
+      : [...selected, option];
+
+    onChange(next.length === options.length ? null : next);
+  }
+
+  function isChecked(option: string) {
+    if (selected == null) return true;
+    return selected.some((item) => item.toLowerCase() === option.toLowerCase());
+  }
+
+  return (
+    <div className="space-y-0.5">
+      <label className="flex cursor-pointer items-center gap-1.5 rounded px-1 py-1 hover:bg-base-200">
+        <input type="checkbox" className="checkbox checkbox-xs shrink-0" checked={allSelected} onChange={toggleAll} />
+        <span className="truncate">(All)</span>
+      </label>
+      {options.map((option) => (
+        <label key={option} className="flex cursor-pointer items-center gap-1.5 rounded px-1 py-1 hover:bg-base-200">
+          <input
+            type="checkbox"
+            className="checkbox checkbox-xs shrink-0"
+            checked={isChecked(option)}
+            onChange={() => toggleOption(option)}
+          />
+          <span className="truncate">{formatLabel(option)}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
 export function ClearOption({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
   return (
     <button
@@ -207,6 +304,49 @@ export function TextFilter({
 
 export function DateFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return <TextFilter value={value} onChange={onChange} placeholder="Search date" />;
+}
+
+export function DatePeriodFilter({
+  dates,
+  years,
+  months,
+  onYearsChange,
+  onMonthsChange,
+}: {
+  dates: Array<string | Date | null | undefined>;
+  years: MultiFilter;
+  months: MultiFilter;
+  onYearsChange: (next: MultiFilter) => void;
+  onMonthsChange: (next: MultiFilter) => void;
+}) {
+  const yearOptions = Array.from(
+    new Set(dates.map((date) => parseDateParts(date)?.year).filter((year): year is string => Boolean(year)))
+  ).sort((a, b) => Number(b) - Number(a));
+
+  const monthOptions = Array.from(
+    new Set(dates.map((date) => parseDateParts(date)?.month).filter((month): month is string => Boolean(month)))
+  ).sort((a, b) => Number(a) - Number(b));
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <p className="px-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wide opacity-60">Year</p>
+        {yearOptions.length === 0 ? (
+          <p className="px-1 text-xs opacity-60">No dates</p>
+        ) : (
+          <MultiSelectFilter options={yearOptions} selected={years} onChange={onYearsChange} />
+        )}
+      </div>
+      <div>
+        <p className="px-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wide opacity-60">Month</p>
+        {monthOptions.length === 0 ? (
+          <p className="px-1 text-xs opacity-60">No dates</p>
+        ) : (
+          <MultiSelectFilter options={monthOptions} selected={months} onChange={onMonthsChange} formatLabel={monthLabel} />
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function CompareFilter({

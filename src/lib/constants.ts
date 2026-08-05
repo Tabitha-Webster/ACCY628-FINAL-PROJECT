@@ -42,7 +42,7 @@ export const DEMO_ACCOUNTS = [
   },
   {
     role: "customer" as UserRole,
-    label: "Customer (Apex Legal)",
+    label: "Customer (Chad Corporation)",
     email: "customer@apexlegal.demo",
     password: "1234",
     name: "Casey Ortiz",
@@ -133,7 +133,7 @@ export const CONTRACTS_NAV_COPY: Record<
   hr: {
     href: "/contracts",
     title: "Contracts & Agreements",
-    description: "Reference service agreements when reviewing staffing and labor cost needs.",
+    description: "Review active agreements only as needed for workforce and contractor cost context.",
   },
   customer: {
     href: "/my-contracts",

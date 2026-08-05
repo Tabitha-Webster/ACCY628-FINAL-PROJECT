@@ -4,6 +4,9 @@ import { getCurrentProfile } from "@/lib/auth";
 import { ErrorState, PageHeader, StatCard } from "@/components/ui";
 import { AR_AGING_BUCKETS, arAgingBucket } from "@/lib/calculations";
 import { OpenInvoicesTable, type OpenInvoiceRow } from "@/components/OpenInvoicesTable";
+import { PeriodViewControls } from "@/components/PeriodViewControls";
+import { withDerivedInvoiceStatus } from "@/lib/billing";
+import { dateInDashboardPeriod, periodViewControlProps, resolveDashboardPeriod } from "@/lib/dashboard-period";
 
 function bucketCardClass(label: string) {
   if (label === "Current") return "aging-card-current";
@@ -13,24 +16,37 @@ function bucketCardClass(label: string) {
   return "aging-card-over-90";
 }
 
-export default async function AccountsReceivablePage() {
+export default async function AccountsReceivablePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
   if (!["manager", "billing"].includes(profile.role)) redirect("/dashboard");
 
+  const params = await searchParams;
+  const period = resolveDashboardPeriod(params.view, params.period);
   const supabase = await createClient();
   const { data: invoices, error } = await supabase
     .from("invoices")
-    .select("id, invoice_number, due_date, status, remaining_balance, customers(id, name)")
+    .select(
+      "id, invoice_number, due_date, status, remaining_balance, amount_paid, dispute_status, invoice_date, billing_period_start, customers(id, name)"
+    )
     .gt("remaining_balance", 0)
     .neq("status", "canceled")
     .neq("status", "draft")
     .order("due_date", { ascending: true });
 
-  const rows = (invoices ?? []).map((inv) => ({
-    ...inv,
-    bucket: arAgingBucket(inv.due_date),
-  }));
+  const rows = (invoices ?? [])
+    .map((inv) => {
+      const derived = withDerivedInvoiceStatus(inv);
+      return {
+        ...derived,
+        bucket: arAgingBucket(derived.due_date),
+      };
+    })
+    .filter((row) => dateInDashboardPeriod(row.billing_period_start || row.invoice_date, period));
 
   const totalsByBucket = new Map<string, { count: number; amount: number }>();
   for (const label of AR_AGING_BUCKETS) totalsByBucket.set(label, { count: 0, amount: 0 });
@@ -50,19 +66,71 @@ export default async function AccountsReceivablePage() {
     <div className="space-y-6">
       <PageHeader
         title="Accounts Receivable"
-        description="Every unpaid invoice, grouped by how far past its due date it is."
+        description={`Unpaid invoices from ${period.label}, grouped by how far past the due date they are.`}
+        actions={<PeriodViewControls {...periodViewControlProps(period)} />}
       />
 
       {error ? <ErrorState message={error.message} /> : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Total Outstanding" value={`$${totalAr.toFixed(2)}`} />
-        <StatCard label="Past Due" value={`$${pastDueAr.toFixed(2)}`} tone={pastDueAr > 0 ? "warning" : "default"} />
-        <StatCard label="Open Invoices" value={String(rows.length)} />
+        <StatCard
+          label="Total Outstanding"
+          value={`$${totalAr.toFixed(2)}`}
+          explanation={{
+            title: "Total Outstanding",
+            result: `$${totalAr.toFixed(2)}`,
+            formula: `Sum of remaining_balance on unpaid invoices from ${period.label} that are not draft or canceled`,
+            lines: rows.map((row) => {
+              const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+              return {
+                label: row.invoice_number,
+                value: `$${Number(row.remaining_balance ?? 0).toFixed(2)}`,
+                detail: `${customer?.name ?? "Unknown customer"} · ${row.bucket}`,
+              };
+            }),
+          }}
+        />
+        <StatCard
+          label="Past Due"
+          value={`$${pastDueAr.toFixed(2)}`}
+          tone={pastDueAr > 0 ? "warning" : "default"}
+          explanation={{
+            title: "Past Due",
+            result: `$${pastDueAr.toFixed(2)}`,
+            formula: `Sum of remaining_balance on open invoices from ${period.label} that are not in the Current aging bucket`,
+            lines: rows
+              .filter((row) => row.bucket !== "Current")
+              .map((row) => {
+                const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+                return {
+                  label: row.invoice_number,
+                  value: `$${Number(row.remaining_balance ?? 0).toFixed(2)}`,
+                  detail: `${customer?.name ?? "Unknown customer"} · ${row.bucket}`,
+                };
+              }),
+          }}
+        />
+        <StatCard
+          label="Open Invoices"
+          value={String(rows.length)}
+          explanation={{
+            title: "Open Invoices",
+            result: String(rows.length),
+            formula: `Count of unpaid invoices from ${period.label} that are not draft or canceled`,
+            lines: rows.map((row) => {
+              const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+              return {
+                label: row.invoice_number,
+                value: `$${Number(row.remaining_balance ?? 0).toFixed(2)}`,
+                detail: customer?.name ?? "Unknown customer",
+              };
+            }),
+          }}
+        />
       </div>
 
       <div>
-        <h2 className="mb-2 text-lg font-semibold">Aging Summary</h2>
+        <h2 className="mb-2 text-lg font-semibold">Aging Summary · {period.label}</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
           {AR_AGING_BUCKETS.map((label) => {
             const bucket = totalsByBucket.get(label) ?? { count: 0, amount: 0 };
@@ -73,6 +141,21 @@ export default async function AccountsReceivablePage() {
                 value={`$${bucket.amount.toFixed(2)}`}
                 hint={`${bucket.count} invoice${bucket.count === 1 ? "" : "s"}`}
                 className={bucketCardClass(label)}
+                explanation={{
+                  title: label,
+                  result: `$${bucket.amount.toFixed(2)}`,
+                  formula: `Sum of remaining_balance for open invoices from ${period.label} in the ${label} aging bucket`,
+                  lines: rows
+                    .filter((row) => row.bucket === label)
+                    .map((row) => {
+                      const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers;
+                      return {
+                        label: row.invoice_number,
+                        value: `$${Number(row.remaining_balance ?? 0).toFixed(2)}`,
+                        detail: `${customer?.name ?? "Unknown customer"} · due ${row.due_date}`,
+                      };
+                    }),
+                }}
               />
             );
           })}

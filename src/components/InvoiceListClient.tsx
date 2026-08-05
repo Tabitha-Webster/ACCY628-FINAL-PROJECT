@@ -8,14 +8,16 @@ import { EmptyState, Money, StatusBadge } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
   type CompareOp,
+  type MultiFilter,
   CompareFilter,
-  DateFilter,
+  DatePeriodFilter,
   DropdownHeader,
-  FilterOption,
+  MultiSelectFilter,
   StickyFilterTable,
   TextFilter,
+  matchesAnySelected,
   matchesCompare,
-  matchesDateSearch,
+  matchesDatePeriod,
   matchesText,
   useHeaderFilter,
 } from "@/components/table-filters";
@@ -49,8 +51,9 @@ export function InvoiceListClient({ invoices }: { invoices: InvoiceListRow[] }) 
   const [invoiceQuery, setInvoiceQuery] = useState("");
   const [customerQuery, setCustomerQuery] = useState("");
   const [contractQuery, setContractQuery] = useState("");
-  const [dueDateQuery, setDueDateQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [dueYears, setDueYears] = useState<MultiFilter>(null);
+  const [dueMonths, setDueMonths] = useState<MultiFilter>(null);
+  const [statusFilter, setStatusFilter] = useState<MultiFilter>(null);
   const [totalOp, setTotalOp] = useState<CompareOp>("gt");
   const [totalValue, setTotalValue] = useState("");
   const [balanceOp, setBalanceOp] = useState<CompareOp>("gt");
@@ -63,20 +66,20 @@ export function InvoiceListClient({ invoices }: { invoices: InvoiceListRow[] }) 
           matchesText(invoice.invoice_number, invoiceQuery) &&
           matchesText(invoice.customer_name, customerQuery) &&
           matchesText(invoice.contract_name, contractQuery) &&
-          matchesDateSearch(invoice.due_date, dueDateQuery) &&
-          (statusFilter === "all" || invoice.status === statusFilter) &&
+          matchesDatePeriod(invoice.due_date, dueYears, dueMonths) &&
+          matchesAnySelected(invoice.status, statusFilter) &&
           matchesCompare(invoice.total_amount, totalOp, totalValue) &&
           matchesCompare(invoice.remaining_balance, balanceOp, balanceValue)
       ),
-    [invoices, invoiceQuery, customerQuery, contractQuery, dueDateQuery, statusFilter, totalOp, totalValue, balanceOp, balanceValue]
+    [invoices, invoiceQuery, customerQuery, contractQuery, dueYears, dueMonths, statusFilter, totalOp, totalValue, balanceOp, balanceValue]
   );
 
   const activeCount = [
     invoiceQuery.trim(),
     customerQuery.trim(),
     contractQuery.trim(),
-    dueDateQuery.trim(),
-    statusFilter !== "all" ? statusFilter : "",
+    dueYears == null && dueMonths == null ? "" : "dueDate",
+    statusFilter == null ? "" : "status",
     totalValue.trim(),
     balanceValue.trim(),
   ].filter(Boolean).length;
@@ -92,8 +95,9 @@ export function InvoiceListClient({ invoices }: { invoices: InvoiceListRow[] }) 
     setInvoiceQuery("");
     setCustomerQuery("");
     setContractQuery("");
-    setDueDateQuery("");
-    setStatusFilter("all");
+    setDueYears(null);
+    setDueMonths(null);
+    setStatusFilter(null);
     setTotalOp("gt");
     setTotalValue("");
     setBalanceOp("gt");
@@ -120,7 +124,7 @@ export function InvoiceListClient({ invoices }: { invoices: InvoiceListRow[] }) 
       const errorCount = body.errors?.length ?? 0;
       const createdText =
         createdCount > 0
-          ? `Created ${createdCount} monthly invoice(s) for ${body.periodLabel}.`
+          ? `Created ${createdCount} draft monthly invoice(s) for ${body.periodLabel}. Review each draft before sending.`
           : `No new monthly invoices were created for ${body.periodLabel}.`;
       const extra = [skipCount ? `${skipCount} skipped.` : "", errorCount ? `${errorCount} error(s).` : ""].filter(Boolean).join(" ");
       setMessage({
@@ -202,25 +206,27 @@ export function InvoiceListClient({ invoices }: { invoices: InvoiceListRow[] }) 
               <DropdownHeader label="Contract" active={Boolean(contractQuery.trim())} open={openFilter === "contract"} onToggle={() => toggleFilter("contract")}>
                 <TextFilter value={contractQuery} onChange={setContractQuery} placeholder="Search contract" />
               </DropdownHeader>
-              <DropdownHeader label="Due Date" active={Boolean(dueDateQuery.trim())} open={openFilter === "dueDate"} onToggle={() => toggleFilter("dueDate")}>
-                <DateFilter value={dueDateQuery} onChange={setDueDateQuery} />
+              <DropdownHeader
+                label="Due Date"
+                active={dueYears != null || dueMonths != null}
+                open={openFilter === "dueDate"}
+                onToggle={() => toggleFilter("dueDate")}
+              >
+                <DatePeriodFilter
+                  dates={invoices.map((invoice) => invoice.due_date)}
+                  years={dueYears}
+                  months={dueMonths}
+                  onYearsChange={setDueYears}
+                  onMonthsChange={setDueMonths}
+                />
               </DropdownHeader>
-              <DropdownHeader label="Status" active={statusFilter !== "all"} open={openFilter === "status"} onToggle={() => toggleFilter("status")}>
-                <FilterOption selected={statusFilter === "all"} onClick={() => setStatusFilter("all")}>
-                  (All)
-                </FilterOption>
-                {STATUS_OPTIONS.map((status) => (
-                  <FilterOption
-                    key={status}
-                    selected={statusFilter === status}
-                    onClick={() => {
-                      setStatusFilter(status);
-                      setOpenFilter(null);
-                    }}
-                  >
-                    {status.replace(/_/g, " ")}
-                  </FilterOption>
-                ))}
+              <DropdownHeader label="Status" active={statusFilter != null} open={openFilter === "status"} onToggle={() => toggleFilter("status")}>
+                <MultiSelectFilter
+                  options={STATUS_OPTIONS}
+                  selected={statusFilter}
+                  onChange={setStatusFilter}
+                  formatLabel={(status) => status.replace(/_/g, " ")}
+                />
               </DropdownHeader>
               <DropdownHeader
                 label="Total"

@@ -237,18 +237,43 @@ export default async function ContractDetailPage({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Contract Number" value={contract.contract_number} hint="Auto-generated" />
         <StatCard
-          label="Monthly Recurring Fee"
-          value={`$${Number(contract.monthly_recurring_fee ?? 0).toFixed(2)}`}
-        />
-        <StatCard
           label="Included Hours / Month"
           value={`${includedHours.toFixed(1)} hrs`}
           hint={`${pctUsed.toFixed(0)}% used this month`}
           tone={usage === "over_limit" ? "error" : usage === "warning" ? "warning" : "default"}
+          explanation={{
+            title: "Hours Used This Month",
+            result: `${usedHours.toFixed(1)} / ${includedHours.toFixed(1)} hrs`,
+            formula: "Sum of included-classification time entries this month ÷ contract included hours per month",
+            lines: [
+              { label: "Included hours this month", value: `${includedHours.toFixed(1)} hrs` },
+              ...(monthEntries ?? []).map((entry) => ({
+                label: entry.work_date,
+                value: `${Number(entry.hours_worked ?? 0).toFixed(1)} hrs`,
+                detail: entry.description || "Included support time",
+              })),
+            ],
+          }}
         />
         <StatCard
-          label="Overage Hourly Rate"
+          label="Monthly Recurring Fee"
+          value={`$${Number(contract.monthly_recurring_fee ?? 0).toFixed(2)}`}
+          explanation={{
+            title: "Monthly Recurring Fee",
+            result: `$${Number(contract.monthly_recurring_fee ?? 0).toFixed(2)}`,
+            formula: "Value stored on the contract as monthly_recurring_fee",
+            lines: [{ label: contract.name, value: `$${Number(contract.monthly_recurring_fee ?? 0).toFixed(2)}` }],
+          }}
+        />
+        <StatCard
+          label="Additional Hourly Rate"
           value={`$${Number(contract.additional_hourly_rate ?? 0).toFixed(2)}/hr`}
+          explanation={{
+            title: "Additional Hourly Rate",
+            result: `$${Number(contract.additional_hourly_rate ?? 0).toFixed(2)}/hr`,
+            formula: "Value stored on the contract as additional_hourly_rate, used for overage hours",
+            lines: [{ label: contract.name, value: `$${Number(contract.additional_hourly_rate ?? 0).toFixed(2)}/hr` }],
+          }}
         />
       </div>
 
