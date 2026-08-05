@@ -4,11 +4,13 @@ import { useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
 import { Search, X } from "lucide-react";
 import { Button } from "@/components/Button";
+import { ExportCustomersButton } from "@/components/ExportCustomersButton";
 import { Table, TableCell } from "@/components/Table";
 import { EmptyState } from "@/components/ui";
 import { matchesText } from "@/components/table-filters";
 import { statusBadgeClass, statusLabel } from "@/lib/format";
 import type { CustomerListRow } from "@/lib/customers/queries";
+import type { UserRole } from "@/lib/constants";
 import type { CustomerStatus } from "@/lib/types";
 
 export type { CustomerListRow };
@@ -103,7 +105,13 @@ function matchesCustomerStatus(row: CustomerListRow, statusFilter: StatusFilterV
   return displayStatus(row).toLowerCase() === statusFilter;
 }
 
-export function CustomerListSearch({ customers }: { customers: CustomerListRow[] }) {
+export function CustomerListSearch({
+  customers,
+  role,
+}: {
+  customers: CustomerListRow[];
+  role: UserRole;
+}) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("all");
   const deferredQuery = useDeferredValue(query);
@@ -172,11 +180,14 @@ export function CustomerListSearch({ customers }: { customers: CustomerListRow[]
           </label>
         </div>
 
-        <p className="text-sm opacity-70 lg:text-right" aria-live="polite">
-          {narrowed
-            ? `Showing ${filtered.length} of ${customers.length} customer${customers.length === 1 ? "" : "s"}`
-            : `${customers.length} customer${customers.length === 1 ? "" : "s"}`}
-        </p>
+        <div className="flex w-full flex-col items-stretch gap-2 lg:w-auto lg:items-end">
+          <p className="text-sm opacity-70 lg:text-right" aria-live="polite">
+            {narrowed
+              ? `Showing ${filtered.length} of ${customers.length} customer${customers.length === 1 ? "" : "s"}`
+              : `${customers.length} customer${customers.length === 1 ? "" : "s"}`}
+          </p>
+          <ExportCustomersButton rows={filtered} role={role} />
+        </div>
       </div>
 
       {filtered.length === 0 ? (
