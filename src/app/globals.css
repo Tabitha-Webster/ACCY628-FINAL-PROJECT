@@ -1,13 +1,6 @@
 @import "tailwindcss";
 @plugin "daisyui" {
-  themes: corporate --default, business, nord, emerald, cupcake, dim;
-}
-
-/* Keep emerald structure; shift brand green → blue */
-@plugin "daisyui/theme" {
-  name: "emerald";
-  --color-primary: oklch(55% 0.18 250);
-  --color-primary-content: oklch(98% 0.01 250);
+  themes: corporate --default, business;
 }
 
 html,
@@ -26,6 +19,19 @@ body {
 .rounded-box.border,
 .card.border {
   border-width: 2px;
+}
+
+[data-density="compact"] .table :where(th, td) {
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
+}
+
+[data-density="compact"] .filter-table tbody td {
+  padding: 0.3rem 0.6rem;
+}
+
+[data-density="compact"] .card-body {
+  padding: 1rem;
 }
 
 .filter-table-scroll {

@@ -35,6 +35,7 @@ export type ReviewException = {
 
 export type MonthlyPackage = {
   contractId: string;
+  periodStart?: string;
   contractName: string;
   customerId: string;
   customerName: string;
@@ -56,27 +57,32 @@ function itemKey(item: ReviewItem) {
   return `${item.type}:${item.id}`;
 }
 
+function packageSelectKey(pkg: MonthlyPackage) {
+  return pkg.periodStart ? `${pkg.contractId}:${pkg.periodStart}` : pkg.contractId;
+}
+
 export function BillingReviewClient({
   packages,
   items,
   exceptions,
   periodLabel,
   periodRange,
+  canGenerateMonthly = true,
+  billingPeriodStart,
 }: {
   packages: MonthlyPackage[];
   items: ReviewItem[];
   exceptions: ReviewException[];
   periodLabel: string;
   periodRange: string;
+  canGenerateMonthly?: boolean;
+  billingPeriodStart?: string;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<ReviewTab>("monthly");
   const [packageQuery, setPackageQuery] = useState("");
   const [expandedContractId, setExpandedContractId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [selectedContracts, setSelectedContracts] = useState<Set<string>>(
-    () => new Set(packages.filter((pkg) => !pkg.alreadyInvoiced && pkg.estimatedTotal > 0).map((pkg) => pkg.contractId))
-  );
   const [submittingCustomerId, setSubmittingCustomerId] = useState<string | null>(null);
   const [generatingMonthly, setGeneratingMonthly] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -103,37 +109,11 @@ export function BillingReviewClient({
     );
   }, [packages, packageQuery]);
 
-  const selectableFiltered = filteredPackages.filter((pkg) => !pkg.alreadyInvoiced && pkg.estimatedTotal > 0);
-  const allSelectableFilteredChecked =
-    selectableFiltered.length > 0 && selectableFiltered.every((pkg) => selectedContracts.has(pkg.contractId));
+  const readyPackages = packages.filter((pkg) => !pkg.alreadyInvoiced && pkg.estimatedTotal > 0);
+  const packageTotal = readyPackages.reduce((sum, pkg) => sum + pkg.estimatedTotal, 0);
 
-  const packageTotal = packages
-    .filter((pkg) => selectedContracts.has(pkg.contractId))
-    .reduce((sum, pkg) => sum + pkg.estimatedTotal, 0);
-
-  function toggleContract(contractId: string) {
-    setSelectedContracts((prev) => {
-      const next = new Set(prev);
-      if (next.has(contractId)) next.delete(contractId);
-      else next.add(contractId);
-      return next;
-    });
-  }
-
-  function toggleFilteredContracts() {
-    setSelectedContracts((prev) => {
-      const next = new Set(prev);
-      if (allSelectableFilteredChecked) {
-        selectableFiltered.forEach((pkg) => next.delete(pkg.contractId));
-      } else {
-        selectableFiltered.forEach((pkg) => next.add(pkg.contractId));
-      }
-      return next;
-    });
-  }
-
-  function toggleExpanded(contractId: string) {
-    setExpandedContractId((prev) => (prev === contractId ? null : contractId));
+  function toggleExpanded(selectKey: string) {
+    setExpandedContractId((prev) => (prev === selectKey ? null : selectKey));
   }
 
   function toggle(item: ReviewItem) {
@@ -163,7 +143,7 @@ export function BillingReviewClient({
   }
 
   async function generateMonthly() {
-    const contractIds = Array.from(selectedContracts);
+    const contractIds = Array.from(new Set(readyPackages.map((pkg) => pkg.contractId)));
     if (contractIds.length === 0) return;
 
     setGeneratingMonthly(true);
@@ -172,7 +152,7 @@ export function BillingReviewClient({
       const res = await fetch("/api/invoices/generate-monthly", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contractIds }),
+        body: JSON.stringify({ contractIds, periodStart: billingPeriodStart }),
       });
       const body = await res.json();
       if (!res.ok) {
@@ -184,13 +164,13 @@ export function BillingReviewClient({
       const errorCount = body.errors?.length ?? 0;
       setMessage({
         type: errorCount ? "error" : "success",
-        text: `Created ${createdCount} monthly invoice(s) for ${body.periodLabel}. ${skipCount ? `${skipCount} skipped.` : ""} ${
+        text: `Created ${createdCount} draft monthly invoice(s) for ${body.periodLabel}. Review each draft before sending. ${skipCount ? `${skipCount} skipped.` : ""} ${
           errorCount ? `${errorCount} error(s).` : ""
         }`.trim(),
       });
       router.refresh();
     } catch {
-      setMessage({ type: "error", text: "Something went wrong generating monthly invoices." });
+      setMessage({ type: "error", text: "Network error while generating monthly invoices." });
     } finally {
       setGeneratingMonthly(false);
     }
@@ -252,7 +232,7 @@ export function BillingReviewClient({
           <p className="mt-1 text-lg font-semibold tabular-nums">{packages.length}</p>
         </div>
         <div className="rounded-box border border-base-300 bg-base-100 p-4">
-          <p className="text-xs uppercase tracking-wide opacity-60">Selected package total</p>
+          <p className="text-xs uppercase tracking-wide opacity-60">Ready to bill total</p>
           <p className="mt-1 text-lg font-semibold tabular-nums">{formatCurrency(packageTotal)}</p>
         </div>
       </div>
@@ -298,20 +278,26 @@ export function BillingReviewClient({
                 <input
                   type="search"
                   className="input input-bordered input-sm w-full"
-                  placeholder="Search…"
+                  placeholder="Search..."
                   value={packageQuery}
                   onChange={(e) => setPackageQuery(e.target.value)}
                 />
               </label>
             </div>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              disabled={selectedContracts.size === 0 || generatingMonthly}
-              onClick={generateMonthly}
-            >
-              {generatingMonthly ? "Generating…" : "Generate selected monthly invoices"}
-            </button>
+            <div className="text-right">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={!canGenerateMonthly || readyPackages.length === 0 || generatingMonthly}
+                onClick={generateMonthly}
+                title={canGenerateMonthly ? undefined : "Switch to monthly view to generate invoices."}
+              >
+                {generatingMonthly ? "Generating..." : `Generate ${readyPackages.length} monthly invoice(s)`}
+              </button>
+              {!canGenerateMonthly ? (
+                <p className="mt-1 text-xs opacity-60">Switch to monthly view to generate invoices.</p>
+              ) : null}
+            </div>
           </div>
 
           <p className="text-sm opacity-70">
@@ -331,16 +317,6 @@ export function BillingReviewClient({
               <table className="table table-sm">
                 <thead>
                   <tr>
-                    <th className="w-10">
-                      <input
-                        type="checkbox"
-                        className="checkbox checkbox-sm"
-                        checked={allSelectableFilteredChecked}
-                        onChange={toggleFilteredContracts}
-                        aria-label="Select all filtered packages"
-                        disabled={selectableFiltered.length === 0}
-                      />
-                    </th>
                     <th className="w-8" />
                     <th>Customer</th>
                     <th>Contract</th>
@@ -352,27 +328,18 @@ export function BillingReviewClient({
                 </thead>
                 <tbody>
                   {filteredPackages.map((pkg) => {
-                    const expanded = expandedContractId === pkg.contractId;
+                    const selectKey = packageSelectKey(pkg);
+                    const expanded = expandedContractId === selectKey;
                     return (
-                      <Fragment key={pkg.contractId}>
+                      <Fragment key={selectKey}>
                         <tr className="hover">
-                          <td>
-                            <input
-                              type="checkbox"
-                              className="checkbox checkbox-sm"
-                              checked={selectedContracts.has(pkg.contractId)}
-                              onChange={() => toggleContract(pkg.contractId)}
-                              disabled={pkg.alreadyInvoiced || pkg.estimatedTotal <= 0}
-                              aria-label={`Select ${pkg.contractName}`}
-                            />
-                          </td>
                           <td>
                             <button
                               type="button"
                               className="btn btn-ghost btn-xs btn-square"
                               aria-expanded={expanded}
                               aria-label={expanded ? "Collapse package details" : "Expand package details"}
-                              onClick={() => toggleExpanded(pkg.contractId)}
+                              onClick={() => toggleExpanded(selectKey)}
                             >
                               {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                             </button>
@@ -398,7 +365,7 @@ export function BillingReviewClient({
                         </tr>
                         {expanded ? (
                           <tr>
-                            <td colSpan={8} className="bg-base-200/40 p-4">
+                            <td colSpan={7} className="bg-base-200/40 p-4">
                               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                                 <div>
                                   <p className="text-xs opacity-60">Monthly contract charge</p>
@@ -544,7 +511,7 @@ export function BillingReviewClient({
 
                     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-base-300 pt-3">
                       <p className="text-sm">
-                        <span className="opacity-60">{groupSelectedItems.length} selected · Total: </span>
+                        <span className="opacity-60">{groupSelectedItems.length} selected ? Total: </span>
                         <span className="font-semibold">{formatCurrency(total)}</span>
                       </p>
                       <button
@@ -553,7 +520,7 @@ export function BillingReviewClient({
                         disabled={groupSelectedItems.length === 0 || isSubmitting}
                         onClick={() => generateInvoice(group)}
                       >
-                        {isSubmitting ? "Generating…" : "Generate Invoice"}
+                        {isSubmitting ? "Generating..." : "Generate Invoice"}
                       </button>
                     </div>
                   </div>

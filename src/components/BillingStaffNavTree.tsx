@@ -8,7 +8,7 @@ import { useState } from "react";
 type NavLink = { href: string; label: string };
 
 const BILLING_LINKS: NavLink[] = [
-  { href: "/billing-review", label: "Billing Review" },
+  { href: "/billing-review", label: "Overview" },
   { href: "/invoices", label: "Invoices" },
   { href: "/hr-analytics", label: "HR Cost Analytics" },
 ];
