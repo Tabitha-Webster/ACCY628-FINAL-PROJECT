@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Download } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EmptyState, Money, StatusBadge } from "@/components/ui";
 import { formatDate } from "@/lib/format";
@@ -25,7 +25,41 @@ const AGING_ORDER = ["Current", "1-30 Days", "31-60 Days", "61-90 Days", ">90 Da
 function agingBadgeClass(daysPastDue: number): string {
   if (daysPastDue > 60) return "badge-error";
   if (daysPastDue > 0) return "badge-warning";
-  return "badge-success";
+  return "badge-aging-current";
+}
+
+function csvEscape(value: string | number): string {
+  const text = String(value);
+  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+function downloadArCsv(rows: ArAgingRow[]) {
+  const headers = ["Invoice", "Customer", "Due Date", "Days Past Due", "Status", "Aging", "Balance"];
+  const lines = [
+    headers.join(","),
+    ...rows.map((row) =>
+      [
+        row.invoiceNumber,
+        row.customerName,
+        row.dueDate,
+        row.daysPastDue,
+        row.status,
+        row.bucket,
+        row.remainingBalance.toFixed(2),
+      ]
+        .map(csvEscape)
+        .join(",")
+    ),
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 10);
+  link.href = url;
+  link.download = `accounts-receivable-${stamp}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function matchesDaysPastDueFilter(days: number, filter: string): boolean {
@@ -253,10 +287,10 @@ export function AccountsReceivableClient({ rows }: { rows: ArAgingRow[] }) {
                     </Link>
                   </td>
                   <td>{row.customerName}</td>
-                  <td className={`text-xs ${row.daysPastDue > 0 ? "font-medium text-error" : ""}`}>
+                  <td className={`text-xs ${row.daysPastDue > 0 ? "font-medium" : ""}`}>
                     {formatDate(row.dueDate)}
                   </td>
-                  <td className={row.daysPastDue > 0 ? "font-medium text-error" : ""}>
+                  <td className={row.daysPastDue > 0 ? "font-medium" : ""}>
                     {row.daysPastDue > 0 ? row.daysPastDue : "—"}
                   </td>
                   <td>
@@ -276,6 +310,18 @@ export function AccountsReceivableClient({ rows }: { rows: ArAgingRow[] }) {
           </table>
         </div>
       )}
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          disabled={filtered.length === 0}
+          onClick={() => downloadArCsv(filtered)}
+        >
+          <Download className="h-4 w-4" />
+          Export
+        </button>
+      </div>
     </div>
   );
 }

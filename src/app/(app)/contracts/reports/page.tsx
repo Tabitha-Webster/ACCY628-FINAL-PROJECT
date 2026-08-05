@@ -31,7 +31,7 @@ export default async function ContractReportsPage() {
       </div>
 
       <PageHeader
-        title="Contracts Reporting & Dashboard"
+        title="Reports"
         description="Active agreements, expirations, renewals, MRR/ACV, SLA compliance, and support-hour utilization."
       />
 

@@ -66,20 +66,19 @@ export function ArAgingChart({ data }: { data: ArAgingBucketTotal[] }) {
         </ResponsiveContainer>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-5">
+      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-5">
         {data.map((entry) => (
-          <div key={entry.bucket} className="flex items-center gap-2">
+          <div key={entry.bucket} className="flex items-start gap-2">
             <span
-              className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+              className="mt-1 inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
               style={{ backgroundColor: BUCKET_COLORS[entry.shortLabel] ?? "#0891b2" }}
             />
-            <span className="min-w-0">
-              <span className="font-medium">{entry.shortLabel}</span>
-              <span className="opacity-60">
-                {" "}
-                · {entry.count} invoice{entry.count === 1 ? "" : "s"}
-              </span>
-            </span>
+            <div className="min-w-0">
+              <p className="font-medium">{entry.shortLabel}</p>
+              <p className="opacity-60">
+                {entry.count} invoice{entry.count === 1 ? "" : "s"}
+              </p>
+            </div>
           </div>
         ))}
       </div>
