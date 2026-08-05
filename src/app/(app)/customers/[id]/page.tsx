@@ -1,23 +1,71 @@
-import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { ButtonLink } from "@/components/Button";
 import { Card } from "@/components/Card";
-import {
-  AccountingExplainer,
-  DataTable,
-  EmptyState,
-  ErrorState,
-  Money,
-  PageHeader,
-  StatCard,
-  StatusBadge,
-} from "@/components/ui";
-import { formatCurrency, formatDate } from "@/lib/format";
-import { grossMarginPct, grossProfit } from "@/lib/calculations";
+import { PageLayout } from "@/components/PageLayout";
+import { ErrorState } from "@/components/ui";
+import { statusBadgeClass, statusLabel } from "@/lib/format";
 
-const OPEN_TICKET_STATUSES = ["new", "assigned", "in_progress", "waiting_on_customer", "waiting_on_approval"];
+type CustomerDetail = {
+  id: string;
+  name: string | null;
+  status: string | null;
+  industry: string | null;
+  primary_contact: string | null;
+  contact_email: string | null;
+  primary_contact_phone: string | null;
+  customer_identifier: string | null;
+  billing_contact_name: string | null;
+  billing_contact_email: string | null;
+  billing_address: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  notes: string | null;
+};
+
+const DETAIL_SELECT =
+  "id, name, status, industry, primary_contact, contact_email, primary_contact_phone, customer_identifier, billing_contact_name, billing_contact_email, billing_address, city, state, postal_code, notes";
+
+const CORE_SELECT = "id, name, status, industry, primary_contact, contact_email, notes";
+
+function display(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : "—";
+}
+
+function customerStatusBadgeClass(status: string) {
+  const s = status.toLowerCase();
+  if (s === "active") return "badge-success";
+  if (s === "inactive") return "badge-error";
+  if (s === "on_hold") return "badge-warning";
+  return statusBadgeClass(s);
+}
+
+function CustomerStatusBadge({ status }: { status: string }) {
+  return <span className={`badge ${customerStatusBadgeClass(status)}`}>{statusLabel(status)}</span>;
+}
+
+function DetailField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs font-medium uppercase tracking-wide opacity-60">{label}</dt>
+      <dd className="mt-1 text-sm">{children}</dd>
+    </div>
+  );
+}
+
+function noteValue(notes: string | null | undefined, label: string) {
+  if (!notes) return null;
+  const line = notes
+    .split("\n")
+    .map((entry) => entry.trim())
+    .find((entry) => entry.toLowerCase().startsWith(`${label.toLowerCase()}:`));
+  if (!line) return null;
+  return line.slice(label.length + 1).trim() || null;
+}
 
 export default async function CustomerDetailPage({
   params,
@@ -28,194 +76,135 @@ export default async function CustomerDetailPage({
   if (!profile) redirect("/login");
   if (!["manager", "billing", "technician"].includes(profile.role)) redirect("/dashboard");
 
-  const { id } = await params;
+  const { id: rawId } = await params;
+  const id = decodeURIComponent(rawId ?? "").trim();
+
+  if (!id) {
+    return (
+      <PageLayout
+        title="Customer not found"
+        description="Customer details"
+        actions={
+          <ButtonLink href="/customers" variant="secondary" size="sm">
+            Back to list
+          </ButtonLink>
+        }
+      >
+        <ErrorState message="No customer ID was provided in the link. Return to the customer list and select a customer again." />
+      </PageLayout>
+    );
+  }
+
   const supabase = await createClient();
 
-  const { data: customer, error: customerError } = await supabase
+  let { data: customer, error } = await supabase
     .from("customers")
-    .select("*")
+    .select(DETAIL_SELECT)
     .eq("id", id)
     .maybeSingle();
 
-  if (!customerError && !customer) notFound();
-
-  const yearStart = `${new Date().getFullYear()}-01-01`;
-
-  const [
-    { data: contracts },
-    { data: tickets },
-    { data: invoices },
-    { data: revenueYtd },
-    { data: costsYtd },
-  ] = await Promise.all([
-    supabase
-      .from("contracts")
-      .select("id, contract_number, name, status, contract_type, start_date, end_date, monthly_recurring_fee")
-      .eq("customer_id", id)
-      .order("start_date", { ascending: false }),
-    supabase
-      .from("support_tickets")
-      .select("id, ticket_number, title, status, priority, submitted_at")
-      .eq("customer_id", id)
-      .order("submitted_at", { ascending: false })
-      .limit(10),
-    supabase
-      .from("invoices")
-      .select("id, invoice_number, invoice_date, due_date, status, total_amount, remaining_balance")
-      .eq("customer_id", id)
-      .order("invoice_date", { ascending: false }),
-    supabase
-      .from("revenue_records")
-      .select("amount")
-      .eq("customer_id", id)
-      .eq("recognition", "earned")
-      .gte("period_month", yearStart),
-    supabase.from("direct_costs").select("internal_cost").eq("customer_id", id).gte("cost_date", yearStart),
-  ]);
-
-  const activeContracts = (contracts ?? []).filter((c) => c.status === "active").length;
-  const openTickets = (tickets ?? []).filter((t) => OPEN_TICKET_STATUSES.includes(t.status)).length;
-  const nonCanceledInvoices = (invoices ?? []).filter((inv) => inv.status !== "canceled");
-  const totalAr = nonCanceledInvoices.reduce((sum, inv) => sum + Number(inv.remaining_balance ?? 0), 0);
-  const overdueAmount = (invoices ?? [])
-    .filter((inv) => inv.status === "overdue")
-    .reduce((sum, inv) => sum + Number(inv.remaining_balance ?? 0), 0);
-
-  const ytdRevenue = (revenueYtd ?? []).reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
-  const ytdCost = (costsYtd ?? []).reduce((sum, c) => sum + Number(c.internal_cost ?? 0), 0);
-  const ytdProfit = grossProfit(ytdRevenue, ytdCost);
-  const ytdMargin = grossMarginPct(ytdRevenue, ytdCost);
-
-  if (customerError || !customer) {
-    return <ErrorState message={customerError?.message ?? "Customer not found."} />;
+  if (error && /column|does not exist|customer_identifier|billing_|primary_contact_phone|city|state|postal/i.test(error.message)) {
+    const fallback = await supabase.from("customers").select(CORE_SELECT).eq("id", id).maybeSingle();
+    customer = fallback.data
+      ? ({
+          ...fallback.data,
+          primary_contact_phone: null,
+          customer_identifier: null,
+          billing_contact_name: noteValue(fallback.data.notes, "Billing contact"),
+          billing_contact_email: noteValue(fallback.data.notes, "Billing email"),
+          billing_address: noteValue(fallback.data.notes, "Billing address"),
+          city: noteValue(fallback.data.notes, "City"),
+          state: noteValue(fallback.data.notes, "State"),
+          postal_code: noteValue(fallback.data.notes, "Postal code"),
+        } as CustomerDetail)
+      : null;
+    error = fallback.error;
   }
 
+  if (error) {
+    return (
+      <PageLayout
+        title="Customer"
+        description="Customer details"
+        actions={
+          <ButtonLink href="/customers" variant="secondary" size="sm">
+            Back to list
+          </ButtonLink>
+        }
+      >
+        <ErrorState message={`Unable to load this customer. ${error.message}`} />
+      </PageLayout>
+    );
+  }
+
+  if (!customer) {
+    return (
+      <PageLayout
+        title="Customer not found"
+        description="Customer details"
+        actions={
+          <ButtonLink href="/customers" variant="secondary" size="sm">
+            Back to list
+          </ButtonLink>
+        }
+      >
+        <ErrorState message="That customer does not exist, or you do not have access to it. Return to the customer list and try another record." />
+      </PageLayout>
+    );
+  }
+
+  const row = customer as CustomerDetail;
+  const identifier = display(row.customer_identifier) !== "—" ? row.customer_identifier : row.id;
+  const canEdit = ["manager", "billing"].includes(profile.role);
+
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={customer.name}
-        description={customer.industry ? `${customer.industry} · ${customer.credit_terms ?? "Net 30"}` : undefined}
-        actions={<StatusBadge status={customer.status} />}
-      />
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Active Contracts" value={String(activeContracts)} />
-        <StatCard label="Open Tickets" value={String(openTickets)} tone={openTickets > 0 ? "warning" : "default"} />
-        <StatCard label="Accounts Receivable" value={formatCurrency(totalAr)} />
-        <StatCard
-          label="Overdue Amount"
-          value={formatCurrency(overdueAmount)}
-          tone={overdueAmount > 0 ? "error" : "default"}
-        />
-      </div>
-
-      <Card title="Year to Date" description="Earned revenue, direct costs, and margin for the current calendar year.">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div>
-            <p className="text-xs opacity-60">Earned Revenue</p>
-            <p className="text-xl font-semibold tabular-nums">
-              <Money value={ytdRevenue} />
-            </p>
-          </div>
-          <div>
-            <p className="text-xs opacity-60">Direct Costs</p>
-            <p className="text-xl font-semibold tabular-nums">
-              <Money value={ytdCost} />
-            </p>
-          </div>
-          <div>
-            <p className="text-xs opacity-60">Gross Profit / Margin</p>
-            <p className="text-xl font-semibold tabular-nums">
-              <Money value={ytdProfit} /> <span className="text-sm opacity-60">({ytdMargin.toFixed(1)}%)</span>
-            </p>
-          </div>
-        </div>
+    <PageLayout
+      title={display(row.name)}
+      description="Customer profile"
+      actions={
+        <>
+          <ButtonLink href="/customers" variant="secondary" size="sm">
+            Back to list
+          </ButtonLink>
+          {canEdit ? (
+            <ButtonLink href={`/customers/${row.id}/edit`} variant="primary" size="sm">
+              Edit Customer
+            </ButtonLink>
+          ) : null}
+        </>
+      }
+    >
+      <Card title="Customer details">
+        <dl className="grid gap-4 sm:grid-cols-2">
+          <DetailField label="Customer identifier">
+            <span className="font-mono text-xs tabular-nums">{display(identifier)}</span>
+          </DetailField>
+          <DetailField label="Customer name">{display(row.name)}</DetailField>
+          <DetailField label="Customer status">
+            {row.status ? <CustomerStatusBadge status={row.status} /> : "—"}
+          </DetailField>
+          <DetailField label="Industry">{display(row.industry)}</DetailField>
+        </dl>
       </Card>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card title="Contracts">
-          {contracts && contracts.length > 0 ? (
-            <DataTable headers={["Contract", "Status", "Type", "Term", "Monthly Fee"]}>
-              {contracts.map((contract) => (
-                <tr key={contract.id}>
-                  <td>
-                    <Link href={`/contracts/${contract.id}`} className="link link-hover font-medium">
-                      {contract.name}
-                    </Link>
-                    <div className="text-xs opacity-60">{contract.contract_number}</div>
-                  </td>
-                  <td>
-                    <StatusBadge status={contract.status} />
-                  </td>
-                  <td className="text-xs">{contract.contract_type}</td>
-                  <td className="text-xs">
-                    {formatDate(contract.start_date)} – {formatDate(contract.end_date)}
-                  </td>
-                  <td>
-                    <Money value={Number(contract.monthly_recurring_fee ?? 0)} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          ) : (
-            <EmptyState title="No contracts on file" />
-          )}
-        </Card>
-
-        <Card title="Recent Tickets">
-          {tickets && tickets.length > 0 ? (
-            <DataTable headers={["Ticket", "Priority", "Status", "Submitted"]}>
-              {tickets.map((ticket) => (
-                <tr key={ticket.id}>
-                  <td>
-                    <div className="font-medium">{ticket.title}</div>
-                    <div className="text-xs opacity-60">{ticket.ticket_number}</div>
-                  </td>
-                  <td className="text-xs capitalize">{ticket.priority}</td>
-                  <td>
-                    <StatusBadge status={ticket.status} />
-                  </td>
-                  <td className="text-xs">{formatDate(ticket.submitted_at)}</td>
-                </tr>
-              ))}
-            </DataTable>
-          ) : (
-            <EmptyState title="No support tickets on file" />
-          )}
-        </Card>
-      </div>
-
-      <Card title="Invoices">
-        {invoices && invoices.length > 0 ? (
-          <DataTable headers={["Invoice", "Date", "Due", "Status", "Total", "Balance", ""]}>
-            {invoices.map((invoice) => (
-              <tr key={invoice.id}>
-                <td className="font-medium">{invoice.invoice_number}</td>
-                <td className="text-xs">{formatDate(invoice.invoice_date)}</td>
-                <td className="text-xs">{formatDate(invoice.due_date)}</td>
-                <td>
-                  <StatusBadge status={invoice.status} />
-                </td>
-                <td>
-                  <Money value={Number(invoice.total_amount ?? 0)} />
-                </td>
-                <td>
-                  <Money value={Number(invoice.remaining_balance ?? 0)} />
-                </td>
-                <td className="text-right">
-                  <ButtonLink href={`/invoices/${invoice.id}`} variant="secondary" size="xs">
-                    View
-                  </ButtonLink>
-                </td>
-              </tr>
-            ))}
-          </DataTable>
-        ) : (
-          <EmptyState title="No invoices issued yet" />
-        )}
+      <Card title="Primary contact">
+        <dl className="grid gap-4 sm:grid-cols-2">
+          <DetailField label="Primary contact name">{display(row.primary_contact)}</DetailField>
+          <DetailField label="Primary contact email">{display(row.contact_email)}</DetailField>
+          <DetailField label="Primary contact phone">{display(row.primary_contact_phone)}</DetailField>
+        </dl>
       </Card>
 
-      <AccountingExplainer />
-    </div>
+      <Card title="Billing information">
+        <dl className="grid gap-4 sm:grid-cols-2">
+          <DetailField label="Billing contact name">{display(row.billing_contact_name)}</DetailField>
+          <DetailField label="Billing contact email">{display(row.billing_contact_email)}</DetailField>
+          <DetailField label="Billing address">{display(row.billing_address)}</DetailField>
+          <DetailField label="City">{display(row.city)}</DetailField>
+          <DetailField label="State">{display(row.state)}</DetailField>
+          <DetailField label="Postal code">{display(row.postal_code)}</DetailField>
+        </dl>
+      </Card>
+    </PageLayout>
   );
 }
