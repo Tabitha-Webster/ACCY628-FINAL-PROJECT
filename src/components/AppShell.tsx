@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Menu } from "lucide-react";
-import { ThemeSelector } from "@/components/ThemeSelector";
+import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
 import { ROLE_NAV, type Profile, type UserRole } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
@@ -38,21 +38,23 @@ export function AppShell({
         onChange={(e) => setOpen(e.target.checked)}
       />
       <div className="drawer-content flex flex-col">
-        <header className="navbar border-b border-base-300 bg-base-100 px-4">
-          <div className="flex-none lg:hidden">
-            <label htmlFor="app-drawer" className="btn btn-square btn-ghost" onClick={() => setOpen(true)}>
+        <header className="flex flex-wrap items-center gap-3 border-b border-base-300 bg-base-100 px-4 py-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <label htmlFor="app-drawer" className="btn btn-square btn-ghost lg:hidden" onClick={() => setOpen(true)}>
               <Menu className="h-5 w-5" />
             </label>
-          </div>
-          <div className="flex-1">
             <div>
               <p className="text-sm font-semibold leading-tight">ServiceSync MSP</p>
-              <p className="text-xs opacity-60">From service agreement to support, billing, and collection.</p>
+              <p className="hidden text-xs opacity-60 sm:block">
+                From service agreement to support, billing, and collection.
+              </p>
             </div>
           </div>
-          <div className="flex flex-none items-center gap-2">
-            <ThemeSelector compact />
-            <div className="hidden text-right sm:block">
+          <div className="order-3 flex w-full justify-center md:order-none md:w-auto md:flex-1">
+            <DemoRoleSwitcher currentRole={profile.role as UserRole} />
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <div className="hidden text-right lg:block">
               <p className="text-sm font-medium">{profile.full_name}</p>
               <p className="text-xs opacity-60">
                 {statusLabel(profile.role)} · {profile.email}
@@ -93,11 +95,9 @@ export function AppShell({
               );
             })}
           </nav>
-          {profile.is_demo_user ? (
-            <div className="border-t border-base-300 p-4 text-xs opacity-70">
-              Demo account active. Use the Demo Login Selector on the login page to switch roles.
-            </div>
-          ) : null}
+          <div className="border-t border-base-300 p-4 text-xs opacity-70">
+            Use the Demo Role Switcher to change perspectives. A password is required for each role. Log out still ends the session completely.
+          </div>
         </aside>
       </div>
     </div>
