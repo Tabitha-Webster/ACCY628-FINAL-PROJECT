@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { Source_Sans_3, Source_Serif_4 } from "next/font/google";
+import { Plus_Jakarta_Sans, Source_Serif_4 } from "next/font/google";
 import { ThemeInit } from "@/components/ThemeInit";
 import "./globals.css";
 
-const sans = Source_Sans_3({
+const sans = Plus_Jakarta_Sans({
   variable: "--font-sans",
   subsets: ["latin"],
 });
@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${sans.variable} ${serif.variable} h-full`}
       suppressHydrationWarning
     >
-      <body className="min-h-full bg-base-200 font-sans antialiased text-base-content">
+      <body className="min-h-full bg-base-100 font-sans antialiased text-base-content">
         <ThemeInit />
         {children}
       </body>

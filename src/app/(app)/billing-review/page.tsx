@@ -28,7 +28,7 @@ export default async function BillingReviewPage({
   return (
     <div>
       <PageHeader
-        title="Billing Review"
+        title="Overview"
         description={
           period.view === "all"
             ? "Preview monthly contract charges, included hours, overage, approved projects, and equipment or software across the life of the company."
