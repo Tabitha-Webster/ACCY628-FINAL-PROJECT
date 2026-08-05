@@ -7,8 +7,8 @@ export const DEFAULT_APPEARANCE = "system" as const;
 
 export type AppearancePreference = "light" | "dark" | "system";
 
-const LIGHT_THEME = "corporate";
-const DARK_THEME = "business";
+const LIGHT_THEME = "servicesync";
+const DARK_THEME = "servicesync-dark";
 
 const OPTIONS: { id: AppearancePreference; label: string; hint: string }[] = [
   { id: "light", label: "Light", hint: "Always use the light theme" },
@@ -27,8 +27,8 @@ function prefersDark(): boolean {
 export function normalizeAppearance(raw: string | null): AppearancePreference {
   if (raw === "light" || raw === "dark" || raw === "system") return raw;
   // Migrate older DaisyUI theme ids
-  if (raw === "business" || raw === "dim" || raw === "nord") return "dark";
-  if (raw === "corporate" || raw === "emerald" || raw === "cupcake") return "light";
+  if (raw === "business" || raw === "dim" || raw === "nord" || raw === "servicesync-dark") return "dark";
+  if (raw === "corporate" || raw === "emerald" || raw === "cupcake" || raw === "servicesync") return "light";
   return DEFAULT_APPEARANCE;
 }
 

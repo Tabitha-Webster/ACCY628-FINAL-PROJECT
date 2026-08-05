@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Keep the dev indicator clear of the docked sidebar.
+  devIndicators: {
+    position: "bottom-right",
+  },
 };
 
 export default nextConfig;

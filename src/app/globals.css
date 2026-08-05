@@ -1,6 +1,84 @@
 @import "tailwindcss";
 @plugin "daisyui" {
-  themes: corporate --default, business;
+  themes: false;
+}
+
+@plugin "daisyui/theme" {
+  name: "servicesync";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-100: oklch(100% 0 0);
+  --color-base-200: oklch(97% 0.006 225);
+  --color-base-300: oklch(92% 0.013 225);
+  --color-base-content: oklch(20% 0.05 225);
+
+  --color-primary: oklch(29% 0.07 225);
+  --color-primary-content: oklch(98% 0.006 225);
+  --color-secondary: oklch(38% 0.08 220);
+  --color-secondary-content: oklch(98% 0.006 225);
+  --color-accent: oklch(64% 0.11 205);
+  --color-accent-content: oklch(18% 0.04 205);
+  --color-neutral: oklch(24% 0.06 225);
+  --color-neutral-content: oklch(94% 0.013 225);
+
+  --color-info: oklch(52% 0.19 259);
+  --color-info-content: oklch(98% 0.005 250);
+  --color-success: oklch(60% 0.16 149);
+  --color-success-content: oklch(98% 0.005 250);
+  --color-warning: oklch(65% 0.15 63);
+  --color-warning-content: oklch(20% 0.04 63);
+  --color-error: oklch(58% 0.22 27);
+  --color-error-content: oklch(98% 0.005 250);
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "servicesync-dark";
+  default: false;
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-100: oklch(19% 0.045 225);
+  --color-base-200: oklch(23% 0.055 225);
+  --color-base-300: oklch(29% 0.065 225);
+  --color-base-content: oklch(93% 0.015 225);
+
+  --color-primary: oklch(64% 0.11 210);
+  --color-primary-content: oklch(15% 0.04 225);
+  --color-secondary: oklch(72% 0.09 210);
+  --color-secondary-content: oklch(15% 0.04 225);
+  --color-accent: oklch(75% 0.12 190);
+  --color-accent-content: oklch(17% 0.04 190);
+  --color-neutral: oklch(29% 0.07 225);
+  --color-neutral-content: oklch(93% 0.015 225);
+
+  --color-info: oklch(68% 0.12 215);
+  --color-info-content: oklch(15% 0.04 225);
+  --color-success: oklch(70% 0.15 149);
+  --color-success-content: oklch(18% 0.04 149);
+  --color-warning: oklch(78% 0.14 70);
+  --color-warning-content: oklch(20% 0.04 70);
+  --color-error: oklch(68% 0.19 25);
+  --color-error-content: oklch(18% 0.05 25);
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
 }
 
 html,
@@ -10,6 +88,22 @@ body {
 
 body {
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/*
+ * Navy side pane. Remapping the base tokens rather than hardcoding a
+ * background keeps the nested base-color utilities in the nav trees legible
+ * without touching those components.
+ */
+.app-sidebar {
+  --color-base-100: oklch(21% 0.05 225);
+  --color-base-200: oklch(27% 0.06 222);
+  --color-base-300: oklch(34% 0.07 220);
+  --color-base-content: oklch(95% 0.013 225);
+  --color-primary: oklch(66% 0.11 205);
+  --color-primary-content: oklch(15% 0.04 225);
+  background-color: var(--color-base-100);
+  color: var(--color-base-content);
 }
 
 /* Application layout tokens — reuse across authenticated pages */
@@ -72,6 +166,36 @@ body {
 .rounded-box.border,
 .card.border {
   border-width: 2px;
+}
+
+/* Roomier content panels in the main column, left of the docked nav untouched. */
+.app-main .rounded-box {
+  padding: var(--app-space-4);
+}
+
+.app-main .rounded-box:has(> table),
+.app-main .rounded-box:has(> .table),
+.app-main .rounded-box.overflow-x-auto {
+  padding: 0;
+}
+
+.app-main .card-body {
+  padding: var(--app-space-4);
+  gap: var(--app-space-3);
+}
+
+.app-main .table :where(th, td) {
+  padding-top: 0.7rem;
+  padding-bottom: 0.7rem;
+}
+
+[data-density="compact"] .app-main .rounded-box {
+  padding: var(--app-space-3);
+}
+
+[data-density="compact"] .app-main .table :where(th, td) {
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
 }
 
 [data-density="compact"] .table :where(th, td) {

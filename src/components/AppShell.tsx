@@ -81,8 +81,8 @@ function SideNav({
           );
         })}
       </nav>
-      <div className="space-y-3 border-t border-base-300 p-4">
-        {showSettings && onOpenSettings ? (
+      {showSettings && onOpenSettings ? (
+        <div className="border-t border-base-300 p-4">
           <button
             type="button"
             className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-base-200"
@@ -96,12 +96,8 @@ function SideNav({
             </span>
             <ChevronRight className="h-4 w-4 shrink-0 opacity-50" />
           </button>
-        ) : null}
-        <p className="text-xs opacity-70">
-          Use the Demo Role Switcher to change perspectives. A password is required for each role. Log out still ends
-          the session completely.
-        </p>
-      </div>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -118,6 +114,13 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsPathname, setSettingsPathname] = useState(pathname);
+
+  // Dismiss the settings panel when the route changes.
+  if (settingsPathname !== pathname) {
+    setSettingsPathname(pathname);
+    setSettingsOpen(false);
+  }
 
   const restrictedCustomer =
     profile.role === "customer" &&
@@ -129,10 +132,6 @@ export function AppShell({
       router.replace("/pending-approval");
     }
   }, [restrictedCustomer, pathname, router]);
-
-  useEffect(() => {
-    setSettingsOpen(false);
-  }, [pathname]);
 
   useEffect(() => {
     applyPreferencesToDom(loadPreferences());
@@ -161,9 +160,9 @@ export function AppShell({
   }
 
   return (
-    <div className="flex min-h-screen bg-base-200">
+    <div className="flex min-h-screen bg-base-100">
       {/* Docked sidebar — always visible in the layout flow. */}
-      <aside className="sticky top-0 flex h-screen w-72 shrink-0 flex-col border-r border-base-300 bg-base-100">
+      <aside className="app-sidebar sticky top-0 flex h-screen w-72 shrink-0 flex-col border-r border-base-300">
         <SideNav
           profile={profile}
           pathname={pathname}
@@ -201,7 +200,7 @@ export function AppShell({
             </button>
           </div>
         </header>
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main className="app-main flex-1 p-5 md:p-8">{children}</main>
       </div>
 
       {settingsOpen ? (
