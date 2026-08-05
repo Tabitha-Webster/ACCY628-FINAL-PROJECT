@@ -1,15 +1,22 @@
 import { formatCurrency, formatDate, formatHours, formatPercent, statusBadgeClass, statusLabel } from "@/lib/format";
+import { ExplainNumber, type MetricExplanation } from "@/components/ExplainNumber";
+
+export type { MetricExplanation };
 
 export function StatCard({
   label,
   value,
   hint,
   tone = "default",
+  className = "",
+  explanation,
 }: {
   label: string;
   value: string;
   hint?: string;
-  tone?: "default" | "success" | "warning" | "error";
+  tone?: "default" | "success" | "warning" | "error" | "info";
+  className?: string;
+  explanation?: MetricExplanation;
 }) {
   const border =
     tone === "success"
@@ -18,13 +25,16 @@ export function StatCard({
         ? "border-warning/40"
         : tone === "error"
           ? "border-error/40"
-          : "border-base-300";
+          : tone === "info"
+            ? "border-info/40"
+            : "border-base-300";
 
   return (
-    <div className={`rounded-box border ${border} bg-base-100 p-4 shadow-sm`}>
+    <div className={`rounded-box border ${border} bg-base-100 p-4 shadow-sm ${className}`.trim()}>
       <p className="text-xs font-medium uppercase tracking-wide opacity-60">{label}</p>
       <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
       {hint ? <p className="mt-1 text-xs opacity-60">{hint}</p> : null}
+      {explanation ? <ExplainNumber explanation={explanation} /> : null}
     </div>
   );
 }
@@ -46,26 +56,34 @@ export function ErrorState({ message }: { message: string }) {
   );
 }
 
-export function StatusBadge({ status }: { status: string }) {
-  return <span className={`badge ${statusBadgeClass(status)}`}>{statusLabel(status)}</span>;
+export function StatusBadge({ status, label }: { status: string; label?: string }) {
+  return <span className={`badge ${statusBadgeClass(status)}`}>{label ?? statusLabel(status)}</span>;
 }
 
-export function PageHeader({
-  title,
-  description,
-  actions,
-}: {
+export type PageHeaderProps = {
   title: string;
+  /** Short supporting line under the title. */
   description?: string;
+  /** Optional primary actions (buttons/links) aligned to the right on larger screens. */
   actions?: React.ReactNode;
-}) {
+};
+
+/**
+ * Shared page header: title, optional description, optional action area.
+ * Spacing matches PageLayout; standalone use keeps a bottom margin.
+ */
+export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {description ? <p className="mt-1 text-sm opacity-70">{description}</p> : null}
+    <div className="app-page-header-row mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <div className="min-w-0 flex-1 space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1>
+        {description ? (
+          <p className="max-w-3xl text-sm leading-relaxed opacity-70">{description}</p>
+        ) : null}
       </div>
-      {actions}
+      {actions ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end sm:pt-1">{actions}</div>
+      ) : null}
     </div>
   );
 }
@@ -86,28 +104,7 @@ export function DateText({ value }: { value: string | null | undefined }) {
   return <span>{formatDate(value)}</span>;
 }
 
-export function DataTable({
-  headers,
-  children,
-}: {
-  headers: string[];
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
-      <table className="table table-sm">
-        <thead>
-          <tr>
-            {headers.map((h) => (
-              <th key={h}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
-    </div>
-  );
-}
+export { DataTable } from "@/components/DataTable";
 
 export function AccountingExplainer() {
   return (

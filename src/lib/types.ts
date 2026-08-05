@@ -2,7 +2,7 @@
 // Mirrors the public schema in Supabase; kept hand-written since no generated
 // Database types exist yet in this project.
 
-export type ApprovalStatus = "not_required" | "pending" | "approved" | "rejected";
+export type ApprovalStatus = "not_required" | "pending" | "awaiting_billing" | "approved" | "rejected";
 export type BillingStatus = "unbilled" | "ready" | "billed" | "excluded";
 export type WorkClassification = "included" | "billable" | "out_of_scope";
 export type TicketPriority = "low" | "medium" | "high" | "critical";
@@ -27,6 +27,7 @@ export type ProjectStatus =
 export type InvoiceStatus =
   | "draft"
   | "issued"
+  | "sent"
   | "partially_paid"
   | "paid"
   | "overdue"
@@ -40,6 +41,16 @@ export type ContractStatus =
   | "expired"
   | "canceled"
   | "renewed";
+export type ContractType =
+  | "managed_support"
+  | "included_hours"
+  | "unlimited_remote"
+  | "project_only"
+  | "managed_plus_project"
+  | "pass_through";
+export type RenewalType = "auto" | "manual" | "none";
+export type BillingFrequency = "monthly" | "quarterly" | "annual" | "one_time";
+export type BillingTiming = "in_advance" | "in_arrears";
 export type RevenueRecognition = "earned" | "deferred" | "unbilled";
 export type RevenueType =
   | "recurring"
@@ -48,7 +59,13 @@ export type RevenueType =
   | "software_equipment"
   | "reimbursable";
 export type DisputeResolutionStatus = "open" | "under_review" | "resolved" | "rejected";
-export type CustomerStatus = "active" | "inactive" | "prospect" | "on_hold";
+export type CustomerStatus =
+  | "active"
+  | "inactive"
+  | "prospect"
+  | "on_hold"
+  | "pending_approval"
+  | "rejected";
 
 export type Customer = {
   id: string;
@@ -56,11 +73,15 @@ export type Customer = {
   industry: string | null;
   primary_contact: string | null;
   contact_email: string | null;
+  primary_contact_phone?: string | null;
   service_address: string | null;
   status: CustomerStatus;
   credit_terms: string | null;
   account_manager_id: string | null;
   notes: string | null;
+  approval_note?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
   created_at: string;
 };
 
@@ -70,22 +91,164 @@ export type Contract = {
   contract_number: string;
   name: string;
   status: ContractStatus;
-  contract_type: string;
+  contract_type: ContractType | string;
   start_date: string;
   end_date: string | null;
+  renewal_type: RenewalType | string | null;
+  cancellation_notice_days: number | null;
   assigned_manager_id: string | null;
+  sales_representative_id: string | null;
   description: string | null;
-  scope?: string | null;
-  included_services?: string | null;
-  excluded_services?: string | null;
+  scope: string | null;
   monthly_recurring_fee: number;
+  one_time_setup_fee: number | null;
   included_hours_per_month: number;
   additional_hourly_rate: number;
+  overages_allowed: boolean | null;
+  overage_charges: number | null;
   sla_response_hours: number | null;
   sla_resolution_hours: number | null;
-  billing_frequency: string | null;
+  sla_critical_response_hours: number | null;
+  sla_high_response_hours: number | null;
+  sla_medium_response_hours: number | null;
+  sla_low_response_hours: number | null;
+  supported_locations: string | null;
+  supported_users_devices: string | null;
+  remote_support: boolean | null;
+  onsite_support: boolean | null;
+  after_hours_terms: string | null;
+  included_services: string | null;
+  excluded_services: string | null;
+  billing_frequency: BillingFrequency | string | null;
+  billing_timing: BillingTiming | string | null;
+  billing_method: string | null;
   payment_terms: string | null;
+  next_invoice_date: string | null;
+  last_invoice_date: string | null;
+  billing_status: BillingStatus | string | null;
+  deposit_amount: number | null;
+  late_fee_terms: string | null;
+  reimbursable_cost_policy: string | null;
+  software_markup_pct: number | null;
+  equipment_markup_pct: number | null;
+  tax_status: string | null;
+  billing_contact: string | null;
+  change_request_procedure: string | null;
+  requires_customer_approval: boolean | null;
+  requires_manager_approval: boolean | null;
+  effective_date: string | null;
+  signed_date: string | null;
+  renewal_terms: string | null;
+  cancellation_terms: string | null;
+  version_number: number | null;
   created_at: string;
+  updated_at?: string;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+export type ContractService = {
+  id: string;
+  contract_id: string;
+  service_name: string;
+  service_description: string | null;
+  is_included: boolean;
+  created_at: string;
+};
+
+export type ContractModification = {
+  id: string;
+  contract_id: string;
+  modification_summary: string;
+  effective_date: string;
+  approval_status: ApprovalStatus;
+  approved_by: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at?: string;
+  proposed_changes?: Array<{
+    field_name: string;
+    previous_value: string;
+    new_value: string;
+  }> | null;
+};
+
+export type ContractDocument = {
+  id: string;
+  contract_id: string;
+  document_name: string;
+  document_type: string | null;
+  storage_path: string | null;
+  file_url: string | null;
+  uploaded_by: string | null;
+  uploaded_at: string;
+  notes: string | null;
+  document_group_id: string;
+  version_number: number;
+  is_current: boolean;
+  file_size: number | null;
+  mime_type: string | null;
+  replace_reason: string | null;
+  replaced_at: string | null;
+};
+
+export type ContractVersion = {
+  id: string;
+  contract_id: string;
+  version_number: number;
+  change_summary: string;
+  snapshot: Record<string, unknown> | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type ContractChange = {
+  id: string;
+  contract_id: string;
+  field_name: string;
+  previous_value: string | null;
+  new_value: string | null;
+  change_reason: string;
+  changed_by: string | null;
+  changed_at: string;
+  source: string;
+};
+
+export type ContractRenewalReminderKind =
+  | "renewal_90"
+  | "renewal_60"
+  | "renewal_30"
+  | "expiration_warning"
+  | "expired";
+
+export type ContractRenewalReminderStatus = "open" | "acknowledged" | "dismissed" | "resolved";
+
+export type ContractRenewalReminder = {
+  id: string;
+  contract_id: string;
+  reminder_kind: ContractRenewalReminderKind;
+  anchor_date: string;
+  days_before: number;
+  status: ContractRenewalReminderStatus;
+  message: string;
+  generated_at: string;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+};
+
+export type ContractRenewal = {
+  id: string;
+  contract_id: string;
+  previous_start_date: string | null;
+  previous_end_date: string | null;
+  new_start_date: string;
+  new_end_date: string | null;
+  renewal_method: "auto" | "manual";
+  previous_status: string | null;
+  resulting_status: string;
+  notes: string | null;
+  renewed_by: string | null;
+  renewed_at: string;
 };
 
 export type SupportTicket = {
@@ -100,7 +263,9 @@ export type SupportTicket = {
   status: TicketStatus;
   service_category: string | null;
   submitted_at: string;
+  submitted_by: string | null;
   assigned_technician_id: string | null;
+  assigned_at: string | null;
   target_response_at: string | null;
   target_resolution_at: string | null;
   actual_response_at: string | null;
@@ -109,9 +274,19 @@ export type SupportTicket = {
   classification: WorkClassification | null;
   billable_approval_status: ApprovalStatus | null;
   technician_notes: string | null;
+  completion_notes: string | null;
   customer_resolution_summary: string | null;
+  no_time_explanation: string | null;
+  completed_by: string | null;
+  reopened_at: string | null;
+  reopened_by: string | null;
+  reopen_reason: string | null;
   created_at: string;
+  updated_at: string | null;
   created_by: string | null;
+  updated_by: string | null;
+  archived_at: string | null;
+  archived_by: string | null;
 };
 
 export type TechnicianAssignment = {
@@ -139,8 +314,14 @@ export type TimeEntry = {
   internal_cost_rate: number;
   billing_rate: number | null;
   labor_cost: number | null;
+  unusual_hours_flag?: boolean;
   approval_status: ApprovalStatus;
   billing_status: BillingStatus;
+  approved_by: string | null;
+  approved_at: string | null;
+  invoice_id: string | null;
+  invoice_line_item_id: string | null;
+  billed_at: string | null;
   submitted_at: string | null;
   created_at: string;
 };
@@ -160,8 +341,16 @@ export type DirectCost = {
   receipt_reference: string | null;
   description: string;
   entered_by: string | null;
+  late_entry_flag?: boolean;
+  entered_after_invoice?: boolean;
+  approval_threshold_required?: boolean;
   approval_status: ApprovalStatus;
   billing_status: BillingStatus;
+  approved_by: string | null;
+  approved_at: string | null;
+  invoice_id: string | null;
+  invoice_line_item_id: string | null;
+  billed_at: string | null;
   created_at: string;
 };
 
@@ -200,6 +389,8 @@ export type Project = {
   software_budget: number | null;
   vendor_budget: number | null;
   customer_approval_status: ApprovalStatus | null;
+  customer_approved_by?: string | null;
+  customer_approved_at?: string | null;
   uses_milestone_billing: boolean | null;
   amount_billed: number | null;
   amount_collected: number | null;
@@ -217,6 +408,8 @@ export type ProjectMilestone = {
   completed: boolean;
   completed_at: string | null;
   approval_status: ApprovalStatus | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
   billing_status: BillingStatus | null;
   created_at: string;
 };
@@ -239,6 +432,13 @@ export type Invoice = {
   remaining_balance: number;
   dispute_status: boolean;
   notes: string | null;
+  generated_by?: string | null;
+  generated_at?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_notes?: string | null;
+  sent_at: string | null;
+  sent_by: string | null;
   created_at: string;
 };
 
@@ -277,5 +477,40 @@ export type RevenueRecord = {
   recognition: RevenueRecognition;
   amount: number;
   description: string | null;
+  created_at: string;
+};
+
+export type HrPositionStatus = "open" | "filled" | "closed";
+export type HrContractorStatus = "active" | "ended";
+
+export type HrDepartment = {
+  id: string;
+  name: string;
+  annual_budget: number;
+  created_at: string;
+};
+
+export type HrPosition = {
+  id: string;
+  department_id: string;
+  title: string;
+  status: HrPositionStatus;
+  budgeted_cost: number;
+  opened_at: string;
+  filled_at: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type HrContractor = {
+  id: string;
+  department_id: string;
+  position_id: string | null;
+  full_name: string;
+  status: HrContractorStatus;
+  annual_cost: number;
+  hired_at: string;
+  ended_at: string | null;
+  notes: string | null;
   created_at: string;
 };

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Source_Sans_3, Source_Serif_4 } from "next/font/google";
+import { ThemeInit } from "@/components/ThemeInit";
 import "./globals.css";
 
 const sans = Source_Sans_3({
@@ -19,8 +20,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="emerald" className={`${sans.variable} ${serif.variable} h-full`}>
-      <body className="min-h-full bg-base-200 font-sans antialiased">{children}</body>
+    <html
+      lang="en"
+      data-theme="corporate"
+      className={`${sans.variable} ${serif.variable} h-full`}
+      suppressHydrationWarning
+    >
+      <body className="min-h-full bg-base-200 font-sans antialiased">
+        <ThemeInit />
+        {children}
+      </body>
     </html>
   );
 }

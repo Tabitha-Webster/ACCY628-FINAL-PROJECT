@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { DataTable, EmptyState, ErrorState, Money, PageHeader } from "@/components/ui";
-import { formatDate } from "@/lib/format";
-import { PaymentForm, type PayableInvoice } from "@/components/PaymentForm";
+import { ErrorState, PageHeader, StatCard } from "@/components/ui";
+import { formatCurrency } from "@/lib/format";
+import { PaymentHistoryTable, type PaymentHistoryRow } from "@/components/PaymentHistoryTable";
 
 export default async function PaymentsPage() {
   const profile = await getCurrentProfile();
@@ -19,56 +19,52 @@ export default async function PaymentsPage() {
       .order("payment_date", { ascending: false }),
     supabase
       .from("invoices")
-      .select("id, invoice_number, remaining_balance, customers(name)")
+      .select("id, remaining_balance")
       .gt("remaining_balance", 0)
       .neq("status", "canceled")
-      .order("invoice_date", { ascending: true }),
+      .neq("status", "draft"),
   ]);
 
   const error = paymentsError || invoicesError;
-
-  const payableInvoices: PayableInvoice[] = (openInvoices ?? []).map((inv) => {
-    const customer = Array.isArray(inv.customers) ? inv.customers[0] : inv.customers;
-    return {
-      id: inv.id,
-      invoiceNumber: inv.invoice_number,
-      customerName: customer?.name ?? "Unknown customer",
-      remainingBalance: Number(inv.remaining_balance ?? 0),
-    };
-  });
+  const totalOutstanding = (openInvoices ?? []).reduce(
+    (sum, invoice) => sum + Number(invoice.remaining_balance ?? 0),
+    0
+  );
+  const totalReceived = (payments ?? []).reduce((sum, payment) => sum + Number(payment.payment_amount ?? 0), 0);
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Payments" description="Record customer payments and review payment history." />
+      <PageHeader
+        title="Payment History"
+        description="Customer payments appear here automatically and update invoice balances and statuses."
+      />
 
       {error ? <ErrorState message={error.message} /> : null}
 
-      <PaymentForm invoices={payableInvoices} />
-
-      <div>
-        <h2 className="mb-2 text-lg font-semibold">Payment History</h2>
-        {payments && payments.length > 0 ? (
-          <DataTable headers={["Payment", "Customer", "Date", "Method", "Reference", "Amount"]}>
-            {payments.map((payment) => {
-              const customer = Array.isArray(payment.customers) ? payment.customers[0] : payment.customers;
-              return (
-                <tr key={payment.id}>
-                  <td className="font-medium">{payment.payment_number}</td>
-                  <td>{customer?.name ?? "—"}</td>
-                  <td className="text-xs">{formatDate(payment.payment_date)}</td>
-                  <td className="text-xs capitalize">{payment.payment_method?.replace(/_/g, " ")}</td>
-                  <td className="text-xs">{payment.reference_number ?? "—"}</td>
-                  <td className="font-medium">
-                    <Money value={Number(payment.payment_amount ?? 0)} />
-                  </td>
-                </tr>
-              );
-            })}
-          </DataTable>
-        ) : (
-          <EmptyState title="No payments recorded yet" />
-        )}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard label="Open Invoices" value={String(openInvoices?.length ?? 0)} />
+        <StatCard
+          label="Outstanding Balance"
+          value={formatCurrency(totalOutstanding)}
+          tone={totalOutstanding > 0 ? "warning" : "success"}
+        />
+        <StatCard label="Total Payments Received" value={formatCurrency(totalReceived)} tone="success" />
       </div>
+
+      <PaymentHistoryTable
+        payments={(payments ?? []).map((payment): PaymentHistoryRow => {
+          const customer = Array.isArray(payment.customers) ? payment.customers[0] : payment.customers;
+          return {
+            id: payment.id,
+            payment_number: payment.payment_number,
+            customer_name: customer?.name ?? "Unknown customer",
+            payment_date: payment.payment_date,
+            payment_method: payment.payment_method ?? "other",
+            reference_number: payment.reference_number ?? null,
+            payment_amount: Number(payment.payment_amount ?? 0),
+          };
+        })}
+      />
     </div>
   );
 }

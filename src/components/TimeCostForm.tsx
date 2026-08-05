@@ -5,6 +5,18 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { laborCost, billableCost } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
+import { DAILY_HOUR_LIMIT, LARGE_COST_THRESHOLD } from "@/lib/time-cost-config";
+import {
+  duplicateTimeEntryWarning,
+  excessiveDailyHoursWarning,
+  isLateCostEntry,
+  largeCostRequiresApproval,
+  lateCostEntryWarning,
+  needsManagerCostReview,
+  requireContract,
+  requiresLargeCostApproval,
+  validateHoursWorked,
+} from "@/lib/time-cost-rules";
 
 type Option = { id: string; label: string; customerId: string };
 
@@ -25,8 +37,33 @@ type Props = {
   defaults?: Defaults;
 };
 
-const COST_CATEGORIES = ["software", "equipment", "vendor", "travel", "shipping", "other"] as const;
-const DEFAULT_MARKUP: Record<string, number> = { software: 0.15, equipment: 0.2 };
+const COST_CATEGORIES = [
+  "software",
+  "equipment",
+  "replacement_parts",
+  "vendor",
+  "travel",
+  "shipping",
+  "reimbursable_expenses",
+  "other",
+] as const;
+
+const COST_CATEGORY_LABELS: Record<(typeof COST_CATEGORIES)[number], string> = {
+  software: "Software",
+  equipment: "Equipment",
+  replacement_parts: "Replacement parts",
+  vendor: "Vendor",
+  travel: "Travel",
+  shipping: "Shipping",
+  reimbursable_expenses: "Reimbursable expenses",
+  other: "Other",
+};
+
+const DEFAULT_MARKUP: Record<string, number> = {
+  software: 0.15,
+  equipment: 0.2,
+  replacement_parts: 0.2,
+};
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -97,27 +134,77 @@ export function TimeCostForm({
       setTimeError("Please select a customer.");
       return;
     }
+    if (!tContractId) {
+      setTimeError("Please select a contract.");
+      return;
+    }
+    if (!tTicketId) {
+      setTimeError("Please select a related ticket.");
+      return;
+    }
+    if (!tProjectId) {
+      setTimeError("Please select a related project.");
+      return;
+    }
     if (!description.trim()) {
       setTimeError("Please describe the work performed.");
       return;
     }
-    if (!hoursNum || hoursNum <= 0) {
-      setTimeError("Hours worked must be greater than 0.");
+
+    const hoursIssue = validateHoursWorked(hoursNum);
+    if (hoursIssue) {
+      setTimeError(hoursIssue.message);
       return;
-    }
-    if (hoursNum > 12) {
-      const proceed = window.confirm(`${hoursNum} hours is unusually high for a single entry. Continue anyway?`);
-      if (!proceed) return;
     }
 
     setTimeLoading(true);
     const supabase = createClient();
+
+    const { data: dayRows, error: dayError } = await supabase
+      .from("time_entries")
+      .select("hours_worked, support_ticket_id, project_id, description")
+      .eq("technician_id", technicianId)
+      .eq("work_date", workDate);
+
+    if (dayError) {
+      setTimeLoading(false);
+      setTimeError(`Could not check daily hours: ${dayError.message}`);
+      return;
+    }
+
+    const existingDailyHours = (dayRows ?? []).reduce(
+      (sum, row) => sum + Number(row.hours_worked ?? 0),
+      0
+    );
+    const dailyWarning = excessiveDailyHoursWarning(existingDailyHours, hoursNum, DAILY_HOUR_LIMIT);
+    const unusualHours = Boolean(dailyWarning);
+    if (dailyWarning) {
+      const proceed = window.confirm(dailyWarning.message);
+      if (!proceed) {
+        setTimeLoading(false);
+        return;
+      }
+    }
+
+    const dupWarning = duplicateTimeEntryWarning(dayRows ?? [], {
+      supportTicketId: tTicketId,
+      projectId: tProjectId,
+      hoursWorked: hoursNum,
+    });
+    if (dupWarning) {
+      const proceed = window.confirm(dupWarning.message);
+      if (!proceed) {
+        setTimeLoading(false);
+        return;
+      }
+    }
+
     const { error } = await supabase.from("time_entries").insert({
       technician_id: technicianId,
       customer_id: tCustomerId,
-      contract_id: tContractId || null,
-      support_ticket_id: tTicketId || null,
-      project_id: tProjectId || null,
+      contract_id: tContractId,
+      support_ticket_id: tTicketId,
+      project_id: tProjectId,
       work_date: workDate,
       hours_worked: hoursNum,
       work_category: workCategory || null,
@@ -126,6 +213,7 @@ export function TimeCostForm({
       internal_cost_rate: internalCostRate,
       billing_rate: previewBillingRate,
       labor_cost: laborCost(hoursNum, internalCostRate),
+      unusual_hours_flag: unusualHours,
       approval_status: classification === "included" ? "not_required" : "pending",
     });
     setTimeLoading(false);
@@ -133,7 +221,11 @@ export function TimeCostForm({
       setTimeError(error.message);
       return;
     }
-    setTimeMessage("Time entry saved.");
+    setTimeMessage(
+      unusualHours
+        ? "Time entry saved and flagged for unusual daily hours."
+        : "Time entry saved."
+    );
     setHours("");
     setDescription("");
     setWorkCategory("");
@@ -150,6 +242,19 @@ export function TimeCostForm({
       setCostError("Please select a customer.");
       return;
     }
+    const contractIssue = requireContract(cContractId);
+    if (contractIssue) {
+      setCostError(contractIssue.message);
+      return;
+    }
+    if (!cTicketId) {
+      setCostError("Please select a related ticket.");
+      return;
+    }
+    if (!cProjectId) {
+      setCostError("Please select a related project.");
+      return;
+    }
     if (!costDescription.trim()) {
       setCostError("Please describe this cost.");
       return;
@@ -158,18 +263,57 @@ export function TimeCostForm({
       setCostError("Internal cost must be zero or greater.");
       return;
     }
-    if (costNum > 10000) {
-      const proceed = window.confirm(`${formatCurrency(costNum)} is unusually high for a single cost entry. Continue anyway?`);
+
+    const largeCostWarning = largeCostRequiresApproval(costNum);
+    const isLargeCost = requiresLargeCostApproval(costNum);
+    if (largeCostWarning) {
+      const proceed = window.confirm(largeCostWarning.message);
+      if (!proceed) return;
+    }
+
+    const lateWarning = lateCostEntryWarning(costDate);
+    const lateEntry = isLateCostEntry(costDate);
+    if (lateWarning) {
+      const proceed = window.confirm(lateWarning.message);
       if (!proceed) return;
     }
 
     setCostLoading(true);
     const supabase = createClient();
+
+    // Technicians cannot read invoices via RLS; use a secure RPC existence check.
+    const { data: priorInvoice, error: priorError } = await supabase.rpc("has_prior_invoice_for_cost", {
+      p_contract_id: cContractId,
+      p_customer_id: cCustomerId,
+    });
+    if (priorError) {
+      setCostLoading(false);
+      setCostError(`Could not check existing invoices: ${priorError.message}`);
+      return;
+    }
+
+    const enteredAfterInvoice = Boolean(priorInvoice);
+    if (enteredAfterInvoice) {
+      const proceed = window.confirm(
+        "An invoice already exists for this contract/customer. This cost will be flagged as Entered After Invoice. Existing invoices will not be changed, and the cost will stay available for the next invoice. Continue?"
+      );
+      if (!proceed) {
+        setCostLoading(false);
+        return;
+      }
+    }
+
+    const needsManager = needsManagerCostReview({
+      internalCost: costNum,
+      lateEntry,
+      enteredAfterInvoice,
+    });
+
     const { error } = await supabase.from("direct_costs").insert({
       customer_id: cCustomerId,
-      contract_id: cContractId || null,
-      support_ticket_id: cTicketId || null,
-      project_id: cProjectId || null,
+      contract_id: cContractId,
+      support_ticket_id: cTicketId,
+      project_id: cProjectId,
       cost_category: costCategory,
       vendor: vendor || null,
       cost_date: costDate,
@@ -179,13 +323,29 @@ export function TimeCostForm({
       receipt_reference: receiptReference || null,
       description: costDescription.trim(),
       entered_by: technicianId,
+      late_entry_flag: lateEntry,
+      entered_after_invoice: enteredAfterInvoice,
+      approval_threshold_required: isLargeCost,
+      // Routine costs skip manager and are ready for billing; large/flagged need manager → billing.
+      approval_status: needsManager ? "pending" : "approved",
+      billing_status: "unbilled",
     });
     setCostLoading(false);
     if (error) {
       setCostError(error.message);
       return;
     }
-    setCostMessage("Direct cost saved.");
+
+    const flags: string[] = [];
+    if (needsManager) {
+      flags.push("pending manager approval, then billing");
+    } else {
+      flags.push("approved — ready to bill");
+    }
+    if (isLargeCost) flags.push("large cost");
+    if (lateEntry) flags.push("late entry");
+    if (enteredAfterInvoice) flags.push("entered after invoice");
+    setCostMessage(`Direct cost saved (${flags.join("; ")}).`);
     setInternalCost("");
     setCostDescription("");
     setVendor("");
@@ -232,9 +392,17 @@ export function TimeCostForm({
               </select>
             </label>
             <label className="form-control">
-              <span className="label-text mb-1">Contract (optional)</span>
-              <select className="select select-bordered" value={tContractId} onChange={(e) => setTContractId(e.target.value)} disabled={!tCustomerId}>
-                <option value="">None</option>
+              <span className="label-text mb-1">
+                Contract <span className="text-error">*</span>
+              </span>
+              <select
+                className="select select-bordered"
+                value={tContractId}
+                onChange={(e) => setTContractId(e.target.value)}
+                disabled={!tCustomerId}
+                required
+              >
+                <option value="">Select a contract…</option>
                 {contractsForCustomer(tCustomerId).map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.label}
@@ -243,9 +411,17 @@ export function TimeCostForm({
               </select>
             </label>
             <label className="form-control">
-              <span className="label-text mb-1">Related Ticket (optional)</span>
-              <select className="select select-bordered" value={tTicketId} onChange={(e) => setTTicketId(e.target.value)} disabled={!tCustomerId}>
-                <option value="">None</option>
+              <span className="label-text mb-1">
+                Related Ticket <span className="text-error">*</span>
+              </span>
+              <select
+                className="select select-bordered"
+                value={tTicketId}
+                onChange={(e) => setTTicketId(e.target.value)}
+                disabled={!tCustomerId}
+                required
+              >
+                <option value="">Select a ticket…</option>
                 {ticketsForCustomer(tCustomerId).map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.label}
@@ -254,9 +430,17 @@ export function TimeCostForm({
               </select>
             </label>
             <label className="form-control">
-              <span className="label-text mb-1">Related Project (optional)</span>
-              <select className="select select-bordered" value={tProjectId} onChange={(e) => setTProjectId(e.target.value)} disabled={!tCustomerId}>
-                <option value="">None</option>
+              <span className="label-text mb-1">
+                Related Project <span className="text-error">*</span>
+              </span>
+              <select
+                className="select select-bordered"
+                value={tProjectId}
+                onChange={(e) => setTProjectId(e.target.value)}
+                disabled={!tCustomerId}
+                required
+              >
+                <option value="">Select a project…</option>
                 {projectsForCustomer(tCustomerId).map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.label}
@@ -272,10 +456,12 @@ export function TimeCostForm({
               <input type="date" className="input input-bordered" value={workDate} onChange={(e) => setWorkDate(e.target.value)} required />
             </label>
             <label className="form-control">
-              <span className="label-text mb-1">Hours Worked</span>
+              <span className="label-text mb-1">
+                Hours Worked <span className="text-error">*</span>
+              </span>
               <input
                 type="number"
-                min="0"
+                min="0.25"
                 step="0.25"
                 className="input input-bordered"
                 value={hours}
@@ -366,9 +552,17 @@ export function TimeCostForm({
               </select>
             </label>
             <label className="form-control">
-              <span className="label-text mb-1">Contract (optional)</span>
-              <select className="select select-bordered" value={cContractId} onChange={(e) => setCContractId(e.target.value)} disabled={!cCustomerId}>
-                <option value="">None</option>
+              <span className="label-text mb-1">
+                Contract <span className="text-error">*</span>
+              </span>
+              <select
+                className="select select-bordered"
+                value={cContractId}
+                onChange={(e) => setCContractId(e.target.value)}
+                disabled={!cCustomerId}
+                required
+              >
+                <option value="">Select a contract…</option>
                 {contractsForCustomer(cCustomerId).map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.label}
@@ -377,9 +571,17 @@ export function TimeCostForm({
               </select>
             </label>
             <label className="form-control">
-              <span className="label-text mb-1">Related Ticket (optional)</span>
-              <select className="select select-bordered" value={cTicketId} onChange={(e) => setCTicketId(e.target.value)} disabled={!cCustomerId}>
-                <option value="">None</option>
+              <span className="label-text mb-1">
+                Related Ticket <span className="text-error">*</span>
+              </span>
+              <select
+                className="select select-bordered"
+                value={cTicketId}
+                onChange={(e) => setCTicketId(e.target.value)}
+                disabled={!cCustomerId}
+                required
+              >
+                <option value="">Select a ticket…</option>
                 {ticketsForCustomer(cCustomerId).map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.label}
@@ -388,9 +590,17 @@ export function TimeCostForm({
               </select>
             </label>
             <label className="form-control">
-              <span className="label-text mb-1">Related Project (optional)</span>
-              <select className="select select-bordered" value={cProjectId} onChange={(e) => setCProjectId(e.target.value)} disabled={!cCustomerId}>
-                <option value="">None</option>
+              <span className="label-text mb-1">
+                Related Project <span className="text-error">*</span>
+              </span>
+              <select
+                className="select select-bordered"
+                value={cProjectId}
+                onChange={(e) => setCProjectId(e.target.value)}
+                disabled={!cCustomerId}
+                required
+              >
+                <option value="">Select a project…</option>
                 {projectsForCustomer(cCustomerId).map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.label}
@@ -414,7 +624,7 @@ export function TimeCostForm({
               >
                 {COST_CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
-                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                    {COST_CATEGORY_LABELS[cat]}
                   </option>
                 ))}
               </select>
@@ -463,7 +673,11 @@ export function TimeCostForm({
               <span className="opacity-70">Billable amount to customer</span>
               <span className="font-medium tabular-nums">{formatCurrency(previewBillableAmount)}</span>
             </div>
-            <p className="mt-2 text-xs opacity-60">This cost will be marked pending approval before it can be billed.</p>
+            <p className="mt-2 text-xs opacity-60">
+              Routine costs are approved for billing automatically. Amounts at or above{" "}
+              {formatCurrency(LARGE_COST_THRESHOLD)}, late entries, or costs entered after an invoice need manager
+              review, then billing final approval. Receipt uploads are not required — a text reference is enough.
+            </p>
           </div>
 
           <button className="btn btn-primary" disabled={costLoading}>

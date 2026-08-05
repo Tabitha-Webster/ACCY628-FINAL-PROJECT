@@ -43,31 +43,26 @@ export function remainingBalance(invoiceTotal: number, amountPaid: number) {
   return invoiceTotal - amountPaid;
 }
 
-export function arAgingBucket(dueDate: string | Date, asOf: Date = new Date()) {
+export const AR_AGING_BUCKETS = ["Current", "1-30 Days", "31-60 Days", "61-90 Days", ">90 Days"] as const;
+
+export type ArAgingBucketLabel = (typeof AR_AGING_BUCKETS)[number];
+
+export function isSevereAgingBucket(label: string) {
+  return label === "61-90 Days" || label === ">90 Days";
+}
+
+export function arAgingBucket(dueDate: string | Date, asOf: Date = new Date()): ArAgingBucketLabel {
   const due = typeof dueDate === "string" ? new Date(dueDate) : dueDate;
   const days = Math.floor((asOf.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
   if (days <= 0) return "Current";
-  if (days <= 30) return "1–30 Days Past Due";
-  if (days <= 60) return "31–60 Days Past Due";
-  if (days <= 90) return "61–90 Days Past Due";
-  return "More Than 90 Days Past Due";
+  if (days <= 30) return "1-30 Days";
+  if (days <= 60) return "31-60 Days";
+  if (days <= 90) return "61-90 Days";
+  return ">90 Days";
 }
 
-export function slaStatus(
-  targetAt: string | null | undefined,
-  actualAt: string | null | undefined,
-  now: Date = new Date()
-): "met" | "at_risk" | "missed" | "pending" {
-  if (!targetAt) return "pending";
-  const target = new Date(targetAt);
-  if (actualAt) {
-    return new Date(actualAt) <= target ? "met" : "missed";
-  }
-  const hoursLeft = (target.getTime() - now.getTime()) / (1000 * 60 * 60);
-  if (hoursLeft < 0) return "missed";
-  if (hoursLeft <= 4) return "at_risk";
-  return "pending";
-}
+/** @deprecated Prefer evaluateSlaClock / evaluateTicketSla from '@/lib/sla' (80% At Risk rule). */
+export { slaStatus, evaluateTicketSla, evaluateSlaClock } from "@/lib/sla";
 
 export function marginBand(marginPct: number): "profitable" | "low_margin" | "unprofitable" {
   if (marginPct < 0) return "unprofitable";

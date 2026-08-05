@@ -57,11 +57,20 @@ export function DemoRoleSwitcher({ currentRole }: { currentRole: UserRole }) {
 
     if (signError) {
       setSwitching(false);
-      setError("That password did not match. Role was not changed.");
+      const msg = (signError.message || "").trim();
+      setError(
+        !msg || msg === "Invalid login credentials"
+          ? "That password did not match. Role was not changed."
+          : msg
+      );
       return;
     }
 
-    window.location.assign("/dashboard");
+    // Stay on the same customer/list URL when possible so each role sees the same live record.
+    const path = window.location.pathname;
+    const stayOnSharedCustomerView =
+      path === "/customers" || path.startsWith("/customers/");
+    window.location.assign(stayOnSharedCustomerView ? path : "/dashboard");
   }
 
   const selectedRole = pending?.role ?? currentRole;
