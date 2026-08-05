@@ -1,10 +1,14 @@
 import { hoursRemaining, usagePercentage, usageStatus } from "@/lib/calculations";
+import { isTimeEntryAlreadyInvoiced } from "@/lib/billing-eligibility";
 
 export type TimeHourRow = {
   hours_worked: number | string;
   classification: string;
   approval_status: string;
   billing_status?: string | null;
+  invoice_id?: string | null;
+  invoice_line_item_id?: string | null;
+  billed_at?: string | null;
 };
 
 export type MonthlyUsage = {
@@ -22,11 +26,16 @@ export type MonthlyUsage = {
   monthlyFee: number;
 };
 
+export function billingPeriodFromStart(start: string) {
+  const [year, month] = start.slice(0, 7).split("-").map(Number);
+  const last = new Date(year, month, 0);
+  const end = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
+  const label = new Date(year, month - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  return { start: `${year}-${String(month).padStart(2, "0")}-01`, end, label };
+}
+
 export function currentBillingPeriod(now = new Date()) {
-  const start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
-  const label = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  return { start, end, label };
+  return billingPeriodFromStart(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`);
 }
 
 export function computeMonthlyUsage(
@@ -42,7 +51,7 @@ export function computeMonthlyUsage(
   for (const entry of entries) {
     const hours = Number(entry.hours_worked ?? 0);
     if (!Number.isFinite(hours) || hours <= 0) continue;
-    if (entry.billing_status === "billed" || entry.billing_status === "excluded") continue;
+    if (isTimeEntryAlreadyInvoiced(entry)) continue;
 
     if (entry.classification === "included") {
       includedHoursUsed += hours;
@@ -113,7 +122,7 @@ export function makeInvoiceLine(draft: InvoiceLineDraft) {
   };
 }
 
-export function invoiceSubtotal(lines: Array<{ line_amount: number | string | null | undefined }>) {
+export function invoiceSubtotal(lines: Array<{ line_amount?: number | string | null }>) {
   return round2(lines.reduce((sum, line) => sum + Number(line.line_amount ?? 0), 0));
 }
 
@@ -133,6 +142,36 @@ export function invoiceTaxAmount(
 
 export function invoiceTotal(subtotal: number, taxAmount: number, credits = 0) {
   return round2(Math.max(0, subtotal + taxAmount - Number(credits ?? 0)));
+}
+
+export function invoiceTotalsMatchLines(
+  invoice: {
+    subtotal?: number | string | null;
+    tax_amount?: number | string | null;
+    credits?: number | string | null;
+    total_amount?: number | string | null;
+  },
+  lines: Array<{ line_amount?: number | string | null }>
+) {
+  const subtotal = round2(Number(invoice.subtotal ?? 0));
+  const taxAmount = round2(Number(invoice.tax_amount ?? 0));
+  const credits = round2(Number(invoice.credits ?? 0));
+  const totalAmount = round2(Number(invoice.total_amount ?? 0));
+  const lineSum = invoiceSubtotal(lines);
+  return Math.abs(subtotal - lineSum) <= 0.01 && Math.abs(totalAmount - invoiceTotal(subtotal, taxAmount, credits)) <= 0.01;
+}
+
+export function invoiceTotalsMismatchReason(
+  invoice: {
+    subtotal?: number | string | null;
+    tax_amount?: number | string | null;
+    credits?: number | string | null;
+    total_amount?: number | string | null;
+  },
+  lines: Array<{ line_amount?: number | string | null }>
+) {
+  if (invoiceTotalsMatchLines(invoice, lines)) return null;
+  return "Invoice total must equal the sum of its lines.";
 }
 
 export function parsePaymentTermsDays(paymentTerms: string | null | undefined) {
@@ -184,6 +223,32 @@ export function deriveInvoiceStatus({
   if (dueDate && dueDate < today && remainingBalance > 0.01) return "overdue";
   if (currentStatus === "sent") return "sent";
   return "issued";
+}
+
+export function withDerivedInvoiceStatus<
+  T extends {
+    status: string | null;
+    due_date: string;
+    amount_paid?: number | string | null;
+    remaining_balance?: number | string | null;
+    dispute_status?: string | null;
+  },
+>(invoice: T, today = todayDateString()) {
+  const remainingBalance = Number(invoice.remaining_balance ?? 0);
+  const amountPaid = Number(invoice.amount_paid ?? 0);
+  return {
+    ...invoice,
+    remaining_balance: remainingBalance,
+    amount_paid: amountPaid,
+    status: deriveInvoiceStatus({
+      currentStatus: invoice.status,
+      dueDate: invoice.due_date,
+      amountPaid,
+      remainingBalance,
+      disputed: Boolean(invoice.dispute_status) || invoice.status === "disputed",
+      today,
+    }),
+  };
 }
 
 export function summarizeInvoice(
