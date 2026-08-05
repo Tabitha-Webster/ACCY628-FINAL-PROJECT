@@ -58,11 +58,17 @@ export function statusLabel(status: string) {
 
 export function statusBadgeClass(status: string) {
   const s = status.toLowerCase();
-  if (["active", "paid", "approved", "resolved", "closed", "met", "normal", "filled"].includes(s))
+  if (
+    ["active", "paid", "approved", "resolved", "closed", "met", "normal", "filled", "renewed", "sent"].includes(
+      s
+    )
+  )
     return "badge-success";
+  if (["issued", "current"].includes(s)) return "badge-info";
   if (
     [
       "pending",
+      "pending_approval",
       "draft",
       "warning",
       "at_risk",
@@ -70,6 +76,7 @@ export function statusBadgeClass(status: string) {
       "in_progress",
       "assigned",
       "open",
+      "on_hold",
       "medium",
       "not_yet_due",
     ].includes(s)
@@ -81,6 +88,7 @@ export function statusBadgeClass(status: string) {
       "disputed",
       "rejected",
       "canceled",
+      "expired",
       "missed",
       "over_limit",
       "unprofitable",

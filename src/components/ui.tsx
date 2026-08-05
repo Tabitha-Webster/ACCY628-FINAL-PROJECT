@@ -5,11 +5,13 @@ export function StatCard({
   value,
   hint,
   tone = "default",
+  className = "",
 }: {
   label: string;
   value: string;
   hint?: string;
-  tone?: "default" | "success" | "warning" | "error";
+  tone?: "default" | "success" | "warning" | "error" | "info";
+  className?: string;
 }) {
   const border =
     tone === "success"
@@ -18,10 +20,12 @@ export function StatCard({
         ? "border-warning/40"
         : tone === "error"
           ? "border-error/40"
-          : "border-base-300";
+          : tone === "info"
+            ? "border-info/40"
+            : "border-base-300";
 
   return (
-    <div className={`rounded-box border ${border} bg-base-100 p-4 shadow-sm`}>
+    <div className={`rounded-box border ${border} bg-base-100 p-4 shadow-sm ${className}`.trim()}>
       <p className="text-xs font-medium uppercase tracking-wide opacity-60">{label}</p>
       <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
       {hint ? <p className="mt-1 text-xs opacity-60">{hint}</p> : null}
@@ -46,8 +50,8 @@ export function ErrorState({ message }: { message: string }) {
   );
 }
 
-export function StatusBadge({ status }: { status: string }) {
-  return <span className={`badge ${statusBadgeClass(status)}`}>{statusLabel(status)}</span>;
+export function StatusBadge({ status, label }: { status: string; label?: string }) {
+  return <span className={`badge ${statusBadgeClass(status)}`}>{label ?? statusLabel(status)}</span>;
 }
 
 export function PageHeader({
@@ -86,28 +90,7 @@ export function DateText({ value }: { value: string | null | undefined }) {
   return <span>{formatDate(value)}</span>;
 }
 
-export function DataTable({
-  headers,
-  children,
-}: {
-  headers: string[];
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
-      <table className="table table-sm">
-        <thead>
-          <tr>
-            {headers.map((h) => (
-              <th key={h}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
-    </div>
-  );
-}
+export { DataTable } from "@/components/DataTable";
 
 export function AccountingExplainer() {
   return (
