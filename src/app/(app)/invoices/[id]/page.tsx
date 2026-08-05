@@ -71,14 +71,7 @@ export default async function InvoiceDetailPage({
         title={`Invoice ${invoice.invoice_number}`}
         description={customer ? `${customer.name}${contract ? ` · ${contract.name}` : ""}` : undefined}
         actions={
-          <div className="flex gap-2">
-            <StatusBadge status={invoice.status} />
-            {Number(invoice.remaining_balance ?? 0) > 0 && !["draft", "canceled"].includes(invoice.status) ? (
-              <Link href={`/payments?invoiceId=${invoice.id}`} className="btn btn-primary btn-sm">
-                Record Payment
-              </Link>
-            ) : null}
-          </div>
+          <StatusBadge status={invoice.status} />
         }
       />
 

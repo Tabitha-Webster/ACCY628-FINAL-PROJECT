@@ -55,7 +55,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/operations", label: "Service Operations" },
     { href: "/profitability", label: "Profitability" },
     { href: "/billing-collections", label: "Billing and Collections" },
-    { href: "/payments", label: "Payment Entry" },
+    { href: "/payments", label: "Payment History" },
     { href: "/controls", label: "Controls and Exceptions" },
   ],
   technician: [
@@ -69,7 +69,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/dashboard", label: "Dashboard" },
     { href: "/billing-review", label: "Billing Review" },
     { href: "/invoices", label: "Invoices" },
-    { href: "/payments", label: "Payment Entry" },
+    { href: "/payments", label: "Payment History" },
     { href: "/accounts-receivable", label: "Accounts Receivable" },
     { href: "/accounting", label: "Accounting Review" },
   ],

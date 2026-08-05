@@ -178,11 +178,6 @@ export function InvoiceListClient({ invoices }: { invoices: InvoiceListRow[] }) 
               </td>
               <td className="text-right">
                 <div className="flex justify-end gap-1">
-                  {invoice.remaining_balance > 0 && !["draft", "canceled"].includes(invoice.status) ? (
-                    <Link href={`/payments?invoiceId=${invoice.id}`} className="btn btn-primary btn-xs">
-                      Record Payment
-                    </Link>
-                  ) : null}
                   <Link href={`/invoices/${invoice.id}`} className="btn btn-ghost btn-xs">
                     View
                   </Link>

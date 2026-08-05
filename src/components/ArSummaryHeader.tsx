@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 
@@ -18,6 +18,12 @@ export function ArSummaryHeader({
   escalatedCount: number;
 }) {
   const [showWarning, setShowWarning] = useState(pastDueCount > 0);
+
+  useEffect(() => {
+    if (!showWarning) return;
+    const timer = window.setTimeout(() => setShowWarning(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [showWarning]);
 
   const overdueMessage =
     pastDueCount > 0
@@ -66,30 +72,19 @@ export function ArSummaryHeader({
       </div>
 
       {showWarning ? (
-        <div className="modal modal-open z-50">
-          <div className="modal-box relative max-w-lg border border-warning">
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm btn-circle absolute right-2 top-2"
-              aria-label="Dismiss overdue warning"
-              onClick={() => setShowWarning(false)}
-            >
-              <X className="h-4 w-4" />
-            </button>
-            <h3 className="pr-8 text-lg font-semibold text-warning">Overdue receivables require attention</h3>
-            <p className="mt-3 text-sm leading-relaxed">{overdueMessage}</p>
-            <div className="modal-action">
-              <button type="button" className="btn btn-warning btn-sm" onClick={() => setShowWarning(false)}>
-                Got it
-              </button>
-            </div>
-          </div>
+        <div
+          role="status"
+          className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-box border border-warning bg-warning px-4 py-2 text-sm text-warning-content shadow-lg"
+        >
+          <span>Overdue receivables require attention.</span>
           <button
             type="button"
-            className="modal-backdrop"
+            className="btn btn-ghost btn-xs btn-circle"
             aria-label="Dismiss overdue warning"
             onClick={() => setShowWarning(false)}
-          />
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       ) : null}
     </>

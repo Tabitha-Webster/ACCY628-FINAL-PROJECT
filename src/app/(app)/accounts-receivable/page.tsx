@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { EmptyState, ErrorState, PageHeader, StatCard } from "@/components/ui";
-import { formatCurrency } from "@/lib/format";
+import { EmptyState, ErrorState, PageHeader } from "@/components/ui";
 import { arAgingBucket } from "@/lib/calculations";
 import { AccountsReceivableClient, type ArAgingRow } from "@/components/AccountsReceivableClient";
+import { ArAgingChart, type ArAgingBucketTotal } from "@/components/ArAgingChart";
 import { ArSummaryHeader } from "@/components/ArSummaryHeader";
 
 const AGING_ORDER = [
@@ -15,11 +15,13 @@ const AGING_ORDER = [
   "More Than 90 Days Past Due",
 ];
 
-function bucketTone(label: string): "default" | "warning" | "error" {
-  if (label === "Current") return "default";
-  if (label === "61–90 Days Past Due" || label === "More Than 90 Days Past Due") return "error";
-  return "warning";
-}
+const SHORT_LABELS: Record<string, string> = {
+  Current: "Current",
+  "1–30 Days Past Due": "1–30",
+  "31–60 Days Past Due": "31–60",
+  "61–90 Days Past Due": "61–90",
+  "More Than 90 Days Past Due": "90+",
+};
 
 function daysPastDue(dueDate: string, asOf: Date = new Date()): number {
   const due = new Date(dueDate);
@@ -73,6 +75,16 @@ export default async function AccountsReceivablePage() {
     totalsByBucket.set(row.bucket, bucket);
   }
 
+  const agingChartData: ArAgingBucketTotal[] = AGING_ORDER.map((label) => {
+    const bucket = totalsByBucket.get(label) ?? { count: 0, amount: 0 };
+    return {
+      bucket: label,
+      shortLabel: SHORT_LABELS[label] ?? label,
+      amount: bucket.amount,
+      count: bucket.count,
+    };
+  });
+
   const totalAr = rows.reduce((sum, row) => sum + row.remainingBalance, 0);
   const pastDueAr = rows
     .filter((row) => row.bucket !== "Current")
@@ -99,20 +111,7 @@ export default async function AccountsReceivablePage() {
 
       <div>
         <h2 className="mb-2 text-lg font-semibold">Aging Summary</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
-          {AGING_ORDER.map((label) => {
-            const bucket = totalsByBucket.get(label) ?? { count: 0, amount: 0 };
-            return (
-              <StatCard
-                key={label}
-                label={label}
-                value={formatCurrency(bucket.amount)}
-                hint={`${bucket.count} invoice${bucket.count === 1 ? "" : "s"}`}
-                tone={bucketTone(label)}
-              />
-            );
-          })}
-        </div>
+        <ArAgingChart data={agingChartData} />
       </div>
 
       <div>

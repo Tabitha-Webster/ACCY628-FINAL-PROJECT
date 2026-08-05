@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { AccountingExplainer, DataTable, EmptyState, ErrorState, Money, PageHeader, StatCard } from "@/components/ui";
-import { statusLabel } from "@/lib/format";
+import { formatCurrency, statusLabel } from "@/lib/format";
 
 const RECOGNITION_ORDER = ["earned", "deferred", "unbilled"];
 
@@ -50,12 +50,12 @@ export default async function AccountingPage() {
       {error ? <ErrorState message={error.message} /> : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total Revenue Recorded" value={`$${totalRevenue.toFixed(2)}`} />
+        <StatCard label="Total Revenue Recorded" value={formatCurrency(totalRevenue)} />
         {RECOGNITION_ORDER.map((recognition) => (
           <StatCard
             key={recognition}
             label={statusLabel(recognition)}
-            value={`$${(byRecognition.get(recognition) ?? 0).toFixed(2)}`}
+            value={formatCurrency(byRecognition.get(recognition) ?? 0)}
             tone={recognitionTone(recognition)}
           />
         ))}

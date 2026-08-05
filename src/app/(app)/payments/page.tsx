@@ -4,18 +4,14 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { DataTable, EmptyState, ErrorState, Money, PageHeader, StatCard } from "@/components/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { PaymentForm, type PayableInvoice } from "@/components/PaymentForm";
 
-export default async function PaymentsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ invoiceId?: string }>;
-}) {
+const CUSTOMER_PAYMENT_NOTE = "Submitted through the customer demo payment screen.";
+
+export default async function PaymentsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
   if (!["manager", "billing"].includes(profile.role)) redirect("/dashboard");
 
-  const { invoiceId: initialInvoiceId } = await searchParams;
   const supabase = await createClient();
 
   const [
@@ -25,7 +21,7 @@ export default async function PaymentsPage({
   ] = await Promise.all([
     supabase
       .from("payments")
-      .select("id, payment_number, payment_date, payment_amount, payment_method, reference_number, customers(name)")
+      .select("id, payment_number, payment_date, payment_amount, payment_method, reference_number, notes, customers(name)")
       .order("payment_date", { ascending: false }),
     supabase
       .from("invoices")
@@ -41,18 +37,6 @@ export default async function PaymentsPage({
   ]);
 
   const error = paymentsError || invoicesError || applicationsError;
-
-  const payableInvoices: PayableInvoice[] = (openInvoices ?? []).map((inv) => {
-    const customer = Array.isArray(inv.customers) ? inv.customers[0] : inv.customers;
-    return {
-      id: inv.id,
-      invoiceNumber: inv.invoice_number,
-      customerName: customer?.name ?? "Unknown customer",
-      dueDate: formatDate(inv.due_date),
-      status: inv.status,
-      remainingBalance: Number(inv.remaining_balance ?? 0),
-    };
-  });
 
   const applicationsByPayment = new Map<
     string,
@@ -70,37 +54,39 @@ export default async function PaymentsPage({
     applicationsByPayment.set(application.payment_id, linked);
   }
 
-  const totalOutstanding = payableInvoices.reduce((sum, invoice) => sum + invoice.remainingBalance, 0);
+  const totalOutstanding = (openInvoices ?? []).reduce(
+    (sum, invoice) => sum + Number(invoice.remaining_balance ?? 0),
+    0
+  );
   const totalReceived = (payments ?? []).reduce((sum, payment) => sum + Number(payment.payment_amount ?? 0), 0);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Payment Entry"
-        description="Record received payments, apply them to invoices, and review collection history."
+        title="Payment History"
+        description="Customer payments appear here automatically and update invoice balances and statuses."
       />
 
       {error ? <ErrorState message={error.message} /> : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Open Invoices" value={String(payableInvoices.length)} />
+        <StatCard label="Open Invoices" value={String(openInvoices?.length ?? 0)} />
         <StatCard
           label="Outstanding Balance"
           value={formatCurrency(totalOutstanding)}
           tone={totalOutstanding > 0 ? "warning" : "success"}
         />
-        <StatCard label="Payments Recorded" value={formatCurrency(totalReceived)} tone="success" />
+        <StatCard label="Total Payments Received" value={formatCurrency(totalReceived)} tone="success" />
       </div>
 
-      {!error ? <PaymentForm invoices={payableInvoices} initialInvoiceId={initialInvoiceId} /> : null}
-
       <div>
-        <h2 className="mb-2 text-lg font-semibold">Payment History</h2>
+        <h2 className="mb-2 text-lg font-semibold">Transactions</h2>
         {payments && payments.length > 0 ? (
-          <DataTable headers={["Payment", "Customer", "Invoice Applied", "Date", "Method", "Reference", "Amount"]}>
+          <DataTable headers={["Payment", "Customer", "Invoice Applied", "Date", "Method", "Source", "Reference", "Amount"]}>
             {payments.map((payment) => {
               const customer = Array.isArray(payment.customers) ? payment.customers[0] : payment.customers;
               const linkedApplications = applicationsByPayment.get(payment.id) ?? [];
+              const source = payment.notes === CUSTOMER_PAYMENT_NOTE ? "Customer Portal" : "Billing";
               return (
                 <tr key={payment.id}>
                   <td className="font-medium">{payment.payment_number}</td>
@@ -121,6 +107,7 @@ export default async function PaymentsPage({
                   </td>
                   <td className="text-xs">{formatDate(payment.payment_date)}</td>
                   <td className="text-xs capitalize">{payment.payment_method?.replace(/_/g, " ")}</td>
+                  <td className="text-xs">{source}</td>
                   <td className="text-xs">{payment.reference_number ?? "—"}</td>
                   <td className="font-medium">
                     <Money value={Number(payment.payment_amount ?? 0)} />

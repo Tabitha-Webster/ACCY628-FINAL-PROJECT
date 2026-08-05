@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
 
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
-    .select("id, customer_id, status, remaining_balance, amount_paid")
+    .select("id, customer_id, status, remaining_balance, amount_paid, due_date")
     .eq("id", invoiceId)
     .maybeSingle();
 
@@ -132,7 +133,15 @@ export async function POST(request: Request) {
 
   const newAmountPaid = (toCents(Number(invoice.amount_paid ?? 0)) + amountCents) / 100;
   const newRemainingBalance = Math.max(0, remainingCents - amountCents) / 100;
-  const newStatus = newRemainingBalance === 0 ? "paid" : "partially_paid";
+  const isPastDue = Boolean(invoice.due_date && invoice.due_date < today);
+  const newStatus =
+    newRemainingBalance === 0
+      ? "paid"
+      : invoice.status === "disputed"
+        ? "disputed"
+        : isPastDue
+          ? "overdue"
+          : "partially_paid";
 
   const { error: updateError } = await supabase
     .from("invoices")
@@ -148,6 +157,17 @@ export async function POST(request: Request) {
     await supabase.from("payments").delete().eq("id", payment.id);
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
+
+  [
+    "/dashboard",
+    "/payments",
+    "/invoices",
+    `/invoices/${invoiceId}`,
+    "/accounts-receivable",
+    "/billing-collections",
+    "/my-invoices",
+    "/make-payment",
+  ].forEach((path) => revalidatePath(path));
 
   return NextResponse.json({
     payment: {
