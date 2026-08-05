@@ -31,29 +31,46 @@ export function AdditionalWorkActions({ requestId, supportTicketId, reviewerId }
       })
       .eq("id", requestId);
 
-    if (!updateError && decision === "approved" && supportTicketId) {
-      await supabase
-        .from("time_entries")
-        .update({ approval_status: "approved" })
-        .eq("support_ticket_id", supportTicketId)
-        .eq("approval_status", "pending");
-      await supabase
-        .from("support_tickets")
-        .update({ billable_approval_status: "approved" })
-        .eq("id", supportTicketId);
-    }
-    if (!updateError && decision === "rejected" && supportTicketId) {
-      await supabase
-        .from("support_tickets")
-        .update({ billable_approval_status: "rejected" })
-        .eq("id", supportTicketId);
-    }
-
-    setLoading(null);
     if (updateError) {
+      setLoading(null);
       setError(updateError.message);
       return;
     }
+
+    if (supportTicketId) {
+      await supabase
+        .from("support_tickets")
+        .update({ billable_approval_status: decision })
+        .eq("id", supportTicketId);
+
+      if (decision === "approved") {
+        const { data: pendingTime, error: pendingError } = await supabase
+          .from("time_entries")
+          .select("id")
+          .eq("support_ticket_id", supportTicketId)
+          .eq("approval_status", "pending");
+        if (pendingError) {
+          setLoading(null);
+          setError(pendingError.message);
+          return;
+        }
+        for (const row of pendingTime ?? []) {
+          const res = await fetch("/api/billing/approve", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "time_entry", id: row.id }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            setLoading(null);
+            setError(body.error ?? "The request was approved, but a related time entry could not be approved for billing.");
+            return;
+          }
+        }
+      }
+    }
+
+    setLoading(null);
     router.refresh();
   }
 

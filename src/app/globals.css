@@ -60,6 +60,12 @@ body {
   background-color: color-mix(in oklab, var(--color-base-content) 3.5%, var(--color-base-100));
 }
 
+.badge.badge-aging-current {
+  border-color: #15803d;
+  background-color: #16a34a;
+  color: #000000;
+}
+
 .aging-current {
   border-color: color-mix(in oklab, var(--color-info) 55%, transparent);
   background-color: color-mix(in oklab, var(--color-info) 18%, var(--color-base-100));

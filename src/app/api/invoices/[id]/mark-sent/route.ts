@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { deriveInvoiceStatus, todayDateString } from "@/lib/billing";
+import { deriveInvoiceStatus, invoiceTotalsMismatchReason, todayDateString } from "@/lib/billing";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await getCurrentProfile();
@@ -12,17 +12,29 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const supabase = await createClient();
-  const { data: invoice, error } = await supabase
-    .from("invoices")
-    .select("id, status, due_date, amount_paid, remaining_balance, dispute_status, sent_at")
-    .eq("id", id)
-    .maybeSingle();
+  const [{ data: invoice, error }, { data: lineItems, error: lineError }] = await Promise.all([
+    supabase
+      .from("invoices")
+      .select(
+        "id, status, due_date, amount_paid, remaining_balance, dispute_status, sent_at, reviewed_at, subtotal, tax_amount, credits, total_amount"
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    supabase.from("invoice_line_items").select("line_amount").eq("invoice_id", id),
+  ]);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (lineError) return NextResponse.json({ error: lineError.message }, { status: 500 });
   if (!invoice) return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
-  if (["canceled", "draft"].includes(invoice.status)) {
-    return NextResponse.json({ error: "Draft or canceled invoices cannot be marked sent." }, { status: 400 });
+  if (["canceled", "draft"].includes(invoice.status) || !invoice.reviewed_at) {
+    return NextResponse.json(
+      { error: "Draft invoices must be reviewed before they can be marked sent." },
+      { status: 400 }
+    );
   }
+
+  const totalsMismatch = invoiceTotalsMismatchReason(invoice, lineItems ?? []);
+  if (totalsMismatch) return NextResponse.json({ error: totalsMismatch }, { status: 400 });
 
   const nextStatus = deriveInvoiceStatus({
     currentStatus: invoice.status === "issued" ? "sent" : invoice.status,

@@ -9,6 +9,7 @@ import {
   DEFAULT_SALES_TAX_RATE,
   deriveInvoiceStatus,
   invoiceSubtotal,
+  invoiceTotalsMatchLines,
   isTaxExempt,
   lineSourceLabel,
 } from "@/lib/billing";
@@ -86,19 +87,7 @@ export default async function InvoiceDetailPage({
       <PageHeader
         title={`Invoice ${invoice.invoice_number}`}
         description={customer ? `${customer.name}${contract ? ` · ${contract.name}` : ""}` : undefined}
-        actions={
-          <div className="flex gap-2">
-            <StatusBadge status={displayStatus} />
-            {Number(invoice.remaining_balance ?? 0) > 0 &&
-            invoice.status !== "canceled" &&
-            displayStatus !== "disputed" &&
-            !invoice.dispute_status ? (
-              <Link href="/payments" className="btn btn-primary btn-sm">
-                Record payment
-              </Link>
-            ) : null}
-          </div>
-        }
+        actions={<StatusBadge status={displayStatus} />}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -128,9 +117,16 @@ export default async function InvoiceDetailPage({
         invoiceId={invoice.id}
         status={displayStatus}
         sentAt={invoice.sent_at ?? null}
+        reviewedAt={invoice.reviewed_at ?? null}
         disputeStatus={Boolean(invoice.dispute_status) || invoice.status === "disputed"}
         remainingBalance={Number(invoice.remaining_balance ?? 0)}
       />
+
+      {!invoiceTotalsMatchLines(invoice, lines) ? (
+        <div className="alert alert-error">
+          <span>Invoice total does not equal the sum of its lines. This invoice cannot be issued or sent until the totals are corrected.</span>
+        </div>
+      ) : null}
 
       {customer ? (
         <div className="rounded-box border border-base-300 bg-base-100 p-4">

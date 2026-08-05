@@ -58,19 +58,43 @@ export function statusLabel(status: string) {
 
 export function statusBadgeClass(status: string) {
   const s = status.toLowerCase();
-  if (["active", "paid", "approved", "resolved", "closed", "met", "normal", "sent"].includes(s))
-    return "badge-success";
-  if (["issued", "current"].includes(s)) return "badge-info";
   if (
-    ["pending", "draft", "warning", "at_risk", "partially_paid", "in_progress", "assigned", "medium", "not_yet_due"].includes(
+    ["active", "paid", "approved", "resolved", "closed", "met", "normal", "filled", "renewed", "sent"].includes(
       s
     )
   )
+    return "badge-success";
+  if (["disputed", "overdue", "issued"].includes(s)) return "badge-ghost";
+  if (s === "current") return "badge-info";
+  if (
+    [
+      "pending",
+      "pending_approval",
+      "draft",
+      "warning",
+      "at_risk",
+      "partially_paid",
+      "in_progress",
+      "assigned",
+      "open",
+      "on_hold",
+      "medium",
+      "not_yet_due",
+    ].includes(s)
+  )
     return "badge-warning";
   if (
-    ["overdue", "disputed", "rejected", "canceled", "missed", "over_limit", "unprofitable", "critical", "high"].includes(
-      s
-    )
+    [
+      "rejected",
+      "canceled",
+      "expired",
+      "missed",
+      "over_limit",
+      "unprofitable",
+      "ended",
+      "critical",
+      "high",
+    ].includes(s)
   )
     return "badge-error";
   if (["low", "new", "not_defined"].includes(s)) return "badge-ghost";
