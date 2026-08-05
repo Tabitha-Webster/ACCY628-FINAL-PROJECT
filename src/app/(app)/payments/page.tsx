@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { DataTable, EmptyState, ErrorState, Money, PageHeader } from "@/components/ui";
-import { formatDate } from "@/lib/format";
+import { ErrorState, PageHeader } from "@/components/ui";
 import { PaymentForm, type PayableInvoice } from "@/components/PaymentForm";
+import { PaymentHistoryTable, type PaymentHistoryRow } from "@/components/PaymentHistoryTable";
 
 export default async function PaymentsPage() {
   const profile = await getCurrentProfile();
@@ -45,30 +45,20 @@ export default async function PaymentsPage() {
 
       <PaymentForm invoices={payableInvoices} />
 
-      <div>
-        <h2 className="mb-2 text-lg font-semibold">Payment History</h2>
-        {payments && payments.length > 0 ? (
-          <DataTable headers={["Payment", "Customer", "Date", "Method", "Reference", "Amount"]}>
-            {payments.map((payment) => {
-              const customer = Array.isArray(payment.customers) ? payment.customers[0] : payment.customers;
-              return (
-                <tr key={payment.id}>
-                  <td className="font-medium">{payment.payment_number}</td>
-                  <td>{customer?.name ?? "—"}</td>
-                  <td className="text-xs">{formatDate(payment.payment_date)}</td>
-                  <td className="text-xs capitalize">{payment.payment_method?.replace(/_/g, " ")}</td>
-                  <td className="text-xs">{payment.reference_number ?? "—"}</td>
-                  <td className="font-medium">
-                    <Money value={Number(payment.payment_amount ?? 0)} />
-                  </td>
-                </tr>
-              );
-            })}
-          </DataTable>
-        ) : (
-          <EmptyState title="No payments recorded yet" />
-        )}
-      </div>
+      <PaymentHistoryTable
+        payments={(payments ?? []).map((payment): PaymentHistoryRow => {
+          const customer = Array.isArray(payment.customers) ? payment.customers[0] : payment.customers;
+          return {
+            id: payment.id,
+            payment_number: payment.payment_number,
+            customer_name: customer?.name ?? "Unknown customer",
+            payment_date: payment.payment_date,
+            payment_method: payment.payment_method ?? "other",
+            reference_number: payment.reference_number ?? null,
+            payment_amount: Number(payment.payment_amount ?? 0),
+          };
+        })}
+      />
     </div>
   );
 }

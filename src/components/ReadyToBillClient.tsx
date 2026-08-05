@@ -143,27 +143,18 @@ export function ReadyToBillClient({
             Informational only. These active contracts have a recurring monthly fee that has not yet been recorded
             as revenue for the current period.
           </p>
-          <div className="mt-3 overflow-x-auto rounded-box border border-base-300">
-            <table className="table table-sm">
-              <thead>
-                <tr>
-                  <th>Contract</th>
-                  <th>Customer</th>
-                  <th>Monthly Fee</th>
+          <div className="mt-3">
+            <DataTable headers={["Contract", "Customer", "Monthly Fee"]}>
+              {monthlyFees.map((fee) => (
+                <tr key={fee.contractId}>
+                  <td>{fee.contractName}</td>
+                  <td>{fee.customerName}</td>
+                  <td>
+                    <Money value={fee.monthlyFee} />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {monthlyFees.map((fee) => (
-                  <tr key={fee.contractId}>
-                    <td>{fee.contractName}</td>
-                    <td>{fee.customerName}</td>
-                    <td>
-                      <Money value={fee.monthlyFee} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+              ))}
+            </DataTable>
           </div>
         </div>
       ) : null}
