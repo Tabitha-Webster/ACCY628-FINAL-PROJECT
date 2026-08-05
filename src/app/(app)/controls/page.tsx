@@ -22,12 +22,12 @@ const CONTROLS: Control[] = [
   {
     category: "Contract",
     risk: "work could be performed or billed without an active, approved service agreement in place",
-    control: "every ticket, project, and time entry is linked to a specific contract, and contract terms (included hours, rates, SLAs) are set once and reused consistently instead of re-entered by hand",
+    control: "role-based contract permissions control view, create, edit, delete, approve, renew, cancel, and reporting; managers own lifecycle writes while billing can view reports and technicians can view agreements",
   },
   {
     category: "Contract",
     risk: "a contract could lapse or auto-renew on unfavorable terms without anyone noticing",
-    control: "the contracts list flags agreements approaching their end date and any contract missing payment terms or a billing frequency, so managers can act before the term expires",
+    control: "the contracts list and Renewal & Expiration page generate 90/60/30-day renewal reminders and expiration warnings, support auto-renew processing, and keep a renewal history so managers can act before a term lapses",
   },
   {
     category: "Work",

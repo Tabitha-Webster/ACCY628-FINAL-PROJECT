@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Menu, Settings2, X } from "lucide-react";
 import { ThemeSelector } from "@/components/ThemeSelector";
@@ -10,6 +11,68 @@ import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
 import { Fragment, useEffect, useState } from "react";
 
+function SideNav({
+  profile,
+  pathname,
+  onNavigate,
+  showSettings,
+  onOpenSettings,
+}: {
+  profile: Profile;
+  pathname: string;
+  onNavigate?: () => void;
+  showSettings?: boolean;
+  onOpenSettings?: () => void;
+}) {
+  const nav = ROLE_NAV[profile.role as UserRole] ?? [];
+  const isCustomer = profile.role === "customer";
+
+  return (
+    <>
+      <div className="border-b border-base-300 p-4">
+        <p className="text-lg font-semibold">ServiceSync MSP</p>
+        <p className="text-xs opacity-60">Contract-to-cash workspace</p>
+        <div className="mt-3">
+          <span className="badge badge-primary badge-outline">{statusLabel(profile.role)}</span>
+        </div>
+      </div>
+      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3" aria-label="Main">
+        {nav.map((item) => {
+          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          return (
+            <Fragment key={item.href}>
+              <Link
+                href={item.href}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  active ? "bg-primary text-primary-content" : "hover:bg-base-200"
+                }`}
+                onClick={onNavigate}
+              >
+                {item.label}
+              </Link>
+              {isCustomer && item.href === "/my-contracts" ? (
+                <CustomerBillingNavTree onNavigate={onNavigate} />
+              ) : null}
+            </Fragment>
+          );
+        })}
+      </nav>
+      <div className="space-y-3 border-t border-base-300 p-4">
+        {showSettings && onOpenSettings ? (
+          <button type="button" className="btn btn-ghost btn-sm w-full justify-start" onClick={onOpenSettings}>
+            <Settings2 className="h-4 w-4" />
+            Settings
+          </button>
+        ) : null}
+        <p className="text-xs opacity-70">
+          Use the Demo Role Switcher to change perspectives. A password is required for each role. Log out still ends
+          the session completely.
+        </p>
+      </div>
+    </>
+  );
+}
+
 export function AppShell({
   profile,
   children,
@@ -19,10 +82,31 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [drawerTab, setDrawerTab] = useState<"menu" | "settings">("menu");
-  const nav = ROLE_NAV[profile.role as UserRole] ?? [];
-  const isCustomer = profile.role === "customer";
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileOpen(false);
+    setSettingsOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!settingsOpen && !mobileOpen) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setSettingsOpen(false);
+        setMobileOpen(false);
+      }
+    }
+
+    document.body.style.overflow = settingsOpen || mobileOpen ? "hidden" : "";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [settingsOpen, mobileOpen]);
 
   async function logout() {
     const supabase = createClient();
@@ -31,157 +115,128 @@ export function AppShell({
     router.refresh();
   }
 
-  function openMenu() {
-    setDrawerTab("menu");
-    setOpen(true);
-  }
-
-  function closeMenu() {
-    setOpen(false);
-    setDrawerTab("menu");
-  }
-
-  function goTo(href: string) {
-    if (pathname !== href) {
-      router.push(href);
-    }
-    closeMenu();
-  }
-
-  useEffect(() => {
-    setOpen(false);
-    setDrawerTab("menu");
-  }, [pathname]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") closeMenu();
-    }
-
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
-
   return (
-    <div className="min-h-screen bg-base-200">
-      <header className="sticky top-0 z-30 flex flex-wrap items-center gap-3 border-b border-base-300 bg-base-100 px-4 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <button type="button" className="btn btn-square btn-ghost" aria-label="Open menu" onClick={openMenu}>
-            <Menu className="h-5 w-5" />
-          </button>
-          <div>
-            <p className="text-sm font-semibold leading-tight">ServiceSync MSP</p>
-            <p className="hidden text-xs opacity-60 sm:block">
-              From service agreement to support, billing, and collection.
-            </p>
-          </div>
-        </div>
-        <div className="order-3 flex w-full justify-center md:order-none md:w-auto md:flex-1">
-          <DemoRoleSwitcher currentRole={profile.role as UserRole} />
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <div className="hidden text-right lg:block">
-            <p className="text-sm font-medium">{profile.full_name}</p>
-            <p className="text-xs opacity-60">
-              {statusLabel(profile.role)} · {profile.email}
-            </p>
-          </div>
-          <button className="btn btn-ghost btn-sm" onClick={logout} title="Log out">
-            <LogOut className="h-4 w-4" />
-            <span className="hidden md:inline">Log out</span>
-          </button>
-        </div>
-      </header>
-
-      <main className="p-4 md:p-6">{children}</main>
-
-      <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none invisible"}`} aria-hidden={!open}>
-        <button
-          type="button"
-          className={`absolute inset-0 bg-black/50 transition-opacity ${open ? "opacity-100" : "opacity-0"}`}
-          aria-label="Close menu"
-          tabIndex={open ? 0 : -1}
-          onClick={closeMenu}
+    <div className="flex min-h-screen bg-base-200">
+      {/* Desktop sidebar — always visible and clickable */}
+      <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col border-r border-base-300 bg-base-100 lg:flex">
+        <SideNav
+          profile={profile}
+          pathname={pathname}
+          showSettings
+          onOpenSettings={() => setSettingsOpen(true)}
         />
-        <aside
-          className={`absolute left-0 top-0 z-10 flex h-full w-80 max-w-[85vw] flex-col bg-base-100 shadow-2xl transition-transform duration-200 ${
-            open ? "translate-x-0" : "-translate-x-full"
-          }`}
-        >
-          <div className="flex items-start justify-between gap-3 border-b border-base-300 p-4">
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex flex-wrap items-center gap-3 border-b border-base-300 bg-base-100 px-4 py-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-square btn-ghost lg:hidden"
+              aria-label="Open navigation"
+              onClick={() => setMobileOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
             <div>
-              <p className="text-lg font-semibold">ServiceSync MSP</p>
-              <p className="text-xs opacity-60">Contract-to-cash workspace</p>
-              <div className="mt-3">
-                <span className="badge badge-primary badge-outline">{statusLabel(profile.role)}</span>
-              </div>
+              <p className="text-sm font-semibold leading-tight">ServiceSync MSP</p>
+              <p className="hidden text-xs opacity-60 sm:block">
+                From service agreement to support, billing, and collection.
+              </p>
             </div>
-            <button type="button" className="btn btn-ghost btn-square btn-sm" aria-label="Close menu" onClick={closeMenu}>
-              <X className="h-4 w-4" />
-            </button>
           </div>
-
-          <div role="tablist" className="tabs tabs-box m-3">
+          <div className="order-3 flex w-full justify-center md:order-none md:w-auto md:flex-1">
+            <DemoRoleSwitcher currentRole={profile.role as UserRole} />
+          </div>
+          <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
-              role="tab"
-              className={`tab ${drawerTab === "menu" ? "tab-active" : ""}`}
-              onClick={() => setDrawerTab("menu")}
+              className="btn btn-ghost btn-sm"
+              onClick={() => setSettingsOpen(true)}
+              title="Settings"
             >
-              Menu
+              <Settings2 className="h-4 w-4" />
+              <span className="hidden md:inline">Settings</span>
             </button>
-            <button
-              type="button"
-              role="tab"
-              className={`tab ${drawerTab === "settings" ? "tab-active" : ""}`}
-              onClick={() => setDrawerTab("settings")}
-            >
-              <Settings2 className="mr-1 h-3.5 w-3.5" />
-              Settings
+            <div className="hidden text-right lg:block">
+              <p className="text-sm font-medium">{profile.full_name}</p>
+              <p className="text-xs opacity-60">
+                {statusLabel(profile.role)} · {profile.email}
+              </p>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={logout} title="Log out">
+              <LogOut className="h-4 w-4" />
+              <span className="hidden md:inline">Log out</span>
             </button>
           </div>
+        </header>
+        <main className="flex-1 p-4 md:p-6">{children}</main>
+      </div>
 
-          {drawerTab === "menu" ? (
-            <>
-              <ul className="menu min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-                {nav.map((item) => {
-                  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                  return (
-                    <Fragment key={item.href}>
-                      <li>
-                        <button type="button" className={active ? "active" : ""} onClick={() => goTo(item.href)}>
-                          {item.label}
-                        </button>
-                      </li>
-                      {isCustomer && item.href === "/my-contracts" ? (
-                        <CustomerBillingNavTree onNavigate={closeMenu} />
-                      ) : null}
-                    </Fragment>
-                  );
-                })}
-              </ul>
-              <div className="border-t border-base-300 p-4 text-xs opacity-70">
-                Use the Demo Role Switcher to change perspectives. A password is required for each role. Log out still
-                ends the session completely.
-              </div>
-            </>
-          ) : (
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+      {/* Mobile sidebar overlay */}
+      {mobileOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close navigation"
+            onClick={() => setMobileOpen(false)}
+          />
+          <aside className="absolute inset-y-0 left-0 flex w-72 flex-col bg-base-100 shadow-xl">
+            <div className="flex items-center justify-end border-b border-base-300 p-2">
+              <button
+                type="button"
+                className="btn btn-square btn-ghost btn-sm"
+                aria-label="Close navigation"
+                onClick={() => setMobileOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <SideNav
+              profile={profile}
+              pathname={pathname}
+              onNavigate={() => setMobileOpen(false)}
+              showSettings
+              onOpenSettings={() => {
+                setMobileOpen(false);
+                setSettingsOpen(true);
+              }}
+            />
+          </aside>
+        </div>
+      ) : null}
+
+      {/* Settings panel (theme) */}
+      {settingsOpen ? (
+        <div className="fixed inset-0 z-[60]">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50"
+            aria-label="Close settings"
+            onClick={() => setSettingsOpen(false)}
+          />
+          <aside className="absolute right-0 top-0 flex h-full w-80 max-w-[85vw] flex-col bg-base-100 shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-base-300 p-4">
               <div>
                 <h2 className="text-base font-semibold">Settings</h2>
                 <p className="text-sm opacity-70">Appearance options for this workspace.</p>
               </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-square btn-sm"
+                aria-label="Close settings"
+                onClick={() => setSettingsOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
               <ThemeSelector />
             </div>
-          )}
-        </aside>
-      </div>
+          </aside>
+        </div>
+      ) : null}
     </div>
   );
 }

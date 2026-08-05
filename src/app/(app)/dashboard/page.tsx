@@ -14,6 +14,7 @@ import {
   DateText,
 } from "@/components/ui";
 import { ManagerCharts, type MonthlyFinancials, type TicketsByStatus } from "@/components/ManagerCharts";
+import { ContractMetricsWidgets } from "@/components/ContractMetricsWidgets";
 import {
   TechnicianWorkspaceClient,
   type WorkspaceTicket,
@@ -24,6 +25,7 @@ import {
 import { AR_AGING_BUCKETS, arAgingBucket, usagePercentage, usageStatus, hoursRemaining } from "@/lib/calculations";
 import { evaluateTicketSla } from "@/lib/sla";
 import { formatCurrency } from "@/lib/format";
+import { fetchContractReportMetrics } from "@/lib/contracts";
 import type {
   AdditionalWorkRequest,
   Contract,
@@ -110,6 +112,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
     revenueRes,
     activeContractsRes,
     customersRes,
+    contractReportRes,
   ] = await Promise.all([
     supabase.from("customers").select("id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("contracts").select("id", { count: "exact", head: true }).eq("status", "active"),
@@ -135,9 +138,11 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
       .select("id, name, contract_number, customer_id, included_hours_per_month")
       .eq("status", "active"),
     supabase.from("customers").select("id, name"),
+    fetchContractReportMetrics(supabase),
   ]);
 
   const customerName = new Map((customersRes.data ?? []).map((c) => [c.id, c.name as string]));
+  const contractMetrics = contractReportRes.metrics;
   const tickets = (openTicketsRes.data ?? []) as SupportTicket[];
   const additionalWork = (additionalWorkRes.data ?? []) as Pick<
     AdditionalWorkRequest,
@@ -230,6 +235,14 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
         title="Executive Dashboard"
         description={`Welcome back, ${profile.full_name}. Here's how ServiceSync is performing.`}
       />
+
+      <div className="mb-6">
+        <ContractMetricsWidgets
+          metrics={contractMetrics}
+          showTables={false}
+          title="Contracts portfolio"
+        />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Active Customers" value={String(customersCountRes.count ?? 0)} />
@@ -590,6 +603,7 @@ async function BillingDashboard({ profile }: { profile: Profile }) {
     paymentsRes,
     revenueRes,
     customersRes,
+    contractReportRes,
   ] = await Promise.all([
     supabase.from("time_entries").select("id", { count: "exact", head: true }).eq("billing_status", "ready"),
     supabase.from("direct_costs").select("id", { count: "exact", head: true }).eq("billing_status", "ready"),
@@ -598,9 +612,11 @@ async function BillingDashboard({ profile }: { profile: Profile }) {
     supabase.from("payments").select("payment_amount, payment_date"),
     supabase.from("revenue_records").select("recognition, amount"),
     supabase.from("customers").select("id, name"),
+    fetchContractReportMetrics(supabase),
   ]);
 
   const customerName = new Map((customersRes.data ?? []).map((c) => [c.id, c.name as string]));
+  const contractMetrics = contractReportRes.metrics;
   const invoices = (invoicesRes.data ?? []) as Pick<
     Invoice,
     "id" | "customer_id" | "invoice_number" | "status" | "remaining_balance" | "due_date" | "total_amount"
@@ -639,6 +655,14 @@ async function BillingDashboard({ profile }: { profile: Profile }) {
           Open Billing Review
         </Link>
       </p>
+
+      <div className="mb-6">
+        <ContractMetricsWidgets
+          metrics={contractMetrics}
+          showTables={false}
+          title="Contract billing portfolio"
+        />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Ready to Bill" value={String(readyToBill)} tone={readyToBill > 0 ? "warning" : "default"} />

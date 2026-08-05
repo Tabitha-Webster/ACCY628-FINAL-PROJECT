@@ -51,7 +51,8 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   manager: [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/customers", label: "Customers" },
-    { href: "/contracts", label: "Contracts" },
+    { href: "/contracts", label: "Contracts & Agreements" },
+    { href: "/contracts/reports", label: "Contract Reports" },
     { href: "/operations", label: "Service Operations" },
     { href: "/profitability", label: "Profitability" },
     { href: "/billing-collections", label: "Billing and Collections" },
@@ -59,14 +60,17 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/controls", label: "Controls and Exceptions" },
   ],
   technician: [
-    { href: "/dashboard", label: "Dashboard" },
+    { href: "/dashboard", label: "My Assignments" },
+    { href: "/contracts", label: "Contracts & Agreements" },
     { href: "/tickets", label: "Support Tickets" },
     { href: "/projects", label: "Project Tasks" },
     { href: "/time-costs", label: "Submit Time and Costs" },
     { href: "/additional-work", label: "Additional Work Requests" },
   ],
   billing: [
-    { href: "/dashboard", label: "Dashboard" },
+    { href: "/dashboard", label: "Billing Dashboard" },
+    { href: "/contracts", label: "Contracts & Agreements" },
+    { href: "/contracts/reports", label: "Contract Reports" },
     { href: "/billing-review", label: "Billing Review" },
     { href: "/invoices", label: "Invoices" },
     { href: "/payments", label: "Payment History" },
@@ -74,12 +78,43 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/accounting", label: "Accounting Review" },
   ],
   customer: [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/my-contracts", label: "My Contracts" },
+    { href: "/dashboard", label: "Customer Home" },
+    { href: "/my-contracts", label: "My Contracts & Agreements" },
     { href: "/my-projects", label: "Projects" },
     { href: "/service-usage", label: "Service Usage" },
     { href: "/support-requests", label: "Support Requests" },
   ],
+};
+
+/** Role-specific copy for the Contracts & Agreements nav destination. */
+export const CONTRACTS_NAV_COPY: Record<
+  UserRole,
+  { href: string; title: string; description: string }
+> = {
+  manager: {
+    href: "/contracts",
+    title: "Contracts & Agreements",
+    description:
+      "Manage the full agreement lifecycle — draft, approval, active service, holds, renewals, and cancellations.",
+  },
+  technician: {
+    href: "/contracts",
+    title: "Contracts & Agreements",
+    description:
+      "Review active service agreements, included hours, and SLA terms that guide your ticket and project work.",
+  },
+  billing: {
+    href: "/contracts",
+    title: "Contracts & Agreements",
+    description:
+      "Confirm recurring fees, billing frequency, payment terms, and rates before generating invoices.",
+  },
+  customer: {
+    href: "/my-contracts",
+    title: "My Contracts & Agreements",
+    description:
+      "View the service agreements for your organization, including fees, included hours, and covered services.",
+  },
 };
 
 export function roleHomePath(_role: UserRole) {
@@ -108,7 +143,7 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/time-costs",
     ],
     technician: ["/contracts", "/customers"],
-    billing: ["/customers", "/contracts", "/projects", "/tickets"],
+    billing: ["/customers", "/contracts", "/projects", "/tickets", "/ready-to-bill"],
     customer: ["/my-invoices", "/make-payment", "/tickets"],
   };
 
