@@ -212,10 +212,11 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
       .eq("status", "proposed")
       .order("created_at", { ascending: false })
       .limit(8),
+    // Waiting on customer only — exclude "proposed" so the same project is not also in proposedProjects.
     supabase
       .from("projects")
       .select("id, name, customer_id, status, customer_approval_status")
-      .or("status.eq.awaiting_customer_approval,customer_approval_status.eq.pending")
+      .eq("status", "awaiting_customer_approval")
       .order("created_at", { ascending: false })
       .limit(8),
     supabase
@@ -237,10 +238,14 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
     Project,
     "id" | "name" | "customer_id" | "status" | "customer_approval_status"
   >[];
-  const awaitingCustomerProjects = (awaitingCustomerRes.data ?? []) as Pick<
-    Project,
-    "id" | "name" | "customer_id" | "status" | "customer_approval_status"
-  >[];
+  const proposedProjectIds = new Set(proposedProjects.map((p) => p.id));
+  const awaitingCustomerProjects = (
+    (awaitingCustomerRes.data ?? []) as Pick<
+      Project,
+      "id" | "name" | "customer_id" | "status" | "customer_approval_status"
+    >[]
+  ).filter((p) => !proposedProjectIds.has(p.id));
+  const projectsNeedingCustomerAction = [...proposedProjects, ...awaitingCustomerProjects];
   const pendingMilestones = (pendingMilestonesRes.data ?? []) as Array<{
     id: string;
     name: string;
@@ -249,7 +254,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
     projects: { id: string; name: string; customer_id: string } | { id: string; name: string; customer_id: string }[] | null;
   }>;
   const pendingApprovalsTotal =
-    additionalWork.length + proposedProjects.length + awaitingCustomerProjects.length + pendingMilestones.length;
+    additionalWork.length + projectsNeedingCustomerAction.length + pendingMilestones.length;
   const timeEntries = (timeEntriesRes.data ?? []) as Pick<
     TimeEntry,
     "contract_id" | "customer_id" | "hours_worked" | "labor_cost" | "classification" | "work_date"
@@ -686,11 +691,11 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
             <div className="space-y-4">
               <div>
                 <h3 className="mb-2 text-xs font-medium uppercase tracking-wide opacity-60">Projects to send / waiting on customer</h3>
-                {proposedProjects.length + awaitingCustomerProjects.length === 0 ? (
+                {projectsNeedingCustomerAction.length === 0 ? (
                   <EmptyState title="No project approvals pending" />
                 ) : (
                   <DataTable headers={["Project", "Customer", "Status"]}>
-                    {[...proposedProjects, ...awaitingCustomerProjects].slice(0, 8).map((p) => (
+                    {projectsNeedingCustomerAction.slice(0, 8).map((p) => (
                       <tr key={p.id}>
                         <td>
                           <Link className="link link-hover" href={`/projects/${p.id}`}>
