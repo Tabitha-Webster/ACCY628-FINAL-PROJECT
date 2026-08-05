@@ -57,7 +57,12 @@ export function DemoRoleSwitcher({ currentRole }: { currentRole: UserRole }) {
 
     if (signError) {
       setSwitching(false);
-      setError("That password did not match. Role was not changed.");
+      const msg = (signError.message || "").trim();
+      setError(
+        !msg || msg === "Invalid login credentials"
+          ? "That password did not match. Role was not changed."
+          : msg
+      );
       return;
     }
 

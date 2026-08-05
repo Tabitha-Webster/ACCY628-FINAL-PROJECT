@@ -452,3 +452,38 @@ export type RevenueRecord = {
   description: string | null;
   created_at: string;
 };
+
+export type HrPositionStatus = "open" | "filled" | "closed";
+export type HrContractorStatus = "active" | "ended";
+
+export type HrDepartment = {
+  id: string;
+  name: string;
+  annual_budget: number;
+  created_at: string;
+};
+
+export type HrPosition = {
+  id: string;
+  department_id: string;
+  title: string;
+  status: HrPositionStatus;
+  budgeted_cost: number;
+  opened_at: string;
+  filled_at: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type HrContractor = {
+  id: string;
+  department_id: string;
+  position_id: string | null;
+  full_name: string;
+  status: HrContractorStatus;
+  annual_cost: number;
+  hired_at: string;
+  ended_at: string | null;
+  notes: string | null;
+  created_at: string;
+};
