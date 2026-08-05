@@ -34,7 +34,7 @@ After changing `.env.local`, stop the server (Ctrl+C) and run `npm run dev` agai
 
 ## Demo accounts
 
-Password for all demo users: `Demo123!`
+Password for all demo users: `1234`
 
 | Role | Email |
 |------|-------|
