@@ -8,6 +8,8 @@ export type PayableInvoice = {
   id: string;
   invoiceNumber: string;
   customerName: string;
+  dueDate: string;
+  status: string;
   remainingBalance: number;
 };
 
@@ -19,9 +21,17 @@ const PAYMENT_METHODS: { value: string; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
-export function PaymentForm({ invoices }: { invoices: PayableInvoice[] }) {
+export function PaymentForm({
+  invoices,
+  initialInvoiceId,
+}: {
+  invoices: PayableInvoice[];
+  initialInvoiceId?: string;
+}) {
   const router = useRouter();
-  const [invoiceId, setInvoiceId] = useState(invoices[0]?.id ?? "");
+  const [invoiceId, setInvoiceId] = useState(() =>
+    invoices.some((invoice) => invoice.id === initialInvoiceId) ? initialInvoiceId! : (invoices[0]?.id ?? "")
+  );
   const [amount, setAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [paymentMethod, setPaymentMethod] = useState("ach");
@@ -30,14 +40,20 @@ export function PaymentForm({ invoices }: { invoices: PayableInvoice[] }) {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const selectedInvoice = useMemo(() => invoices.find((inv) => inv.id === invoiceId), [invoices, invoiceId]);
+  const effectiveInvoiceId = invoices.some((invoice) => invoice.id === invoiceId)
+    ? invoiceId
+    : (invoices[0]?.id ?? "");
+  const selectedInvoice = useMemo(
+    () => invoices.find((inv) => inv.id === effectiveInvoiceId),
+    [invoices, effectiveInvoiceId]
+  );
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
 
     const amountValue = Number(amount);
-    if (!invoiceId) {
+    if (!effectiveInvoiceId) {
       setMessage({ type: "error", text: "Select an invoice to apply this payment to." });
       return;
     }
@@ -59,7 +75,7 @@ export function PaymentForm({ invoices }: { invoices: PayableInvoice[] }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          invoiceId,
+          invoiceId: effectiveInvoiceId,
           amount: amountValue,
           paymentDate,
           paymentMethod,
@@ -98,7 +114,12 @@ export function PaymentForm({ invoices }: { invoices: PayableInvoice[] }) {
   return (
     <form onSubmit={onSubmit} className="card border border-base-300 bg-base-100 shadow-sm">
       <div className="card-body gap-4">
-        <h2 className="card-title text-base">Record a Payment</h2>
+        <div>
+          <h2 className="card-title text-base">Record a Payment</h2>
+          <p className="mt-1 text-sm opacity-70">
+            Apply received cash to one open customer invoice. Partial payments are supported.
+          </p>
+        </div>
 
         {message ? (
           <div className={`alert ${message.type === "success" ? "alert-success" : "alert-error"} text-sm`}>
@@ -111,7 +132,7 @@ export function PaymentForm({ invoices }: { invoices: PayableInvoice[] }) {
             <span className="label-text mb-1">Invoice</span>
             <select
               className="select select-bordered w-full"
-              value={invoiceId}
+              value={effectiveInvoiceId}
               onChange={(e) => setInvoiceId(e.target.value)}
               required
             >
@@ -136,9 +157,18 @@ export function PaymentForm({ invoices }: { invoices: PayableInvoice[] }) {
               required
             />
             {selectedInvoice ? (
-              <span className="mt-1 text-xs opacity-60">
-                Remaining balance: {formatCurrency(selectedInvoice.remainingBalance)}
-              </span>
+              <div className="mt-1 flex items-center justify-between gap-2 text-xs">
+                <span className="opacity-60">
+                  Remaining balance: {formatCurrency(selectedInvoice.remainingBalance)}
+                </span>
+                <button
+                  type="button"
+                  className="link link-primary"
+                  onClick={() => setAmount(selectedInvoice.remainingBalance.toFixed(2))}
+                >
+                  Apply full balance
+                </button>
+              </div>
             ) : null}
           </label>
 
@@ -188,6 +218,15 @@ export function PaymentForm({ invoices }: { invoices: PayableInvoice[] }) {
             />
           </label>
         </div>
+
+        {selectedInvoice ? (
+          <div className="rounded-box bg-base-200 p-3 text-sm">
+            <span className="font-medium">{selectedInvoice.invoiceNumber}</span>
+            <span className="opacity-70"> · {selectedInvoice.customerName}</span>
+            <span className="opacity-70"> · Due {selectedInvoice.dueDate}</span>
+            <span className="opacity-70"> · {selectedInvoice.status.replace(/_/g, " ")}</span>
+          </div>
+        ) : null}
 
         <div className="flex justify-end">
           <button type="submit" className="btn btn-primary" disabled={submitting}>

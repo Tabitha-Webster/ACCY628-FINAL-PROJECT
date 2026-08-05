@@ -4,6 +4,12 @@ import { getCurrentProfile } from "@/lib/auth";
 
 const VALID_METHODS = ["ach", "check", "credit_card", "wire", "other"];
 
+function isValidDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 function generatePaymentNumber(): string {
   const today = new Date();
   const stamp = today.toISOString().slice(0, 10).replace(/-/g, "");
@@ -35,14 +41,20 @@ export async function POST(request: Request) {
   }
 
   const invoiceId = body.invoiceId;
-  const amount = Number(body.amount);
+  const amount = Math.round(Number(body.amount) * 100) / 100;
 
   if (!invoiceId || !Number.isFinite(amount) || amount <= 0) {
     return NextResponse.json({ error: "Enter a valid invoice and a payment amount greater than zero." }, { status: 400 });
   }
 
-  const paymentMethod = VALID_METHODS.includes(body.paymentMethod ?? "") ? (body.paymentMethod as string) : "ach";
+  if (body.paymentMethod && !VALID_METHODS.includes(body.paymentMethod)) {
+    return NextResponse.json({ error: "Select a valid payment method." }, { status: 400 });
+  }
+  const paymentMethod = body.paymentMethod || "ach";
   const paymentDate = body.paymentDate || new Date().toISOString().slice(0, 10);
+  if (!isValidDate(paymentDate)) {
+    return NextResponse.json({ error: "Enter a valid payment date." }, { status: 400 });
+  }
 
   const supabase = await createClient();
 
@@ -58,11 +70,14 @@ export async function POST(request: Request) {
   if (!invoice) {
     return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
   }
-  if (invoice.status === "canceled") {
-    return NextResponse.json({ error: "This invoice has been canceled and cannot receive payments." }, { status: 400 });
+  if (["draft", "canceled"].includes(invoice.status)) {
+    return NextResponse.json({ error: "Only issued invoices can receive payments." }, { status: 400 });
   }
 
   const remainingBalance = Number(invoice.remaining_balance ?? 0);
+  if (remainingBalance <= 0.01) {
+    return NextResponse.json({ error: "This invoice is already paid in full." }, { status: 400 });
+  }
   if (amount > remainingBalance + 0.01) {
     return NextResponse.json(
       { error: `Payment amount cannot exceed the remaining balance of $${remainingBalance.toFixed(2)}.` },
@@ -96,6 +111,7 @@ export async function POST(request: Request) {
   });
 
   if (applicationError) {
+    await supabase.from("payments").delete().eq("id", payment.id);
     return NextResponse.json({ error: applicationError.message }, { status: 500 });
   }
 
@@ -113,6 +129,8 @@ export async function POST(request: Request) {
     .eq("id", invoiceId);
 
   if (updateError) {
+    await supabase.from("payment_applications").delete().eq("payment_id", payment.id).eq("invoice_id", invoiceId);
+    await supabase.from("payments").delete().eq("id", payment.id);
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 

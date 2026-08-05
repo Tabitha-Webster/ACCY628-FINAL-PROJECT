@@ -49,9 +49,17 @@ export default async function InvoicesPage() {
                   <Money value={Number(invoice.remaining_balance ?? 0)} />
                 </td>
                 <td className="text-right">
-                  <Link href={`/invoices/${invoice.id}`} className="btn btn-ghost btn-xs">
-                    View
-                  </Link>
+                  <div className="flex justify-end gap-1">
+                    {Number(invoice.remaining_balance ?? 0) > 0 &&
+                    !["draft", "canceled"].includes(invoice.status) ? (
+                      <Link href={`/payments?invoiceId=${invoice.id}`} className="btn btn-primary btn-xs">
+                        Record Payment
+                      </Link>
+                    ) : null}
+                    <Link href={`/invoices/${invoice.id}`} className="btn btn-ghost btn-xs">
+                      View
+                    </Link>
+                  </div>
                 </td>
               </tr>
             );

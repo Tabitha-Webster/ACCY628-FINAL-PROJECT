@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { PageHeader, DataTable, EmptyState, StatusBadge, Money, DateText, ErrorState, StatCard } from "@/components/ui";
 import { formatCurrency } from "@/lib/format";
-import type { Dispute, Invoice, Payment } from "@/lib/types";
+import type { Dispute, Invoice } from "@/lib/types";
 
 export default async function MyInvoicesPage() {
   const profile = await getCurrentProfile();
@@ -21,17 +21,20 @@ export default async function MyInvoicesPage() {
       .order("invoice_date", { ascending: false }),
     supabase
       .from("payments")
-      .select("id, payment_number, payment_date, payment_amount, payment_method, reference_number")
+      .select(
+        "id, payment_number, payment_date, payment_amount, payment_method, reference_number, payment_applications(amount_applied, invoices(invoice_number))"
+      )
       .eq("customer_id", customerId)
       .order("payment_date", { ascending: false }),
     supabase.from("disputes").select("id, invoice_id, dispute_date, dispute_reason, disputed_amount, resolution_status").eq("customer_id", customerId),
   ]);
 
-  if (invoicesRes.error) {
+  const error = invoicesRes.error || paymentsRes.error || disputesRes.error;
+  if (error) {
     return (
       <div>
         <PageHeader title="Invoices and Payments" />
-        <ErrorState message={invoicesRes.error.message} />
+        <ErrorState message={error.message} />
       </div>
     );
   }
@@ -40,7 +43,7 @@ export default async function MyInvoicesPage() {
     Invoice,
     "id" | "invoice_number" | "invoice_date" | "due_date" | "status" | "total_amount" | "amount_paid" | "remaining_balance" | "billing_period_start" | "billing_period_end"
   >[];
-  const payments = (paymentsRes.data ?? []) as (Pick<Payment, "payment_number" | "payment_date" | "payment_amount" | "payment_method" | "reference_number"> & { id: string })[];
+  const payments = paymentsRes.data ?? [];
   const disputes = (disputesRes.data ?? []) as (Pick<Dispute, "invoice_id" | "dispute_date" | "dispute_reason" | "disputed_amount" | "resolution_status"> & { id: string })[];
 
   const balanceDue = invoices.filter((i) => !["draft", "canceled"].includes(i.status)).reduce((sum, i) => sum + Number(i.remaining_balance), 0);
@@ -102,21 +105,30 @@ export default async function MyInvoicesPage() {
           {payments.length === 0 ? (
             <EmptyState title="No payments recorded yet" />
           ) : (
-            <DataTable headers={["Payment #", "Amount", "Method", "Date"]}>
-              {payments.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.payment_number}</td>
-                  <td>
-                    <Money value={Number(p.payment_amount)} />
-                  </td>
-                  <td>
-                    <StatusBadge status={p.payment_method} />
-                  </td>
-                  <td>
-                    <DateText value={p.payment_date} />
-                  </td>
-                </tr>
-              ))}
+            <DataTable headers={["Payment #", "Invoice", "Amount Applied", "Method", "Date"]}>
+              {payments.map((p) => {
+                const application = p.payment_applications?.[0];
+                const invoice = application
+                  ? Array.isArray(application.invoices)
+                    ? application.invoices[0]
+                    : application.invoices
+                  : null;
+                return (
+                  <tr key={p.id}>
+                    <td>{p.payment_number}</td>
+                    <td>{invoice?.invoice_number ?? "—"}</td>
+                    <td>
+                      <Money value={Number(application?.amount_applied ?? p.payment_amount)} />
+                    </td>
+                    <td>
+                      <StatusBadge status={p.payment_method} />
+                    </td>
+                    <td>
+                      <DateText value={p.payment_date} />
+                    </td>
+                  </tr>
+                );
+              })}
             </DataTable>
           )}
         </div>
