@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { isManagerRole, type UserRole } from "@/lib/constants";
+import { type UserRole } from "@/lib/constants";
 import { ButtonLink } from "@/components/Button";
 import { CustomerListRetryButton } from "@/components/CustomerListRetryButton";
 import { CustomerListSearch } from "@/components/CustomerListSearch";
@@ -11,6 +11,7 @@ import { AdminCustomerAccessNotice } from "@/components/AdminCustomerAccessNotic
 import { PageLayout } from "@/components/PageLayout";
 import { EmptyState, ErrorState } from "@/components/ui";
 import {
+  canApproveCustomers,
   canEditCustomers,
   canViewCustomers,
   listCustomersForInternalRoles,
@@ -44,9 +45,12 @@ function CustomerListSkeleton() {
   );
 }
 
-async function CustomerListContent({ role }: { role: UserRole }) {
+async function CustomerListContent({ role, profileId }: { role: UserRole; profileId: string }) {
   const supabase = await createClient();
-  const { customers, error, schemaIncomplete } = await listCustomersForInternalRoles(supabase);
+  const { customers, error, schemaIncomplete } = await listCustomersForInternalRoles(supabase, {
+    role,
+    profileId,
+  });
 
   if (error) {
     return (
@@ -66,6 +70,14 @@ async function CustomerListContent({ role }: { role: UserRole }) {
   }
 
   if (customers.length === 0) {
+    if (role === "technician") {
+      return (
+        <EmptyState
+          title="No assigned customers"
+          description="Active customers appear here when you are assigned to their support tickets."
+        />
+      );
+    }
     if (role === "admin") {
       return (
         <div className="space-y-4">
@@ -80,7 +92,7 @@ async function CustomerListContent({ role }: { role: UserRole }) {
     return (
       <EmptyState
         title="No customers found"
-        description="There are no customer records in Supabase yet. When customers are added to the customers table, they will show up here automatically."
+        description="There are no customer records visible for your role yet. When matching customers are added, they will show up here automatically."
       />
     );
   }
@@ -99,10 +111,10 @@ export default async function CustomersPage() {
   if (!canViewCustomers(profile.role)) redirect("/dashboard");
 
   const canManage = canEditCustomers(profile.role);
-  const canReviewApprovals = isManagerRole(profile.role);
+  const canApprove = canApproveCustomers(profile.role);
   const description = canManage
-    ? "Shared live customer list. Admin and Manager can add or edit customers; Technician and Billing can view the same records."
-    : "Shared live customer list — same records Admin and Manager maintain. Open a row to view the latest profile.";
+    ? "Shared live customer list from public.customers. Visibility depends on role; Admin and Manager can also review Pending Approval signups."
+    : "Shared live customer list — filtered for your role. Open a row to view the latest profile.";
 
   return (
     <PageLayout
@@ -110,7 +122,7 @@ export default async function CustomersPage() {
       description={description}
       actions={
         <>
-          {canReviewApprovals ? (
+          {canApprove ? (
             <ButtonLink href="/customer-approvals" variant="secondary" size="sm">
               Review approvals
             </ButtonLink>
@@ -124,7 +136,7 @@ export default async function CustomersPage() {
       }
     >
       <Suspense fallback={<CustomerListSkeleton />}>
-        <CustomerListContent role={profile.role} />
+        <CustomerListContent role={profile.role} profileId={profile.id} />
       </Suspense>
     </PageLayout>
   );

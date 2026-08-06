@@ -1,23 +1,47 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { DEMO_ACCOUNTS, type UserRole } from "@/lib/constants";
+import { DEMO_ACCOUNTS, roleHomePath, type UserRole } from "@/lib/constants";
+import { isDemoModeEnabled } from "@/lib/demo-mode";
+import { switchDemoRole } from "@/lib/demo-switch";
 import { createClient } from "@/lib/supabase/client";
 
 type DemoAccount = (typeof DEMO_ACCOUNTS)[number];
 
 export function DemoRoleSwitcher({ currentRole }: { currentRole: UserRole }) {
+  const demoMode = isDemoModeEnabled();
   const [pending, setPending] = useState<DemoAccount | null>(null);
   const [password, setPassword] = useState("");
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
-    if (pending) {
+    if (pending && !demoMode) {
       passwordRef.current?.focus();
     }
-  }, [pending]);
+  }, [pending, demoMode]);
+
+  async function performDemoSwitch(account: DemoAccount) {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    setSwitching(true);
+    setError(null);
+
+    const result = await switchDemoRole(account.role);
+    if (!result.ok) {
+      inFlightRef.current = false;
+      setSwitching(false);
+      setError(result.error);
+      return;
+    }
+
+    const path = window.location.pathname;
+    const stayOnSharedCustomerView =
+      path === "/customers" || path.startsWith("/customers/");
+    window.location.assign(stayOnSharedCustomerView ? path : result.homePath);
+  }
 
   function onSelectRole(nextRole: string) {
     setError(null);
@@ -28,6 +52,12 @@ export function DemoRoleSwitcher({ currentRole }: { currentRole: UserRole }) {
     }
     const account = DEMO_ACCOUNTS.find((a) => a.role === nextRole);
     if (!account) return;
+
+    if (demoMode) {
+      void performDemoSwitch(account);
+      return;
+    }
+
     setPending(account);
     setPassword("");
   }
@@ -41,12 +71,13 @@ export function DemoRoleSwitcher({ currentRole }: { currentRole: UserRole }) {
 
   async function confirmSwitch(e: React.FormEvent) {
     e.preventDefault();
-    if (!pending) return;
+    if (!pending || inFlightRef.current) return;
     if (!password.trim()) {
       setError("Enter the password for that role to continue.");
       return;
     }
 
+    inFlightRef.current = true;
     setSwitching(true);
     setError(null);
     const supabase = createClient();
@@ -56,6 +87,7 @@ export function DemoRoleSwitcher({ currentRole }: { currentRole: UserRole }) {
     });
 
     if (signError) {
+      inFlightRef.current = false;
       setSwitching(false);
       const msg = (signError.message || "").trim();
       setError(
@@ -66,7 +98,6 @@ export function DemoRoleSwitcher({ currentRole }: { currentRole: UserRole }) {
       return;
     }
 
-    // Stay on the same customer/list URL when possible so each role sees the same live record.
     const path = window.location.pathname;
     const stayOnSharedCustomerView =
       path === "/customers" || path.startsWith("/customers/");
@@ -74,9 +105,7 @@ export function DemoRoleSwitcher({ currentRole }: { currentRole: UserRole }) {
       window.location.assign(path);
       return;
     }
-    window.location.assign(
-      pending.role === "admin" ? "/admin" : pending.role === "technician" ? "/dashboard" : "/dashboard"
-    );
+    window.location.assign(roleHomePath(pending.role));
   }
 
   const selectedRole = pending?.role ?? currentRole;
@@ -102,7 +131,15 @@ export function DemoRoleSwitcher({ currentRole }: { currentRole: UserRole }) {
         </select>
       </label>
 
-      {pending ? (
+      {demoMode ? (
+        <p className="mt-1 text-[11px] opacity-60">
+          {switching ? "Switching demo role…" : `Demo Mode · ${labelForRole(currentRole)}`}
+        </p>
+      ) : null}
+
+      {error && demoMode ? <p className="mt-1 max-w-xs text-center text-xs text-error">{error}</p> : null}
+
+      {pending && !demoMode ? (
         <div className="modal modal-open z-50">
           <div className="modal-box">
             <h3 className="text-lg font-semibold">Confirm role switch</h3>
@@ -142,4 +179,8 @@ export function DemoRoleSwitcher({ currentRole }: { currentRole: UserRole }) {
       ) : null}
     </div>
   );
+}
+
+function labelForRole(role: UserRole) {
+  return DEMO_ACCOUNTS.find((account) => account.role === role)?.label ?? role;
 }

@@ -25,8 +25,15 @@ export default async function AdminDemoSettingsPage() {
         <p className="font-semibold">How demos work</p>
         <ul className="mt-2 list-disc space-y-1 pl-5 opacity-80">
           <li>All listed demo passwords are <code>1234</code>.</li>
-          <li>The login page Demo Login Selector fills email/password for a role.</li>
-          <li>The header Demo Role Switcher re-authenticates as another demo account.</li>
+          <li>
+            On the login page, Demo Login Selector fills email/password; the user still clicks Sign
+            in.
+          </li>
+          <li>
+            With <code>NEXT_PUBLIC_DEMO_MODE=true</code>, the header Demo Role Switcher signs in to
+            demo accounts without typing a password.
+          </li>
+          <li>When Demo Mode is off, the login demo buttons are hidden and normal login remains.</li>
           <li>Mark demo accounts with <code>is_demo_user = true</code> in User Access.</li>
         </ul>
       </div>
@@ -40,7 +47,7 @@ export default async function AdminDemoSettingsPage() {
             <td>{account.name}</td>
             <td>{account.email}</td>
             <td>
-              <code>{account.password}</code>
+              <code>1234</code>
             </td>
           </tr>
         ))}

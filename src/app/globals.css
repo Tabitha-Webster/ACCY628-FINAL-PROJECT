@@ -3,6 +3,13 @@
   themes: false;
 }
 
+/* Site-wide typeface — Helvetica Neue (system); sizing/weight/caps/color unchanged */
+@theme {
+  --font-sans: "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
+}
+
 @plugin "daisyui/theme" {
   name: "servicesync";
   default: true;
@@ -86,8 +93,13 @@ body {
   min-height: 100%;
 }
 
-body {
-  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+body,
+button,
+input,
+select,
+textarea,
+optgroup {
+  font-family: var(--font-sans);
 }
 
 /*
@@ -160,6 +172,29 @@ body {
   background-color: #d4ebf8;
   border-color: #8fc5e3;
   color: #123b5d;
+}
+
+/* Floating help “?” button — navy to match sidebar branding; always viewport-fixed */
+.help-chat-fab {
+  background-color: #123b5d !important;
+  border: 1px solid #0d2f4a !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(18, 59, 93, 0.35);
+}
+
+.help-chat-fab:hover,
+.help-chat-fab:focus-visible {
+  background-color: #0f3352 !important;
+  color: #ffffff !important;
+}
+
+.help-chat-fab:focus-visible {
+  outline-color: #123b5d;
+}
+
+.help-chat-fab svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
 }
 
 /* Same brand mark as login; lightened so it reads on the navy sidebar */

@@ -28,25 +28,48 @@ export function CustomerApprovalActions({ customerId, managerId, currentStatus }
     const supabase = createClient();
     const approved = decision === "approve";
 
+    const nextStatus = approved ? "active" : "rejected";
+    const reviewedAt = new Date().toISOString();
+
     const { error: updateError } = await supabase
       .from("customers")
       .update({
-        status: approved ? "active" : "rejected",
+        status: nextStatus,
+        customer_status: nextStatus,
         approval_note: trimmedNote,
-        reviewed_at: new Date().toISOString(),
+        reviewed_at: reviewedAt,
         reviewed_by: managerId,
       })
-      .eq("id", customerId);
+      .eq("id", customerId)
+      .eq("status", "pending_approval");
 
     if (updateError) {
-      // Fallback when manager-approval columns / enum values are not applied yet.
-      const { error: fallbackError } = await supabase
+      // Fallback when manager-approval columns / rejected enum are not applied yet.
+      // Prefer rejected when possible; only use inactive if rejected is unavailable.
+      const preferRejected = await supabase
         .from("customers")
         .update({
-          status: approved ? "active" : "inactive",
+          status: nextStatus,
+          customer_status: nextStatus,
           notes: `${approved ? "Approved" : "Rejected"}: ${trimmedNote}`,
         })
-        .eq("id", customerId);
+        .eq("id", customerId)
+        .eq("status", "pending_approval");
+
+      let fallbackError = preferRejected.error;
+      if (fallbackError && !approved && /rejected/i.test(fallbackError.message)) {
+        const inactiveFallback = await supabase
+          .from("customers")
+          .update({
+            status: "inactive",
+            customer_status: "inactive",
+            notes: `Rejected: ${trimmedNote}`,
+          })
+          .eq("id", customerId)
+          .eq("status", "pending_approval");
+        fallbackError = inactiveFallback.error;
+      }
+
       if (fallbackError) {
         setLoading(null);
         setError(fallbackError.message || updateError.message);
