@@ -37,29 +37,29 @@ const TONE_STYLES: Record<
   { card: string; icon: string; value: string }
 > = {
   sky: {
-    card: "border-sky-300/60 bg-gradient-to-br from-sky-50 to-sky-100/80",
-    icon: "bg-sky-500/15 text-sky-700",
-    value: "text-sky-900",
+    card: "border-sky-400/50 bg-gradient-to-br from-sky-100 to-sky-200/90 text-slate-900",
+    icon: "bg-sky-600/20 text-sky-800",
+    value: "text-slate-950",
   },
   violet: {
-    card: "border-violet-300/60 bg-gradient-to-br from-violet-50 to-violet-100/80",
-    icon: "bg-violet-500/15 text-violet-700",
-    value: "text-violet-900",
+    card: "border-violet-400/50 bg-gradient-to-br from-violet-100 to-violet-200/90 text-slate-900",
+    icon: "bg-violet-600/20 text-violet-800",
+    value: "text-slate-950",
   },
   amber: {
-    card: "border-amber-300/60 bg-gradient-to-br from-amber-50 to-amber-100/80",
-    icon: "bg-amber-500/15 text-amber-800",
-    value: "text-amber-950",
+    card: "border-amber-400/50 bg-gradient-to-br from-amber-100 to-amber-200/90 text-slate-900",
+    icon: "bg-amber-600/20 text-amber-900",
+    value: "text-slate-950",
   },
   rose: {
-    card: "border-rose-300/70 bg-gradient-to-br from-rose-50 to-rose-100/90",
-    icon: "bg-rose-500/15 text-rose-700",
-    value: "text-rose-900",
+    card: "border-rose-400/50 bg-gradient-to-br from-rose-100 to-rose-200/90 text-slate-900",
+    icon: "bg-rose-600/20 text-rose-800",
+    value: "text-slate-950",
   },
   emerald: {
-    card: "border-emerald-300/60 bg-gradient-to-br from-emerald-50 to-emerald-100/80",
-    icon: "bg-emerald-500/15 text-emerald-700",
-    value: "text-emerald-900",
+    card: "border-emerald-400/50 bg-gradient-to-br from-emerald-100 to-emerald-200/90 text-slate-900",
+    icon: "bg-emerald-600/20 text-emerald-800",
+    value: "text-slate-950",
   },
 };
 
@@ -89,9 +89,9 @@ function StatusMixChart({ counts }: { counts: ProjectsStatusCounts }) {
   const max = Math.max(1, ...data.map((d) => d.count));
 
   return (
-    <div className="flex h-full min-h-[11rem] flex-col rounded-2xl border border-base-300 bg-base-100 p-3 shadow-sm">
+    <div className="flex h-full min-h-[11rem] flex-col rounded-2xl border border-base-300 bg-base-100 p-3 text-base-content shadow-sm">
       <p className="mb-0.5 text-xs font-semibold">Project status mix</p>
-      <p className="mb-2 text-[10px] opacity-60">How delivery work is distributed</p>
+      <p className="mb-2 text-[10px] text-base-content/70">How delivery work is distributed</p>
       {total === 0 ? (
         <div className="flex flex-1 items-center justify-center text-sm opacity-60">No projects yet</div>
       ) : (
@@ -144,8 +144,8 @@ export function ProjectsHomeVisuals({
   return (
     <div className="flex flex-col gap-3">
       <div className="min-w-0 space-y-0.5">
-        <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{title}</h1>
-        {subtitle ? <p className="text-sm opacity-70">{subtitle}</p> : null}
+        <h1 className="text-xl font-semibold tracking-tight text-base-content md:text-2xl">{title}</h1>
+        {subtitle ? <p className="text-sm text-base-content/80">{subtitle}</p> : null}
       </div>
 
       <div className="grid gap-3 lg:grid-cols-12">
@@ -155,7 +155,7 @@ export function ProjectsHomeVisuals({
             return (
               <div key={metric.label} className={`rounded-2xl border p-3 shadow-sm ${tone.card}`}>
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-700">
                     {metric.label}
                   </p>
                   <span className={`rounded-lg p-1.5 ${tone.icon}`}>
@@ -165,7 +165,7 @@ export function ProjectsHomeVisuals({
                 <p className={`mt-1 text-xl font-semibold tabular-nums ${tone.value}`}>
                   {metric.value}
                 </p>
-                {metric.hint ? <p className="mt-0.5 text-[10px] opacity-60">{metric.hint}</p> : null}
+                {metric.hint ? <p className="mt-0.5 text-[10px] text-slate-700/80">{metric.hint}</p> : null}
               </div>
             );
           })}

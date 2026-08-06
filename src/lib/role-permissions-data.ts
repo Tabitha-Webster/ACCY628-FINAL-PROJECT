@@ -63,7 +63,7 @@ function fallbackMatrix(): RolePagePermissionRow[] {
     for (const role of page.defaultRoles) {
       rows.push({ role, page_key: page.key, can_view: true });
     }
-    for (const role of ["manager", "technician", "billing", "customer", "hr"] as UserRole[]) {
+    for (const role of ["manager", "technician", "billing", "customer", "hr", "executive"] as UserRole[]) {
       if (!page.defaultRoles.includes(role)) {
         rows.push({ role, page_key: page.key, can_view: false });
       }

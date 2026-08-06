@@ -19,6 +19,7 @@ import {
 } from "recharts";
 import { EmptyState, StatusBadge } from "@/components/ui";
 import { TicketSlaAlerts, SlaConditionBadge } from "@/components/SlaBadges";
+import { ServiceModeBadge } from "@/components/ServiceModeBadge";
 import { formatDateTime } from "@/lib/format";
 import { evaluateTicketSla, type SlaCondition } from "@/lib/sla";
 import type { UserRole } from "@/lib/constants";
@@ -42,6 +43,8 @@ export type TicketListItem = {
   target_resolution_at: string | null;
   actual_response_at: string | null;
   completed_at: string | null;
+  service_mode: string | null;
+  service_location: string | null;
 };
 
 type FilterOption = { id: string; name: string };
@@ -469,6 +472,12 @@ export function TicketListClient({
                         <div className="flex shrink-0 flex-wrap items-center gap-1">
                           <CriticalPriorityBadge priority={t.priority} />
                           <StatusBadge status={t.status} />
+                          <ServiceModeBadge
+                            mode={t.service_mode}
+                            location={t.service_location}
+                            showLocation={false}
+                            size="xs"
+                          />
                           <SlaConditionBadge condition={overall} />
                         </div>
                       </div>

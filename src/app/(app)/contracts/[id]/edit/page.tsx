@@ -23,16 +23,23 @@ export default async function EditContractPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: contractData, error }, { data: customers }, { data: managers }] = await Promise.all([
-    getContractById(supabase, id),
-    supabase.from("customers").select("id, name").order("name"),
-    supabase
-      .from("profiles")
-      .select("id, full_name")
-      .eq("role", "manager")
-      .eq("is_active", true)
-      .order("full_name"),
-  ]);
+  const [{ data: contractData, error }, { data: customers }, { data: managers }, { data: technicians }] =
+    await Promise.all([
+      getContractById(supabase, id),
+      supabase.from("customers").select("id, name").order("name"),
+      supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("role", "manager")
+        .eq("is_active", true)
+        .order("full_name"),
+      supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("role", "technician")
+        .eq("is_active", true)
+        .order("full_name"),
+    ]);
 
   if (!error && !contractData) notFound();
   if (error || !contractData) {
@@ -53,30 +60,45 @@ export default async function EditContractPage({
   const contract = contractData as ContractDetailRow;
   const overagesAllowed =
     contract.overages_allowed ?? Number(contract.additional_hourly_rate ?? 0) > 0;
+  const isDraft = contract.status === "draft";
 
   return (
     <div>
       <div className="mb-4">
-        <Link href={`/contracts/${id}`} className="btn btn-ghost btn-sm">
-          ← Back to contract
+        <Link
+          href={isDraft ? "/contracts?status=draft" : "/contracts/view-edit"}
+          className="btn btn-ghost btn-sm"
+        >
+          {isDraft ? "← Back to drafts" : "← Back to view and edit"}
         </Link>
       </div>
       <ContractForm
         mode="edit"
         profileId={profile.id}
+        profileName={profile.full_name}
         contractId={id}
         currentVersion={Number(contract.version_number ?? 1)}
         customers={customers.map((c) => ({ id: c.id, label: c.name }))}
         managers={(managers ?? []).map((m) => ({ id: m.id, label: m.full_name }))}
+        technicians={(technicians ?? []).map((t) => ({ id: t.id, label: t.full_name }))}
         initialValues={{
           contract_number: contract.contract_number,
           name: contract.name,
           description: contract.description ?? "",
           customer_id: contract.customer_id,
           assigned_manager_id: contract.assigned_manager_id ?? "",
+          assigned_technician_id: contract.assigned_technician_id ?? "",
           sales_representative_id: contract.sales_representative_id ?? "",
+          billing_contact: contract.billing_contact ?? "",
+          scope: contract.scope ?? "",
           contract_type: contract.contract_type,
           status: contract.status,
+          work_location:
+            contract.work_location === "on_site" || contract.work_location === "remote"
+              ? contract.work_location
+              : contract.onsite_support
+                ? "on_site"
+                : "remote",
           start_date: contract.start_date,
           end_date: contract.end_date ?? "",
           effective_date: contract.effective_date ?? "",
@@ -87,6 +109,7 @@ export default async function EditContractPage({
           cancellation_notice_days: str(contract.cancellation_notice_days),
           monthly_recurring_fee: str(contract.monthly_recurring_fee),
           one_time_setup_fee: str(contract.one_time_setup_fee ?? 0),
+          deposit_amount: str(contract.deposit_amount ?? 0),
           included_hours_per_month: str(contract.included_hours_per_month),
           additional_hourly_rate: str(contract.additional_hourly_rate),
           overages_allowed: overagesAllowed,
@@ -98,10 +121,16 @@ export default async function EditContractPage({
           next_invoice_date: contract.next_invoice_date ?? "",
           last_invoice_date: contract.last_invoice_date ?? "",
           billing_status: String(contract.billing_status ?? "unbilled"),
+          software_markup_pct: str(contract.software_markup_pct ?? ""),
+          equipment_markup_pct: str(contract.equipment_markup_pct ?? ""),
+          reimbursable_cost_policy: contract.reimbursable_cost_policy ?? "",
           included_services: contract.included_services ?? "",
           excluded_services: contract.excluded_services ?? "",
           supported_locations: contract.supported_locations ?? "",
           supported_users_devices: contract.supported_users_devices ?? "",
+          remote_support: contract.remote_support ?? true,
+          onsite_support: contract.onsite_support ?? true,
+          after_hours_terms: contract.after_hours_terms ?? "",
           sla_critical_response_hours: str(contract.sla_critical_response_hours),
           sla_high_response_hours: str(contract.sla_high_response_hours),
           sla_medium_response_hours: str(contract.sla_medium_response_hours),

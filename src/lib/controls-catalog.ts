@@ -122,20 +122,20 @@ export const CONTROLS_CATALOG: ControlItem[] = [
     category: "Contract",
     risk: "price or commercial terms on a live agreement could change without manager oversight",
     control:
-      "price changes on active contracts are held as pending modifications until a manager explicitly approves them; they do not update the live contract until approved",
-    whatIf: "What if MRR is edited on an active agreement without a manager?",
+      "manager edits apply the new terms immediately in draft form but set the contract to pending approval and restart signatures—executive must approve, then the customer must accept—before the agreement is active again",
+    whatIf: "What if MRR is edited on an active agreement?",
     where: [
-      { href: "/contracts?status=active", label: "Active contracts" },
-      { href: "/contracts", label: "Manage contracts" },
+      { href: "/contracts/view-edit", label: "View and Edit Contracts" },
+      { href: "/contracts/awaiting-signature", label: "Awaiting Your Signature" },
     ],
   },
   {
     id: "contract-audit-trail",
     category: "Contract",
-    risk: "contract terms could be edited without an audit trail explaining why",
+    risk: "contract terms could be edited without an audit trail",
     control:
-      "every contract edit requires a change reason, and field-level history records previous value, new value, user, date, and reason, with major commercial terms highlighted",
-    whatIf: "What if we need to prove who changed a rate and why?",
+      "field-level history records previous value, new value, user, date, and an automatic change summary when a manager edits and resends for approval, with major commercial terms highlighted",
+    whatIf: "What if we need to prove who changed a rate?",
     where: [{ href: "/contracts", label: "Open a contract → Changes" }],
   },
   {
@@ -154,9 +154,9 @@ export const CONTROLS_CATALOG: ControlItem[] = [
     category: "Contract",
     risk: "someone could edit an active agreement without realizing it affects live billing and SLA",
     control:
-      "editing an active contract shows a warning dialog and requires an on-form acknowledgment before changes can be saved",
+      "editing an active contract shows a warning that saving moves the agreement back to pending approval for executive and customer re-acceptance",
     whatIf: "What if a manager opens Edit on a live customer agreement?",
-    where: [{ href: "/contracts?status=active", label: "Edit an active contract" }],
+    where: [{ href: "/contracts/view-edit", label: "View and Edit Contracts" }],
   },
   {
     id: "contract-renewals",

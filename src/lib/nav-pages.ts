@@ -23,6 +23,8 @@ const ADMIN_EXTRA_PAGES: SearchablePage[] = [
 const CONTRACTS_PAGES: SearchablePage[] = [
   { href: "/contracts/reports", label: "Contracts Dashboard", group: "Contracts & Agreements" },
   { href: "/contracts", label: "Manage Contracts", group: "Contracts & Agreements" },
+  { href: "/contracts/view-edit", label: "View and Edit Contracts", group: "Contracts & Agreements" },
+  { href: "/contracts/awaiting-signature", label: "Awaiting Your Signature", group: "Contracts & Agreements" },
   { href: "/contracts/new", label: "New Contract", group: "Contracts & Agreements" },
   { href: "/contracts/renewals", label: "Renewal & Expiration", group: "Contracts & Agreements" },
   { href: "/contracts/customers", label: "Customer Contract Data", group: "Contracts & Agreements" },
@@ -68,12 +70,15 @@ export function pagesForRole(
     pages.push(...ADMIN_EXTRA_PAGES);
   }
 
-  if (role === "admin" || role === "manager" || role === "technician" || role === "billing") {
+  if (role === "admin" || role === "manager" || role === "technician" || role === "billing" || role === "executive") {
     pages.push(
       ...CONTRACTS_PAGES.filter((page) => {
-        if (page.href === "/contracts/reports") return role === "admin" || role === "manager" || role === "billing";
+        if (page.href === "/contracts/reports")
+          return role === "admin" || role === "manager" || role === "billing" || role === "executive";
         if (page.href === "/contracts/new") return role === "admin" || role === "manager";
         if (page.href === "/contracts/customers") return role === "admin" || role === "manager";
+        if (page.href === "/contracts/awaiting-signature") return role === "executive" || role === "admin";
+        if (page.href === "/contracts/view-edit") return role === "admin" || role === "manager";
         return true;
       })
     );

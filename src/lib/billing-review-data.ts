@@ -1,4 +1,5 @@
 ﻿import { computeMonthlyUsage, currentBillingPeriod, round2 } from "@/lib/billing";
+import { billedHourlyRate, billedMonthlyRecurringFee } from "@/lib/contracts";
 import { projectBillingBlockReason } from "@/lib/billing-eligibility";
 import type { MonthlyPackage, ReviewException, ReviewItem } from "@/components/BillingReviewClient";
 import type { createClient } from "@/lib/supabase/server";
@@ -85,7 +86,7 @@ export async function loadBillingReviewData(
     supabase
       .from("contracts")
       .select(
-        "id, name, customer_id, start_date, monthly_recurring_fee, included_hours_per_month, additional_hourly_rate, customers(name)"
+        "id, name, customer_id, start_date, monthly_recurring_fee, work_location, included_hours_per_month, additional_hourly_rate, customers(name)"
       )
       .eq("status", "active"),
     unbounded ? timeQuery : timeQuery.gte("work_date", billingPeriodStart).lte("work_date", billingPeriodEnd),
@@ -205,8 +206,8 @@ export async function loadBillingReviewData(
       const usage = computeMonthlyUsage(
         monthEntries,
         Number(contract.included_hours_per_month ?? 0),
-        Number(contract.additional_hourly_rate ?? 0),
-        Number(contract.monthly_recurring_fee ?? 0)
+        billedHourlyRate(contract),
+        billedMonthlyRecurringFee(contract)
       );
       const attachOneTime = includeOpenOneTime && monthIndex === monthStarts.length - 1;
       const equipmentSoftwareCharges = attachOneTime

@@ -12,9 +12,15 @@ function pathActive(pathname: string, href: string) {
   if (href === "/contracts") {
     return (
       pathname === "/contracts" ||
-      /^\/contracts\/(?!reports(?:\/|$)|renewals(?:\/|$)|customers(?:\/|$)|new(?:\/|$)).+/.test(
+      /^\/contracts\/(?!reports(?:\/|$)|renewals(?:\/|$)|customers(?:\/|$)|new(?:\/|$)|awaiting-signature(?:\/|$)|view-edit(?:\/|$)|[^/]+\/(?:view|edit)(?:\/|$)).+/.test(
         pathname
       )
+    );
+  }
+  if (href === "/contracts/view-edit") {
+    return (
+      pathname === href ||
+      /^\/contracts\/[^/]+\/(?:view|edit)(?:\/|$)/.test(pathname)
     );
   }
   return pathname === href || pathname.startsWith(href + "/");
@@ -28,12 +34,16 @@ export function ContractsAgreementsNavTree({
   showReports = true,
   showNewContract = false,
   showCustomerContractData = false,
+  showAwaitingSignature = false,
+  showViewEditContracts = false,
   onNavigate,
   allowedPageKeys = null,
 }: {
   showReports?: boolean;
   showNewContract?: boolean;
   showCustomerContractData?: boolean;
+  showAwaitingSignature?: boolean;
+  showViewEditContracts?: boolean;
   onNavigate?: () => void;
   allowedPageKeys?: Set<string> | null;
 }) {
@@ -42,13 +52,19 @@ export function ContractsAgreementsNavTree({
     () => [
       ...(showReports ? [{ href: "/contracts/reports", label: "Contracts Dashboard" }] : []),
       { href: "/contracts", label: "Manage Contracts" },
+      ...(showViewEditContracts
+        ? [{ href: "/contracts/view-edit", label: "View and Edit Contracts" }]
+        : []),
+      ...(showAwaitingSignature
+        ? [{ href: "/contracts/awaiting-signature", label: "Awaiting Your Signature" }]
+        : []),
       ...(showNewContract ? [{ href: "/contracts/new", label: "New Contract" }] : []),
       { href: "/contracts/renewals", label: "Renewal & Expiration" },
       ...(showCustomerContractData
         ? [{ href: "/contracts/customers", label: "Customer Contract Data" }]
         : []),
     ],
-    [showReports, showNewContract, showCustomerContractData]
+    [showReports, showNewContract, showCustomerContractData, showAwaitingSignature, showViewEditContracts]
   );
   const links = useMemo(
     () => allLinks.filter((link) => hrefAllowedByPageKeys(link.href, allowedPageKeys)),

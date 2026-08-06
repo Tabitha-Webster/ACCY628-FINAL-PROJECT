@@ -18,6 +18,7 @@ import {
   pendingAdditionalWorkBlockReason,
   projectBillingBlockReason,
 } from "@/lib/billing-eligibility";
+import { billedHourlyRate, billedMonthlyRecurringFee } from "@/lib/contracts";
 
 function generateInvoiceNumber(): string {
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
   let contractQuery = supabase
     .from("contracts")
     .select(
-      "id, name, customer_id, status, monthly_recurring_fee, included_hours_per_month, additional_hourly_rate, payment_terms, billing_timing, tax_status"
+      "id, name, customer_id, status, monthly_recurring_fee, work_location, included_hours_per_month, additional_hourly_rate, payment_terms, billing_timing, tax_status"
     )
     .eq("status", "active");
 
@@ -139,8 +140,8 @@ export async function POST(request: Request) {
     const usage = computeMonthlyUsage(
       timeEntries ?? [],
       Number(contract.included_hours_per_month ?? 0),
-      Number(contract.additional_hourly_rate ?? 0),
-      Number(contract.monthly_recurring_fee ?? 0)
+      billedHourlyRate(contract),
+      billedMonthlyRecurringFee(contract)
     );
     const approvedProjects = (projects ?? []).filter((project) => {
       if (projectBillingBlockReason(project)) return false;

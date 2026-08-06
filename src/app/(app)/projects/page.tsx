@@ -6,9 +6,9 @@ import { EmptyState, StatusBadge, Money, DateText, ErrorState } from "@/componen
 import { grossMarginPct, marginBand } from "@/lib/calculations";
 import type { ApprovalStatus, Project, ProjectMilestone, ProjectStatus } from "@/lib/types";
 import { ProjectActions, ProjectChangeRequestPanel } from "@/components/ProjectActions";
-import { ProjectProgressCard, projectCompletionPercent } from "@/components/ProjectProgressCard";
+import { projectCompletionPercent } from "@/components/ProjectProgressCard";
 import { ProjectsHomeVisuals } from "@/components/ProjectsHomeVisuals";
-import ProjectsOverviewPanel from "@/components/ProjectsOverviewPanel";
+import { ProjectSelectDropdown } from "@/components/ProjectSelectDropdown";
 
 type ProjectRow = Pick<
   Project,
@@ -228,105 +228,6 @@ export default async function ProjectsPage({
   }
   const projectNamesForPanel = selectedProject ? { [selectedProject.id]: selectedProject.name } : {};
 
-  const proposedProjects =
-    profile.role === "manager"
-      ? rows
-          .filter((p) => p.status === "proposed")
-          .map((p) => ({
-            id: p.id,
-            name: p.name,
-            status: p.status,
-            customer_name: customerName.get(p.customer_id) ?? "—",
-            customer_approval_status: p.customer_approval_status,
-          }))
-      : [];
-  const projectsAwaitingCustomer =
-    profile.role === "manager"
-      ? rows
-          .filter((p) => p.status === "awaiting_customer_approval" || p.customer_approval_status === "pending")
-          .map((p) => ({
-            id: p.id,
-            name: p.name,
-            status: p.status,
-            customer_name: customerName.get(p.customer_id) ?? "—",
-            customer_approval_status: p.customer_approval_status,
-          }))
-      : [];
-
-  let managerPendingCrs: {
-    id: string;
-    title: string;
-    project_id: string | null;
-    project_name: string;
-    estimated_hours: number | null;
-    estimated_amount: number | null;
-    approval_status: ApprovalStatus;
-    customer_approval_status?: string | null;
-  }[] = [];
-  let managerPendingMilestones: {
-    id: string;
-    name: string;
-    project_id: string;
-    project_name: string;
-  }[] = [];
-
-  if (profile.role === "manager" && projectIds.length) {
-    const [mgrCrRes, mgrMsRes] = await Promise.all([
-      supabase
-        .from("additional_work_requests")
-        .select("id, title, project_id, estimated_hours, estimated_amount, approval_status, customer_approval_status")
-        .in("project_id", projectIds)
-        .eq("approval_status", "pending")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("project_milestones")
-        .select("id, name, project_id, approval_status, completed")
-        .in("project_id", projectIds)
-        .eq("approval_status", "pending"),
-    ]);
-    managerPendingCrs = (mgrCrRes.data ?? []).map((r) => ({
-      id: r.id,
-      title: r.title,
-      project_id: r.project_id,
-      project_name: rows.find((p) => p.id === r.project_id)?.name ?? "Project",
-      estimated_hours: r.estimated_hours,
-      estimated_amount: r.estimated_amount,
-      approval_status: r.approval_status as ApprovalStatus,
-      customer_approval_status: r.customer_approval_status,
-    }));
-    managerPendingMilestones = (mgrMsRes.data ?? []).map((m) => ({
-      id: m.id,
-      name: m.name,
-      project_id: m.project_id,
-      project_name: rows.find((p) => p.id === m.project_id)?.name ?? "Project",
-    }));
-  }
-
-  const technicianAttention =
-    profile.role === "technician"
-      ? [
-          ...rows.flatMap((p) => {
-            const openMs = (milestonesByProject.get(p.id) ?? []).filter((m) => !m.completed);
-            return openMs.slice(0, 3).map((m) => ({
-              id: `ms-${m.id}`,
-              title: m.name,
-              detail: `${p.name} · milestone open`,
-              href: `/projects?selected=${p.id}`,
-              tone: "default" as const,
-            }));
-          }),
-          ...rows
-            .filter((p) => (pendingCrByProject.get(p.id) ?? 0) > 0)
-            .map((p) => ({
-              id: `oos-${p.id}`,
-              title: p.name,
-              detail: `${pendingCrByProject.get(p.id)} out-of-scope / change request(s) pending`,
-              href: `/projects?selected=${p.id}`,
-              tone: "warning" as const,
-            })),
-        ].slice(0, 8)
-      : [];
-
   return (
     <ProjectsHomeVisuals
       title={profile.role === "technician" ? "Project Tasks" : "Projects"}
@@ -358,30 +259,6 @@ export default async function ProjectsPage({
         completed: completedCount,
       }}
     >
-      <div className="overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-b from-violet-50/70 to-base-100 p-3 shadow-sm">
-        <ProjectsOverviewPanel
-          role={profile.role}
-          currentUserId={profile.id}
-          projects={rows.map((p) => ({
-            id: p.id,
-            name: p.name,
-            status: p.status,
-            customer_name: customerName.get(p.customer_id) ?? "—",
-          }))}
-          proposedProjects={proposedProjects}
-          projectsAwaitingCustomer={projectsAwaitingCustomer}
-          pendingChangeRequests={managerPendingCrs}
-          pendingMilestones={managerPendingMilestones}
-          technicianItems={technicianAttention}
-          counts={{
-            total: rows.length,
-            inProgress,
-            awaitingApproval,
-            openOutOfScope: pendingChangeRequests,
-          }}
-        />
-      </div>
-
       {rows.length === 0 ? (
         <EmptyState
           title={profile.role === "technician" ? "No assigned projects" : "No projects yet"}
@@ -392,140 +269,154 @@ export default async function ProjectsPage({
           }
         />
       ) : (
-        <div className="grid gap-3 xl:grid-cols-5">
-          <section className="flex flex-col overflow-hidden rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50/80 to-base-100 shadow-sm xl:col-span-3">
-            <div className="border-b border-sky-200/70 px-3 py-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-900/80">
-                All projects ({rows.length})
-              </h2>
+        <div className="space-y-3">
+          <section className="rounded-2xl border border-base-300 bg-base-100 p-4 shadow-sm">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <ProjectSelectDropdown
+                label={profile.role === "technician" ? "Choose an assigned project" : "Choose a project to view"}
+                selectedId={selectedId ?? null}
+                projects={rows.map((p) => ({
+                  id: p.id,
+                  name: p.name,
+                  customerName: customerName.get(p.customer_id) ?? "—",
+                  status: p.status,
+                }))}
+              />
+              {selectedProject ? (
+                <Link href={`/projects/${selectedProject.id}`} className="btn btn-outline btn-sm">
+                  Open full detail page
+                </Link>
+              ) : null}
             </div>
-            <ul className="space-y-2 p-3">
-              {rows.map((p) => {
+
+            {selectedProject ? (
+              (() => {
                 const budget =
-                  Number(p.labor_budget ?? 0) +
-                  Number(p.equipment_budget ?? 0) +
-                  Number(p.software_budget ?? 0) +
-                  Number(p.vendor_budget ?? 0);
-                const actual = actualByProject.get(p.id) ?? 0;
-                const revenue = Number(p.fixed_fee ?? 0) || Number(p.estimated_billing_amount ?? 0);
+                  Number(selectedProject.labor_budget ?? 0) +
+                  Number(selectedProject.equipment_budget ?? 0) +
+                  Number(selectedProject.software_budget ?? 0) +
+                  Number(selectedProject.vendor_budget ?? 0);
+                const actual = actualByProject.get(selectedProject.id) ?? 0;
+                const revenue =
+                  Number(selectedProject.fixed_fee ?? 0) ||
+                  Number(selectedProject.estimated_billing_amount ?? 0);
                 const margin = grossMarginPct(revenue, actual);
-                const pendingCr = pendingCrByProject.get(p.id) ?? 0;
+                const pendingCr = pendingCrByProject.get(selectedProject.id) ?? 0;
                 const needsApproval =
-                  p.status === "awaiting_customer_approval" || p.customer_approval_status === "pending";
-                const isSelected = p.id === selectedId;
-                const ms = milestonesByProject.get(p.id) ?? [];
+                  selectedProject.status === "awaiting_customer_approval" ||
+                  selectedProject.customer_approval_status === "pending";
+                const ms = milestonesByProject.get(selectedProject.id) ?? [];
                 const done = ms.filter((m) => m.completed).length;
-                const pct = projectCompletionPercent(p.status, done, ms.length);
+                const pct = projectCompletionPercent(selectedProject.status, done, ms.length);
 
                 return (
-                  <li key={p.id}>
-                    <Link
-                      href={`/projects?selected=${p.id}`}
-                      className={`block rounded-xl border px-3 py-2.5 shadow-sm transition ${
-                        isSelected
-                          ? "border-sky-400 bg-sky-100/70 ring-1 ring-sky-300/60"
-                          : "border-sky-100 bg-white/85 hover:border-sky-300 hover:bg-sky-50/60"
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold">{p.name}</p>
-                          <p className="truncate text-[11px] opacity-70">
-                            {customerName.get(p.customer_id) ?? "—"}
-                            {" · "}
-                            PM:{" "}
-                            {p.project_manager_id
-                              ? managerName.get(p.project_manager_id) ?? "—"
-                              : "Unassigned"}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 flex-wrap items-center gap-1">
-                          <StatusBadge status={p.status} />
-                          {needsApproval ? <StatusBadge status="pending" /> : null}
-                          {pendingCr > 0 ? (
-                            <span className="badge badge-warning badge-sm">{pendingCr} OOS</span>
-                          ) : null}
-                        </div>
+                  <div className="mt-4 rounded-xl border border-base-300 bg-base-200/40 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h2 className="text-lg font-semibold text-base-content">{selectedProject.name}</h2>
+                        <p className="mt-1 text-sm text-base-content/80">
+                          {customerName.get(selectedProject.customer_id) ?? "—"}
+                          {" · "}
+                          PM:{" "}
+                          {selectedProject.project_manager_id
+                            ? managerName.get(selectedProject.project_manager_id) ?? "—"
+                            : "Unassigned"}
+                        </p>
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px]">
-                        <div className="min-w-[7rem] flex-1">
-                          <div className="mb-0.5 flex justify-between gap-2 opacity-70">
-                            <span>Completion</span>
-                            <span className="tabular-nums">{pct}%</span>
-                          </div>
-                          <div className="h-1.5 overflow-hidden rounded-full bg-sky-900/10">
-                            <div
-                              className="h-full rounded-full bg-sky-500"
-                              style={{ width: `${Math.min(100, Math.max(4, pct))}%` }}
-                            />
-                          </div>
-                        </div>
-                        {isInternal ? (
-                          <StatusBadge status={marginBand(margin)} />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge status={selectedProject.status} />
+                        {needsApproval ? <StatusBadge status="pending" /> : null}
+                        {pendingCr > 0 ? (
+                          <span className="badge badge-warning badge-sm">{pendingCr} OOS</span>
                         ) : null}
-                        <span className="opacity-60">
-                          Target:{" "}
-                          {p.target_completion_date ? (
-                            <DateText value={p.target_completion_date} />
+                        {isInternal ? <StatusBadge status={marginBand(margin)} /> : null}
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <div className="mb-1 flex justify-between gap-2 text-xs font-medium text-base-content/80">
+                        <span>Completion</span>
+                        <span className="tabular-nums">{pct}%</span>
+                      </div>
+                      <div className="h-2.5 overflow-hidden rounded-full bg-base-300">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${Math.min(100, Math.max(4, pct))}%` }}
+                          role="progressbar"
+                          aria-valuenow={pct}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label={`Project ${pct}% complete`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <div className="text-sm text-base-content/90">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-base-content/60">
+                          Target
+                        </span>
+                        <p className="font-medium">
+                          {selectedProject.target_completion_date ? (
+                            <DateText value={selectedProject.target_completion_date} />
                           ) : (
                             "—"
                           )}
-                        </span>
-                        <span className="opacity-50">Full detail →</span>
+                        </p>
                       </div>
-                      <span className="sr-only">
-                        budget {budget} actual {actual}
-                      </span>
-                    </Link>
-                    <div className="mt-1 px-1">
-                      <Link
-                        className="text-[11px] opacity-60 hover:opacity-100"
-                        href={`/projects/${p.id}`}
-                      >
-                        Open full detail page
-                      </Link>
+                      {isInternal ? (
+                        <div className="text-sm text-base-content/90">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-base-content/60">
+                            Cost vs budget
+                          </span>
+                          <p className="font-medium tabular-nums">
+                            <Money value={actual} /> / <Money value={budget} />
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
-                  </li>
+                  </div>
                 );
-              })}
-            </ul>
+              })()
+            ) : null}
           </section>
 
-          <div className="space-y-3 xl:col-span-2">
-            {selectedProject ? (
-              <>
-                <div className="rounded-2xl border border-violet-200/80 bg-gradient-to-b from-violet-50/80 to-base-100 p-4 shadow-sm">
+          {selectedProject ? (
+            <div className="grid gap-3 xl:grid-cols-2">
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-base-300 bg-base-100 p-4 shadow-sm">
                   <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <h2 className="text-lg font-semibold tracking-tight">{selectedProject.name}</h2>
-                      <p className="text-sm opacity-70">
+                      <h2 className="text-lg font-semibold tracking-tight text-base-content">
+                        {selectedProject.name}
+                      </h2>
+                      <p className="text-sm text-base-content/80">
                         {customerName.get(selectedProject.customer_id) ?? "—"}
                       </p>
                     </div>
-                    <Link href={`/projects/${selectedProject.id}`} className="btn btn-sm btn-outline">
-                      Full Detail
-                    </Link>
-                  </div>
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    <StatusBadge status={selectedProject.status} />
-                    {selectedProject.customer_approval_status ? (
-                      <StatusBadge status={selectedProject.customer_approval_status} />
-                    ) : null}
-                    {selectedContract ? (
-                      <span className="badge badge-ghost">{selectedContract.contract_number}</span>
-                    ) : null}
+                    <div className="flex flex-wrap gap-2">
+                      <StatusBadge status={selectedProject.status} />
+                      {selectedProject.customer_approval_status ? (
+                        <StatusBadge status={selectedProject.customer_approval_status} />
+                      ) : null}
+                      {selectedContract ? (
+                        <span className="badge badge-outline">{selectedContract.contract_number}</span>
+                      ) : null}
+                    </div>
                   </div>
                   {selectedProject.description ? (
-                    <p className="mb-2 text-sm leading-relaxed opacity-80">{selectedProject.description}</p>
+                    <p className="mb-3 text-sm leading-relaxed text-base-content/90">
+                      {selectedProject.description}
+                    </p>
                   ) : (
-                    <p className="mb-2 text-sm opacity-60">No description provided.</p>
+                    <p className="mb-3 text-sm text-base-content/60">No description provided.</p>
                   )}
                   <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="rounded-xl border border-violet-100 bg-white/80 p-2.5">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60">
+                    <div className="rounded-xl border border-base-300 bg-base-200/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-base-content/60">
                         Est. Billing
                       </p>
-                      <p className="font-semibold tabular-nums">
+                      <p className="font-semibold tabular-nums text-base-content">
                         <Money
                           value={
                             Number(selectedProject.fixed_fee ?? 0) ||
@@ -534,49 +425,21 @@ export default async function ProjectsPage({
                         />
                       </p>
                     </div>
-                    <div className="rounded-xl border border-violet-100 bg-white/80 p-2.5">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60">
+                    <div className="rounded-xl border border-base-300 bg-base-200/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-base-content/60">
                         Billed / Collected
                       </p>
-                      <p className="font-semibold tabular-nums">
+                      <p className="font-semibold tabular-nums text-base-content">
                         <Money value={Number(selectedProject.amount_billed ?? 0)} /> /{" "}
                         <Money value={Number(selectedProject.amount_collected ?? 0)} />
                       </p>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                <div className="overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-b from-emerald-50/70 to-base-100 p-3 shadow-sm">
-                  <ProjectProgressCard
-                    status={selectedProject.status}
-                    startDate={selectedProject.start_date}
-                    targetCompletionDate={selectedProject.target_completion_date}
-                    projectManagerName={
-                      selectedProject.project_manager_id
-                        ? managerName.get(selectedProject.project_manager_id) ?? null
-                        : null
-                    }
-                    milestones={selectedMilestones.map((m) => ({
-                      id: m.id,
-                      name: m.name,
-                      completed: m.completed,
-                      approval_status: m.approval_status,
-                      due_date: m.due_date,
-                    }))}
-                    contract={selectedContract}
-                    laborHours={hoursByProject.get(selectedProject.id) ?? 0}
-                    materialsCost={materialsByProject.get(selectedProject.id) ?? 0}
-                    pendingChangeRequests={pendingCrByProject.get(selectedProject.id) ?? 0}
-                    pendingRequestedHours={selectedChangeRequests
-                      .filter((r) => r.approval_status === "pending")
-                      .reduce((sum, r) => sum + Number(r.estimated_hours ?? 0), 0)}
-                    pendingRequestedPrice={selectedChangeRequests
-                      .filter((r) => r.approval_status === "pending")
-                      .reduce((sum, r) => sum + Number(r.estimated_amount ?? 0), 0)}
-                  />
-                </div>
-
-                <div className="overflow-hidden rounded-2xl border border-amber-200/80 bg-gradient-to-b from-amber-50/70 to-base-100 p-3 shadow-sm">
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-base-300 bg-base-100 p-3 shadow-sm">
                   <ProjectActions
                     projectId={selectedProject.id}
                     projectName={selectedProject.name}
@@ -596,8 +459,8 @@ export default async function ProjectsPage({
                   />
                 </div>
 
-                <div className="overflow-hidden rounded-2xl border border-rose-200/70 bg-gradient-to-b from-rose-50/60 to-base-100 p-3 shadow-sm">
-                  <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-rose-900/80">
+                <div className="rounded-2xl border border-base-300 bg-base-100 p-3 shadow-sm">
+                  <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-base-content/70">
                     Out of Scope & Change Requests
                   </h2>
                   <ProjectChangeRequestPanel
@@ -609,14 +472,14 @@ export default async function ProjectsPage({
                     currentUserId={profile.id}
                   />
                 </div>
-              </>
-            ) : (
-              <EmptyState
-                title="Select a project"
-                description="Choose a card to review detail, approvals, and change requests."
-              />
-            )}
-          </div>
+              </div>
+            </div>
+          ) : (
+            <EmptyState
+              title="Select a project"
+              description="Use the dropdown above to review detail, approvals, and change requests."
+            />
+          )}
         </div>
       )}
     </ProjectsHomeVisuals>

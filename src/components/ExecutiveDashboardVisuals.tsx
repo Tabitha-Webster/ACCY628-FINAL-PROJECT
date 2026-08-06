@@ -133,7 +133,7 @@ export function ExecutiveDashboardVisuals({
     <div className="flex min-h-0 flex-col gap-3 overflow-hidden lg:h-[calc(100vh-7.5rem)]">
       <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-0.5">
-          <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Executive Dashboard</h1>
+          <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Manager Dashboard</h1>
           <p className="text-sm opacity-70">Welcome back, {fullName}.</p>
         </div>
         <Link

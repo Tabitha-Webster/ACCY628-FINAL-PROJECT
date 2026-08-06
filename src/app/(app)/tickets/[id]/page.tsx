@@ -18,6 +18,7 @@ import { hoursRemaining, usagePercentage } from "@/lib/calculations";
 import { evaluateTicketSla } from "@/lib/sla";
 import { completedTicketQualityIssues } from "@/lib/technicianWork";
 import { SlaConditionBadge, TicketSlaAlerts } from "@/components/SlaBadges";
+import { ServiceModeBadge, serviceModeLabel } from "@/components/ServiceModeBadge";
 import { TicketActions } from "@/components/TicketActions";
 import type { SupportTicket } from "@/lib/types";
 import type { UserRole } from "@/lib/constants";
@@ -270,6 +271,10 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
                 <StatusBadge status={t.priority} />
               )}
               {t.service_category ? <span className="badge badge-ghost">{t.service_category}</span> : null}
+              <ServiceModeBadge
+                mode={(t as SupportTicket).service_mode}
+                location={(t as SupportTicket).service_location}
+              />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Ticket number" value={t.ticket_number} />
@@ -285,6 +290,14 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
               />
               <Field label="Assigned technician" value={technicianRes.data?.full_name ?? "Unassigned"} />
               <Field label="Issue category" value={t.service_category ?? "—"} />
+              <Field
+                label="Job type"
+                value={serviceModeLabel((t as SupportTicket).service_mode)}
+              />
+              <Field
+                label="Service location"
+                value={(t as SupportTicket).service_location?.trim() || "—"}
+              />
             </div>
             <div className="mt-4">
               <p className="text-xs uppercase tracking-wide opacity-50">Request title</p>
@@ -687,6 +700,25 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
                   <StatusBadge status={t.priority} />
                 </dd>
               </div>
+              <div className="flex justify-between gap-3">
+                <dt className="opacity-60">Job type</dt>
+                <dd>
+                  <ServiceModeBadge
+                    mode={(t as SupportTicket).service_mode}
+                    location={(t as SupportTicket).service_location}
+                    showLocation={false}
+                    size="xs"
+                  />
+                </dd>
+              </div>
+              {(t as SupportTicket).service_location?.trim() ? (
+                <div className="flex justify-between gap-3">
+                  <dt className="opacity-60">Location</dt>
+                  <dd className="max-w-[12rem] text-right text-xs">
+                    {(t as SupportTicket).service_location}
+                  </dd>
+                </div>
+              ) : null}
               <div className="flex justify-between gap-3">
                 <dt className="opacity-60">SLA result</dt>
                 <dd>

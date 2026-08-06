@@ -226,9 +226,8 @@ export function aggregateContractHours(
 }
 
 type RpcClient = {
-  rpc: (
-    fn: string
-  ) => Promise<{ data: unknown; error: { message: string } | null }>;
+  // Supabase rpc() returns a thenable builder; accept any PromiseLike-compatible client.
+  rpc: (fn: string) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
 };
 
 /** Load under-worked contract hours for HR match scoring (RPC, then service-role fallback). */

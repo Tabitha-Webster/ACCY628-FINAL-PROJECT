@@ -7,8 +7,11 @@ import { Button } from "@/components/Button";
 import {
   CONTRACT_STATUS_LABELS,
   CONTRACT_TYPE_LABELS,
+  WORK_LOCATION_LABELS,
+  billedMonthlyRecurringFee,
   canExportContracts,
   getContractRenewalDate,
+  isWorkLocation,
   unwrapAssignedManager,
   unwrapCustomer,
   type ContractListRow,
@@ -48,7 +51,11 @@ function toExportRow(row: ContractListRow) {
     "End date": row.end_date || "",
     "Renewal type": row.renewal_type ? statusLabel(String(row.renewal_type)) : "",
     "Renewal date": renewalDate || "",
-    MRR: row.monthly_recurring_fee ?? "",
+    "Work location": isWorkLocation(row.work_location)
+      ? WORK_LOCATION_LABELS[row.work_location]
+      : "",
+    "Base MRR": row.monthly_recurring_fee ?? "",
+    "Billed MRR": billedMonthlyRecurringFee(row),
     "Included hours / month": row.included_hours_per_month ?? "",
     "Payment terms": row.payment_terms?.trim() || "",
     "Billing frequency": row.billing_frequency
@@ -99,12 +106,19 @@ export function ExportContractsButton({ rows, role }: Props) {
 
   if (!allowed) return null;
 
+  const tip =
+    rows.length === 0
+      ? "Export downloads an Excel (.xlsx) file of the contracts currently shown. Apply search or filters first — there is nothing to export right now."
+      : `Download an Excel (.xlsx) file of the ${rows.length} contract${rows.length === 1 ? "" : "s"} currently shown (matching your search and filters), including contract #, customer, status, dates, MRR, and account manager.`;
+
   return (
     <div className="space-y-2">
-      <Button type="button" variant="secondary" size="sm" onClick={onExport}>
-        <Download className="h-4 w-4" />
-        Export Contracts
-      </Button>
+      <div className="tooltip tooltip-left before:max-w-xs before:text-left" data-tip={tip}>
+        <Button type="button" variant="secondary" size="sm" onClick={onExport}>
+          <Download className="h-4 w-4" />
+          Export Contracts
+        </Button>
+      </div>
       {error ? (
         <div className="alert alert-error text-sm py-2 max-w-xl" role="alert">
           {error}

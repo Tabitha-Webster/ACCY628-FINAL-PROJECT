@@ -21,6 +21,7 @@ import {
   type WorkScope,
 } from "@/lib/technicianWork";
 import { statusLabel } from "@/lib/format";
+import { ServiceModeBadge } from "@/components/ServiceModeBadge";
 
 type Props = {
   ticketId: string;
@@ -42,6 +43,8 @@ type Props = {
   hasTimeEntryDescriptions: boolean;
   compact?: boolean;
   initialFocus?: "status" | "notes" | "time" | "scope" | "complete" | null;
+  serviceMode?: string | null;
+  serviceLocation?: string | null;
 };
 
 export function TechnicianWorkPanel({
@@ -64,6 +67,8 @@ export function TechnicianWorkPanel({
   hasTimeEntryDescriptions,
   compact = false,
   initialFocus = null,
+  serviceMode = null,
+  serviceLocation = null,
 }: Props) {
   const router = useRouter();
   const openStatuses = TECHNICIAN_STATUSES as readonly string[];
@@ -490,8 +495,28 @@ export function TechnicianWorkPanel({
         </div>
       ) : null}
 
+      <div
+        className={`rounded-box border px-3 py-2 ${
+          serviceMode === "onsite"
+            ? "border-warning/40 bg-warning/10"
+            : serviceMode === "remote"
+              ? "border-info/40 bg-info/10"
+              : "border-base-300 bg-base-200/40"
+        }`}
+      >
+        <p className="text-xs font-semibold uppercase tracking-wide opacity-60">How to work this job</p>
+        <div className="mt-1">
+          <ServiceModeBadge mode={serviceMode} location={serviceLocation} />
+        </div>
+        {!serviceMode ? (
+          <p className="mt-1 text-xs opacity-70">
+            A manager has not set onsite vs remote on this ticket yet.
+          </p>
+        ) : null}
+      </div>
+
       <form
-        className="space-y-4 rounded-box border border-base-300 bg-base-100 p-4"
+        className={`space-y-4 rounded-box border border-base-300 bg-base-100 p-4`}
         onSubmit={saveAll}
       >
         <div>

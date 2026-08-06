@@ -7,6 +7,7 @@ import { EmptyState, StatusBadge, Hours, DateText } from "@/components/ui";
 import { TicketSlaAlerts, SlaConditionBadge } from "@/components/SlaBadges";
 import { SlaCountdown } from "@/components/SlaCountdown";
 import { TechnicianWorkPanel } from "@/components/TechnicianWorkPanel";
+import { ServiceModeBadge } from "@/components/ServiceModeBadge";
 import {
   TechnicianHomeVisuals,
   type TechMetricFilter,
@@ -276,6 +277,7 @@ function TicketCard({
             </Link>
             <PriorityChip priority={ticket.priority} />
             <StatusBadge status={ticket.status} />
+            <ServiceModeBadge mode={ticket.service_mode} location={ticket.service_location} />
             <SlaConditionBadge condition={live.overall} />
             {ticket.hours_warning && ticket.hours_warning !== "normal" ? (
               <StatusBadge status={ticket.hours_warning} />
@@ -427,6 +429,8 @@ function TicketCard({
             hasTimeEntryDescriptions={false}
             compact
             initialFocus={workFocus}
+            serviceMode={ticket.service_mode}
+            serviceLocation={ticket.service_location}
           />
         </div>
       ) : null}

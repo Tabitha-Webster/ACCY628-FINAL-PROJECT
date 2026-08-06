@@ -39,11 +39,17 @@ export * from "./audit";
 export * from "./modifications";
 export * from "./renewals";
 export * from "./billing";
+export * from "./locationPricing";
 export * from "./reporting";
 export * from "./reportQueries";
 export * from "./customerMetrics";
 export * from "./calendarTypes";
 export * from "./calendarEvents";
+export * from "./signature-packets";
+// build-contract-pdf pulls jspdf/canvg — import it directly where needed, not from this barrel.
+// executive-waiting is re-exported via signature-packets for barrel consumers; client components
+// should import "@/lib/contracts/executive-waiting" directly.
+export * from "./demo-signature";
 
 
 

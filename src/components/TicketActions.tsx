@@ -431,6 +431,8 @@ export function TicketActions({
       contractHourlyRate={contractHourlyRate}
       recordedHours={recordedHours}
       hasTimeEntryDescriptions={hasTimeEntryDescriptions}
+      serviceMode={serviceMode}
+      serviceLocation={serviceLocation}
     />
   );
 }

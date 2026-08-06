@@ -12,7 +12,9 @@ import {
   CONTRACT_STATUS_LABELS,
   CONTRACT_TYPE_LABELS,
   CONTRACT_TYPES,
+  billedMonthlyRecurringFee,
   contractHighlightClass,
+  daysUntilDate,
   getContractHighlight,
   getContractRenewalDate,
   getContractWarnings,
@@ -31,6 +33,7 @@ type SortKey =
   | "contract_type"
   | "start_date"
   | "end_date"
+  | "days_to_end"
   | "mrr"
   | "renewal_date"
   | "manager";
@@ -38,6 +41,14 @@ type SortKey =
 type SortDir = "asc" | "desc";
 
 type DatePreset = "" | "next_30" | "next_60" | "next_90" | "past" | "custom";
+
+function formatDaysToEnd(days: number | null): string | null {
+  if (days == null) return null;
+  if (days === 0) return "Expires today";
+  if (days > 0) return `${days} day${days === 1 ? "" : "s"} left`;
+  const past = Math.abs(days);
+  return `${past} day${past === 1 ? "" : "s"} past`;
+}
 
 function inDateRange(
   value: string | null,
@@ -156,6 +167,7 @@ export function ContractsListClient({
       const customer = unwrapCustomer(row);
       const manager = unwrapAssignedManager(row);
       const renewalDate = getContractRenewalDate(row);
+      const highlight = getContractHighlight(row, now);
       const warnings = getContractWarnings(row, now).filter((w) =>
         [
           "ends_soon",
@@ -167,7 +179,6 @@ export function ContractsListClient({
           "expiration_warning",
         ].includes(w.code)
       );
-      // Prefer specific reminder badges over the generic renewal_soon duplicate
       const displayWarnings = warnings.filter((w) => {
         if (w.code === "renewal_soon") {
           return !warnings.some((x) =>
@@ -179,7 +190,7 @@ export function ContractsListClient({
         }
         return true;
       });
-      const highlight = getContractHighlight(row, now);
+      const endDays = daysUntilDate(row.end_date, now);
       return {
         row,
         customer,
@@ -187,7 +198,8 @@ export function ContractsListClient({
         renewalDate,
         warnings: displayWarnings,
         highlight,
-        mrr: Number(row.monthly_recurring_fee ?? 0),
+        daysUntilEnd: endDays,
+        mrr: billedMonthlyRecurringFee(row),
       };
     });
   }, [contracts, now]);
@@ -246,6 +258,15 @@ export function ContractsListClient({
         case "end_date":
           result = compareDate(a.row.end_date, b.row.end_date);
           break;
+        case "days_to_end": {
+          const aDays = a.daysUntilEnd;
+          const bDays = b.daysUntilEnd;
+          if (aDays == null && bDays == null) result = 0;
+          else if (aDays == null) result = 1;
+          else if (bDays == null) result = -1;
+          else result = aDays - bDays;
+          break;
+        }
         case "mrr":
           result = a.mrr - b.mrr;
           break;
@@ -280,41 +301,33 @@ export function ContractsListClient({
 
   const highlightCounts = useMemo(() => {
     const counts = {
-      ends_soon: 0,
-      renewal_soon: 0,
-      past_end_date: 0,
       renewal_90: 0,
       renewal_60: 0,
       renewal_30: 0,
+      ends_soon: 0,
+      past_end_date: 0,
     };
-    for (const item of enriched) {
-      if (item.highlight === "ends_soon" || item.highlight === "renewal_30") counts.ends_soon += 1;
-      if (
-        item.highlight === "renewal_soon" ||
-        item.highlight === "renewal_60" ||
-        item.highlight === "renewal_90"
-      ) {
-        counts.renewal_soon += 1;
-      }
-      if (item.highlight === "past_end_date") counts.past_end_date += 1;
+    for (const item of filtered) {
       if (item.highlight === "renewal_90") counts.renewal_90 += 1;
-      if (item.highlight === "renewal_60") counts.renewal_60 += 1;
-      if (item.highlight === "renewal_30") counts.renewal_30 += 1;
+      else if (item.highlight === "renewal_60" || item.highlight === "renewal_soon") {
+        counts.renewal_60 += 1;
+      } else if (item.highlight === "renewal_30") counts.renewal_30 += 1;
+      else if (item.highlight === "ends_soon") counts.ends_soon += 1;
+      else if (item.highlight === "past_end_date") counts.past_end_date += 1;
     }
     return counts;
-  }, [enriched]);
+  }, [filtered]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
       setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      setSortDir(key === "mrr" || key === "end_date" || key === "renewal_date" ? "asc" : "asc");
+      setSortDir("asc");
     }
   }
 
   function clearFilters() {
-    setSearch("");
     setCustomerId("");
     setStatus("");
     setContractType("");
@@ -328,7 +341,6 @@ export function ContractsListClient({
   }
 
   const hasFilters =
-    search ||
     customerId ||
     status ||
     contractType ||
@@ -371,6 +383,7 @@ export function ContractsListClient({
                   placeholder="Search contract #, name, customer, manager…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  aria-label="Search contracts"
                 />
               </div>
             </label>
@@ -546,8 +559,11 @@ export function ContractsListClient({
               Past end date: {highlightCounts.past_end_date}
             </span>
           </div>
+
           {role ? (
-            <ExportContractsButton rows={filtered.map((item) => item.row)} role={role} />
+            <div className="ml-auto">
+              <ExportContractsButton rows={filtered.map((item) => item.row)} role={role} />
+            </div>
           ) : null}
         </div>
       </div>
@@ -591,6 +607,9 @@ export function ContractsListClient({
                       <SortHeader label="End" column="end_date" />
                     </th>
                     <th>
+                      <SortHeader label="Days to end" column="days_to_end" />
+                    </th>
+                    <th>
                       <SortHeader label="MRR" column="mrr" />
                     </th>
                     <th>
@@ -605,7 +624,7 @@ export function ContractsListClient({
                 </thead>
                 <tbody>
                   {filtered.map(
-                    ({ row, customer, manager, renewalDate, warnings, highlight, mrr }) => (
+                    ({ row, customer, manager, renewalDate, warnings, highlight, daysUntilEnd, mrr }) => (
                       <tr key={row.id} className={contractHighlightClass(highlight)}>
                         <td className="font-mono text-xs">{row.contract_number}</td>
                         <td>
@@ -618,10 +637,7 @@ export function ContractsListClient({
                           )}
                         </td>
                         <td>
-                          <Link
-                            href={`/contracts/${row.id}`}
-                            className="link link-hover font-medium"
-                          >
+                          <Link href={`/contracts/${row.id}`} className="link link-hover font-medium">
                             {row.name}
                           </Link>
                         </td>
@@ -643,6 +659,19 @@ export function ContractsListClient({
                         </td>
                         <td className="whitespace-nowrap text-xs">{formatDate(row.start_date)}</td>
                         <td className="whitespace-nowrap text-xs">{formatDate(row.end_date)}</td>
+                        <td className="whitespace-nowrap text-xs">
+                          {(() => {
+                            const label = formatDaysToEnd(daysUntilEnd);
+                            if (!label) return <span className="opacity-40">—</span>;
+                            if (daysUntilEnd != null && daysUntilEnd < 0) {
+                              return <span className="font-medium text-error">{label}</span>;
+                            }
+                            if (daysUntilEnd != null && daysUntilEnd <= 30) {
+                              return <span className="font-medium text-warning">{label}</span>;
+                            }
+                            return <span>{label}</span>;
+                          })()}
+                        </td>
                         <td className="whitespace-nowrap">
                           <Money value={mrr} />
                         </td>
@@ -688,12 +717,15 @@ export function ContractsListClient({
                                 href={`/contracts/${row.id}/edit`}
                                 className="btn btn-ghost btn-xs"
                               >
-                                Edit
+                                {row.status === "draft" ? "Continue" : "Edit"}
                               </Link>
                             ) : null}
                             {row.status === "pending_approval" ? (
-                              <Link href={`/contracts/${row.id}`} className="btn btn-primary btn-xs">
-                                Approve
+                              <Link
+                                href={`/contracts/${row.id}${role === "executive" ? "#pdf-signatures" : ""}`}
+                                className="btn btn-primary btn-xs"
+                              >
+                                {role === "executive" ? "Review & sign" : "Review"}
                               </Link>
                             ) : null}
                             {row.status === "active" || row.status === "expired" ? (

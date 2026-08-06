@@ -63,27 +63,33 @@ export function statusLabel(status: string) {
 
 export function statusBadgeClass(status: string) {
   const s = status.toLowerCase();
+  // Contract lifecycle — each status gets a distinct color (see View and Edit legend).
+  if (s === "draft") return "border-stone-300 bg-stone-200 text-stone-700";
+  if (s === "pending_approval") return "badge-warning";
+  if (s === "active") return "badge-success";
+  if (s === "on_hold") return "border-violet-300 bg-violet-100 text-violet-800";
+  if (s === "expired") return "badge-neutral";
+  if (s === "canceled") return "badge-error";
+  if (s === "renewed") return "badge-info";
+
   if (
-    ["paid", "approved", "resolved", "closed", "met", "normal", "filled", "renewed", "sent", "loyal", "expired"].includes(
+    ["paid", "approved", "resolved", "closed", "met", "normal", "filled", "sent", "loyal"].includes(
       s
     )
   )
     return "badge-success";
-  if (["disputed", "overdue", "issued", "steady", "active"].includes(s)) return "badge-ghost";
+  if (["disputed", "overdue", "issued", "steady"].includes(s)) return "badge-ghost";
   if (s === "current" || s === "new") return "badge-info";
   if (
     [
       "pending",
-      "pending_approval",
       "awaiting_billing",
-      "draft",
       "warning",
       "at_risk",
       "partially_paid",
       "in_progress",
       "assigned",
       "open",
-      "on_hold",
       "medium",
       "not_yet_due",
       "replacement_parts",
@@ -94,7 +100,6 @@ export function statusBadgeClass(status: string) {
   if (
     [
       "rejected",
-      "canceled",
       "missed",
       "over_limit",
       "unprofitable",
@@ -104,6 +109,6 @@ export function statusBadgeClass(status: string) {
     ].includes(s)
   )
     return "badge-error";
-  if (["low", "new", "not_defined"].includes(s)) return "badge-ghost";
+  if (["low", "not_defined"].includes(s)) return "badge-ghost";
   return "badge-ghost";
 }
