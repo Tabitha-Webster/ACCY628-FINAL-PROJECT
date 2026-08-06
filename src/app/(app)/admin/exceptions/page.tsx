@@ -1,311 +1,328 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { requireAdmin, OPEN_TICKET_STATUSES } from "@/lib/admin";
-import { PageHeader, StatCard, DataTable, EmptyState, ErrorState, StatusBadge, Hours, Money, DateText } from "@/components/ui";
-import { slaStatus } from "@/lib/calculations";
+import { requireAdmin } from "@/lib/admin";
+import { PageHeader, StatCard, EmptyState } from "@/components/ui";
+import { PAGE_PERMISSION_CATALOG } from "@/lib/role-permissions";
+import type { UserRole } from "@/lib/constants";
+
+type ExceptionKind = "Failed job" | "Permission error" | "Sync failure";
+type ExceptionSeverity = "critical" | "warning";
+
+type TechnicalException = {
+  id: string;
+  kind: ExceptionKind;
+  severity: ExceptionSeverity;
+  title: string;
+  detail: string;
+  affectedProcess: string;
+  href: string;
+  action: string;
+};
+
+const EXPECTED_PERMISSION_ROWS = PAGE_PERMISSION_CATALOG.length;
+const ACCESS_ROLES: UserRole[] = ["admin", "manager", "technician", "billing", "customer", "hr"];
 
 export default async function AdminExceptionsPage() {
   await requireAdmin();
   const supabase = await createClient();
-  const today = new Date().toISOString().slice(0, 10);
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() - 7);
+  const sevenDaysAgo = cutoff.toISOString();
+  const sevenDaysAgoDate = sevenDaysAgo.slice(0, 10);
 
   const [
-    ticketsRes,
-    pendingWorkRes,
-    pendingTimeRes,
-    pendingCostsRes,
-    overdueInvoicesRes,
-    disputesRes,
-    unassignedRes,
-    inactiveUsersRes,
+    staleDraftsRes,
+    staleWorkRes,
+    staleTimeRes,
+    staleCostsRes,
+    permissionsRes,
+    profilesRes,
+    paymentsRes,
+    contractsRes,
+    invoiceStoreRes,
+    paymentStoreRes,
+    permissionStoreRes,
   ] = await Promise.all([
     supabase
-      .from("support_tickets")
-      .select("id, ticket_number, title, status, priority, target_resolution_at, completed_at, customers(name)")
-      .in("status", OPEN_TICKET_STATUSES)
-      .order("target_resolution_at", { ascending: true }),
+      .from("invoices")
+      .select("id, invoice_number, created_at", { count: "exact" })
+      .eq("status", "draft")
+      .lt("created_at", sevenDaysAgo)
+      .order("created_at", { ascending: true }),
     supabase
       .from("additional_work_requests")
-      .select("id, title, estimated_hours, estimated_amount, created_at, customers(name)")
+      .select("id, title, created_at", { count: "exact" })
       .eq("approval_status", "pending")
+      .lt("created_at", sevenDaysAgo)
       .order("created_at", { ascending: true }),
     supabase
       .from("time_entries")
-      .select("id, hours_worked, work_date, description, technician_id, customers(name)")
+      .select("id, work_date", { count: "exact" })
       .eq("approval_status", "pending")
-      .order("work_date", { ascending: false })
-      .limit(20),
+      .lt("work_date", sevenDaysAgoDate)
+      .order("work_date", { ascending: true }),
     supabase
       .from("direct_costs")
-      .select("id, cost_category, internal_cost, billable_amount, cost_date, description, customers(name)")
+      .select("id, cost_date", { count: "exact" })
       .eq("approval_status", "pending")
-      .order("cost_date", { ascending: false })
-      .limit(20),
+      .lt("cost_date", sevenDaysAgoDate)
+      .order("cost_date", { ascending: true }),
+    supabase.from("role_page_permissions").select("role, page_key, can_view"),
+    supabase.from("profiles").select("id, full_name, email, role, is_active").eq("is_active", true),
+    supabase.from("payments").select("id, payment_number, payment_date, payment_applications(id)"),
     supabase
-      .from("invoices")
-      .select("id, invoice_number, due_date, remaining_balance, status, customers(name)")
-      .or(`status.eq.overdue,and(due_date.lt.${today},remaining_balance.gt.0)`)
-      .order("due_date", { ascending: true })
-      .limit(20),
-    supabase
-      .from("disputes")
-      .select("id, dispute_reason, disputed_amount, resolution_status, dispute_date, customers(name)")
-      .in("resolution_status", ["open", "under_review"])
-      .order("dispute_date", { ascending: false }),
-    supabase
-      .from("support_tickets")
-      .select("id, ticket_number, title, priority, status, customers(name)")
-      .in("status", OPEN_TICKET_STATUSES)
-      .is("assigned_technician_id", null),
-    supabase.from("profiles").select("id, full_name, email, role").eq("is_active", false),
+      .from("contracts")
+      .select("id, contract_number, billing_frequency, payment_terms")
+      .eq("status", "active")
+      .or("billing_frequency.is.null,payment_terms.is.null"),
+    supabase.from("invoices").select("id", { count: "exact", head: true }),
+    supabase.from("payments").select("id", { count: "exact", head: true }),
+    supabase.from("role_page_permissions").select("role", { count: "exact", head: true }),
   ]);
 
-  const error =
-    ticketsRes.error ||
-    pendingWorkRes.error ||
-    pendingTimeRes.error ||
-    pendingCostsRes.error ||
-    overdueInvoicesRes.error ||
-    disputesRes.error ||
-    unassignedRes.error ||
-    inactiveUsersRes.error;
+  const exceptions: TechnicalException[] = [];
 
-  const slaIssues = (ticketsRes.data ?? [])
-    .map((t) => ({ ...t, sla: slaStatus(t.target_resolution_at, t.completed_at) }))
-    .filter((t) => t.sla === "at_risk" || t.sla === "missed");
+  const failedChecks = [
+    { name: "Invoice processing job", error: staleDraftsRes.error, process: "Invoice generation" },
+    { name: "Approval workflow job", error: staleWorkRes.error, process: "Additional-work approval" },
+    { name: "Time approval job", error: staleTimeRes.error, process: "Time-to-bill handoff" },
+    { name: "Cost approval job", error: staleCostsRes.error, process: "Cost-to-bill handoff" },
+    { name: "Invoice data service", error: invoiceStoreRes.error, process: "Billing" },
+    { name: "Payment data service", error: paymentStoreRes.error, process: "Cash application" },
+  ];
 
-  const pendingWork = pendingWorkRes.data ?? [];
-  const pendingTime = pendingTimeRes.data ?? [];
-  const pendingCosts = pendingCostsRes.data ?? [];
-  const overdueInvoices = overdueInvoicesRes.data ?? [];
-  const disputes = disputesRes.data ?? [];
-  const unassigned = unassignedRes.data ?? [];
-  const inactiveUsers = inactiveUsersRes.data ?? [];
+  for (const check of failedChecks) {
+    if (!check.error) continue;
+    exceptions.push({
+      id: `failed-${check.name}`,
+      kind: "Failed job",
+      severity: "critical",
+      title: `${check.name} failed`,
+      detail: check.error.message,
+      affectedProcess: check.process,
+      href: "/admin/system",
+      action: "Platform Status",
+    });
+  }
 
-  const techIds = Array.from(new Set(pendingTime.map((e) => e.technician_id).filter(Boolean)));
-  const techNamesRes = techIds.length
-    ? await supabase.from("profiles").select("id, full_name").in("id", techIds)
-    : { data: [] as { id: string; full_name: string }[] };
-  const techName = new Map((techNamesRes.data ?? []).map((p) => [p.id, p.full_name]));
+  if (!staleDraftsRes.error && (staleDraftsRes.count ?? 0) > 0) {
+    exceptions.push({
+      id: "stale-draft-invoices",
+      kind: "Failed job",
+      severity: "critical",
+      title: "Invoice generation did not complete",
+      detail: `${staleDraftsRes.count} draft invoice(s) have remained unissued for more than 7 days.`,
+      affectedProcess: "Billing → Collections",
+      href: "/admin/alerts",
+      action: "View Alerts",
+    });
+  }
+
+  const staleApprovals =
+    (staleWorkRes.count ?? 0) + (staleTimeRes.count ?? 0) + (staleCostsRes.count ?? 0);
+  if (!staleWorkRes.error && !staleTimeRes.error && !staleCostsRes.error && staleApprovals > 0) {
+    exceptions.push({
+      id: "stale-approval-workflow",
+      kind: "Failed job",
+      severity: "warning",
+      title: "Approval workflow is stalled",
+      detail: `${staleApprovals} approval item(s) have remained pending for more than 7 days.`,
+      affectedProcess: "Approval → Ready to Bill",
+      href: "/admin/alerts",
+      action: "View Alerts",
+    });
+  }
+
+  if (permissionStoreRes.error || permissionsRes.error) {
+    exceptions.push({
+      id: "permission-store-error",
+      kind: "Permission error",
+      severity: "critical",
+      title: "Role permission service is unavailable",
+      detail: (permissionStoreRes.error || permissionsRes.error)?.message ?? "Permission rows could not be read.",
+      affectedProcess: "Authentication and page authorization",
+      href: "/admin/role-permissions",
+      action: "Role Permissions",
+    });
+  } else {
+    const permissionRows = permissionsRes.data ?? [];
+    const rowsByRole = new Map<UserRole, Set<string>>();
+    for (const role of ACCESS_ROLES) rowsByRole.set(role, new Set());
+    for (const row of permissionRows) {
+      const role = row.role as UserRole;
+      rowsByRole.get(role)?.add(row.page_key);
+    }
+
+    for (const role of ACCESS_ROLES) {
+      const rowCount = rowsByRole.get(role)?.size ?? 0;
+      if (rowCount >= EXPECTED_PERMISSION_ROWS) continue;
+      exceptions.push({
+        id: `permission-matrix-${role}`,
+        kind: "Permission error",
+        severity: "critical",
+        title: `${role} permission matrix is incomplete`,
+        detail: `${EXPECTED_PERMISSION_ROWS - rowCount} page permission definition(s) are missing for this role.`,
+        affectedProcess: "Role-based page access",
+        href: "/admin/role-permissions",
+        action: "Repair Permissions",
+      });
+    }
+  }
+
+  if (profilesRes.error) {
+    exceptions.push({
+      id: "profile-access-error",
+      kind: "Permission error",
+      severity: "critical",
+      title: "Active-user permission check failed",
+      detail: profilesRes.error.message,
+      affectedProcess: "Portal access",
+      href: "/admin/users",
+      action: "Manage Access",
+    });
+  } else {
+    const rolesWithPermissions = new Set((permissionsRes.data ?? []).map((row) => row.role));
+    const affectedUsers = (profilesRes.data ?? []).filter((profile) => !rolesWithPermissions.has(profile.role));
+    if (affectedUsers.length > 0) {
+      exceptions.push({
+        id: "users-without-permission-role",
+        kind: "Permission error",
+        severity: "critical",
+        title: "Active users have no permission matrix",
+        detail: `${affectedUsers.length} active user(s) are assigned a role with no stored page permissions.`,
+        affectedProcess: "Login → Authorized workspace",
+        href: "/admin/users",
+        action: "Manage Access",
+      });
+    }
+  }
+
+  if (paymentsRes.error) {
+    exceptions.push({
+      id: "payment-sync-query",
+      kind: "Sync failure",
+      severity: "critical",
+      title: "Payment-to-invoice sync check failed",
+      detail: paymentsRes.error.message,
+      affectedProcess: "Cash application",
+      href: "/admin/system",
+      action: "Platform Status",
+    });
+  } else {
+    const unappliedPayments = (paymentsRes.data ?? []).filter((payment) => {
+      const applications = payment.payment_applications;
+      return !Array.isArray(applications) || applications.length === 0;
+    });
+    if (unappliedPayments.length > 0) {
+      exceptions.push({
+        id: "unapplied-payment-sync",
+        kind: "Sync failure",
+        severity: "critical",
+        title: "Payments are not synchronized to invoices",
+        detail: `${unappliedPayments.length} payment(s) have no invoice application.`,
+        affectedProcess: "Payment → Accounts Receivable",
+        href: "/admin/system",
+        action: "Platform Status",
+      });
+    }
+  }
+
+  if (contractsRes.error) {
+    exceptions.push({
+      id: "contract-sync-query",
+      kind: "Sync failure",
+      severity: "critical",
+      title: "Contract-to-billing sync check failed",
+      detail: contractsRes.error.message,
+      affectedProcess: "Contract → Invoice generation",
+      href: "/admin/system",
+      action: "Platform Status",
+    });
+  } else if ((contractsRes.data ?? []).length > 0) {
+    exceptions.push({
+      id: "contract-billing-sync",
+      kind: "Sync failure",
+      severity: "critical",
+      title: "Active contracts are not billing-ready",
+      detail: `${contractsRes.data?.length ?? 0} active contract(s) are missing billing frequency or payment terms.`,
+      affectedProcess: "Contract → Invoice generation",
+      href: "/admin/alerts",
+      action: "View Alerts",
+    });
+  }
+
+  const failedJobs = exceptions.filter((item) => item.kind === "Failed job").length;
+  const permissionErrors = exceptions.filter((item) => item.kind === "Permission error").length;
+  const syncFailures = exceptions.filter((item) => item.kind === "Sync failure").length;
+  const critical = exceptions.filter((item) => item.severity === "critical").length;
 
   return (
-    <div className="space-y-8">
+    <div>
       <PageHeader
-        title="Exceptions Queue"
-        description="Items that need admin or manager attention across service, approvals, billing, and access."
+        title="Exception Log"
+        description="Technical and process breakages affecting jobs, permissions, and data synchronization."
         actions={
-          <Link href="/admin" className="btn btn-sm btn-outline">
-            Back to Admin Console
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/admin/system" className="btn btn-sm btn-outline">
+              Platform Status
+            </Link>
+            <Link href="/admin" className="btn btn-sm btn-outline">
+              Back to Home
+            </Link>
+          </div>
         }
       />
 
-      {error ? <ErrorState message={error.message} /> : null}
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="SLA Issues" value={String(slaIssues.length)} tone={slaIssues.length ? "error" : "success"} />
-        <StatCard label="Pending Approvals" value={String(pendingWork.length + pendingTime.length + pendingCosts.length)} tone="warning" />
-        <StatCard label="Overdue Invoices" value={String(overdueInvoices.length)} tone={overdueInvoices.length ? "error" : "success"} />
-        <StatCard label="Unassigned Tickets" value={String(unassigned.length)} tone={unassigned.length ? "warning" : "success"} />
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Failed jobs" value={String(failedJobs)} tone={failedJobs ? "error" : "success"} />
+        <StatCard
+          label="Permission errors"
+          value={String(permissionErrors)}
+          tone={permissionErrors ? "error" : "success"}
+        />
+        <StatCard
+          label="Sync failures"
+          value={String(syncFailures)}
+          tone={syncFailures ? "error" : "success"}
+        />
+        <StatCard label="Critical" value={String(critical)} tone={critical ? "error" : "success"} />
       </div>
 
-      <section>
-        <h2 className="mb-2 text-sm font-semibold">SLA at risk / missed</h2>
-        {slaIssues.length === 0 ? (
-          <EmptyState title="No SLA exceptions" />
-        ) : (
-          <DataTable headers={["Ticket", "Customer", "Priority", "Status", "SLA"]}>
-            {slaIssues.map((t) => (
-              <tr key={t.id}>
-                <td>
-                  <Link className="link link-hover" href={`/tickets/${t.id}`}>
-                    {t.ticket_number} · {t.title}
-                  </Link>
-                </td>
-                <td>{(t.customers as { name?: string } | null)?.name ?? "—"}</td>
-                <td>
-                  <StatusBadge status={t.priority} />
-                </td>
-                <td>
-                  <StatusBadge status={t.status} />
-                </td>
-                <td>
-                  <StatusBadge status={t.sla} />
-                </td>
-              </tr>
-            ))}
-          </DataTable>
-        )}
-      </section>
-
-      <section>
-        <h2 className="mb-2 text-sm font-semibold">Unassigned open tickets</h2>
-        {unassigned.length === 0 ? (
-          <EmptyState title="All open tickets are assigned" />
-        ) : (
-          <DataTable headers={["Ticket", "Customer", "Priority", "Status"]}>
-            {unassigned.map((t) => (
-              <tr key={t.id}>
-                <td>
-                  <Link className="link link-hover" href={`/tickets/${t.id}`}>
-                    {t.ticket_number} · {t.title}
-                  </Link>
-                </td>
-                <td>{(t.customers as { name?: string } | null)?.name ?? "—"}</td>
-                <td>
-                  <StatusBadge status={t.priority} />
-                </td>
-                <td>
-                  <StatusBadge status={t.status} />
-                </td>
-              </tr>
-            ))}
-          </DataTable>
-        )}
-      </section>
-
-      <section>
-        <h2 className="mb-2 text-sm font-semibold">Pending additional work</h2>
-        {pendingWork.length === 0 ? (
-          <EmptyState title="No pending additional work" />
-        ) : (
-          <DataTable headers={["Request", "Customer", "Est. Hours", "Est. Amount", "Submitted"]}>
-            {pendingWork.map((w) => (
-              <tr key={w.id}>
-                <td>
-                  <Link className="link link-hover" href="/additional-work">
-                    {w.title}
-                  </Link>
-                </td>
-                <td>{(w.customers as { name?: string } | null)?.name ?? "—"}</td>
-                <td>{w.estimated_hours != null ? <Hours value={Number(w.estimated_hours)} /> : "—"}</td>
-                <td>{w.estimated_amount != null ? <Money value={Number(w.estimated_amount)} /> : "—"}</td>
-                <td>
-                  <DateText value={w.created_at} />
-                </td>
-              </tr>
-            ))}
-          </DataTable>
-        )}
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Pending time approvals</h2>
-          {pendingTime.length === 0 ? (
-            <EmptyState title="No pending time entries" />
-          ) : (
-            <DataTable headers={["Date", "Technician", "Customer", "Hours"]}>
-              {pendingTime.map((e) => (
-                <tr key={e.id}>
-                  <td>
-                    <DateText value={e.work_date} />
-                  </td>
-                  <td>{techName.get(e.technician_id) ?? "—"}</td>
-                  <td>{(e.customers as { name?: string } | null)?.name ?? "—"}</td>
-                  <td>
-                    <Hours value={Number(e.hours_worked)} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
+      {exceptions.length === 0 ? (
+        <EmptyState title="No technical or process exceptions detected" />
+      ) : (
+        <div className="space-y-3">
+          {exceptions.map((item) => (
+            <div
+              key={item.id}
+              className={`flex flex-col gap-3 rounded-box border bg-base-100 p-4 sm:flex-row sm:items-center sm:justify-between ${
+                item.severity === "critical" ? "border-error/50" : "border-warning/50"
+              }`}
+            >
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`badge badge-sm ${
+                      item.severity === "critical" ? "badge-error" : "badge-warning"
+                    }`}
+                  >
+                    {item.severity}
+                  </span>
+                  <span className="badge badge-ghost badge-sm">{item.kind}</span>
+                  <p className="font-semibold">{item.title}</p>
+                </div>
+                <p className="mt-1 text-sm opacity-70">{item.detail}</p>
+                <p className="mt-1 text-xs font-medium uppercase tracking-wide opacity-60">
+                  Affected process: {item.affectedProcess}
+                </p>
+              </div>
+              <Link href={item.href} className="btn btn-sm btn-primary shrink-0">
+                {item.action}
+              </Link>
+            </div>
+          ))}
         </div>
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Pending cost approvals</h2>
-          {pendingCosts.length === 0 ? (
-            <EmptyState title="No pending direct costs" />
-          ) : (
-            <DataTable headers={["Date", "Customer", "Category", "Billable"]}>
-              {pendingCosts.map((c) => (
-                <tr key={c.id}>
-                  <td>
-                    <DateText value={c.cost_date} />
-                  </td>
-                  <td>{(c.customers as { name?: string } | null)?.name ?? "—"}</td>
-                  <td>
-                    <StatusBadge status={c.cost_category} />
-                  </td>
-                  <td>
-                    <Money value={Number(c.billable_amount)} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-      </section>
-
-      <section>
-        <h2 className="mb-2 text-sm font-semibold">Overdue / past-due invoices</h2>
-        {overdueInvoices.length === 0 ? (
-          <EmptyState title="No overdue invoices" />
-        ) : (
-          <DataTable headers={["Invoice", "Customer", "Due", "Status", "Balance"]}>
-            {overdueInvoices.map((inv) => (
-              <tr key={inv.id}>
-                <td>
-                  <Link className="link link-hover" href={`/invoices/${inv.id}`}>
-                    {inv.invoice_number}
-                  </Link>
-                </td>
-                <td>{(inv.customers as { name?: string } | null)?.name ?? "—"}</td>
-                <td>
-                  <DateText value={inv.due_date} />
-                </td>
-                <td>
-                  <StatusBadge status={inv.status} />
-                </td>
-                <td>
-                  <Money value={Number(inv.remaining_balance)} />
-                </td>
-              </tr>
-            ))}
-          </DataTable>
-        )}
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Open disputes</h2>
-          {disputes.length === 0 ? (
-            <EmptyState title="No open disputes" />
-          ) : (
-            <DataTable headers={["Customer", "Reason", "Amount", "Status"]}>
-              {disputes.map((d) => (
-                <tr key={d.id}>
-                  <td>{(d.customers as { name?: string } | null)?.name ?? "—"}</td>
-                  <td className="max-w-xs truncate">{d.dispute_reason}</td>
-                  <td>
-                    <Money value={Number(d.disputed_amount)} />
-                  </td>
-                  <td>
-                    <StatusBadge status={d.resolution_status} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Inactive user accounts</h2>
-          {inactiveUsers.length === 0 ? (
-            <EmptyState title="No inactive users" />
-          ) : (
-            <DataTable headers={["Name", "Email", "Role"]}>
-              {inactiveUsers.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.full_name}</td>
-                  <td>{u.email}</td>
-                  <td>
-                    <StatusBadge status={u.role} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-      </section>
+      )}
     </div>
   );
 }

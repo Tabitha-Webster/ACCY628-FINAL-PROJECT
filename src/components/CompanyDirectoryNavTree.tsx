@@ -8,19 +8,10 @@ import { hrefAllowedByPageKeys } from "@/lib/role-permissions";
 
 type NavLink = { href: string; label: string };
 
-const BILLING_LINKS: NavLink[] = [
-  { href: "/billing-review", label: "Overview" },
-  { href: "/billing-cost-approvals", label: "Approve Costs" },
-  { href: "/invoices", label: "Invoices" },
-  { href: "/hr-analytics", label: "HR Cost Analytics" },
+const COMPANY_DIRECTORY_LINKS: NavLink[] = [
+  { href: "/admin/employees", label: "Employees" },
+  { href: "/customers", label: "Customers" },
 ];
-
-const COLLECTIONS_LINKS: NavLink[] = [
-  { href: "/accounts-receivable", label: "Accounts Receivable" },
-  { href: "/payments", label: "Payment History" },
-];
-
-const ACCOUNTING_LINKS: NavLink[] = [{ href: "/accounting", label: "Accounting Review" }];
 
 function pathActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
@@ -30,17 +21,19 @@ function sectionActive(pathname: string, links: NavLink[]) {
   return links.some((link) => pathActive(pathname, link.href));
 }
 
-function NavSection({
-  title,
-  links,
+export function CompanyDirectoryNavTree({
   onNavigate,
+  allowedPageKeys = null,
 }: {
-  title: string;
-  links: NavLink[];
   onNavigate?: () => void;
+  allowedPageKeys?: Set<string> | null;
 }) {
   const pathname = usePathname();
-  const [open, setOpen] = useState(() => sectionActive(pathname, links));
+  const links = useMemo(
+    () => COMPANY_DIRECTORY_LINKS.filter((link) => hrefAllowedByPageKeys(link.href, allowedPageKeys)),
+    [allowedPageKeys]
+  );
+  const [open, setOpen] = useState(() => sectionActive(pathname, COMPANY_DIRECTORY_LINKS));
 
   if (links.length === 0) return null;
 
@@ -52,7 +45,7 @@ function NavSection({
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <span>{title}</span>
+        <span>Company Directory</span>
         {open ? (
           <Minus className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
         ) : (
@@ -79,37 +72,6 @@ function NavSection({
           })}
         </div>
       ) : null}
-    </div>
-  );
-}
-
-export function BillingStaffNavTree({
-  onNavigate,
-  allowedPageKeys = null,
-}: {
-  onNavigate?: () => void;
-  allowedPageKeys?: Set<string> | null;
-}) {
-  const billing = useMemo(
-    () => BILLING_LINKS.filter((link) => hrefAllowedByPageKeys(link.href, allowedPageKeys)),
-    [allowedPageKeys]
-  );
-  const collections = useMemo(
-    () => COLLECTIONS_LINKS.filter((link) => hrefAllowedByPageKeys(link.href, allowedPageKeys)),
-    [allowedPageKeys]
-  );
-  const accounting = useMemo(
-    () => ACCOUNTING_LINKS.filter((link) => hrefAllowedByPageKeys(link.href, allowedPageKeys)),
-    [allowedPageKeys]
-  );
-
-  if (billing.length + collections.length + accounting.length === 0) return null;
-
-  return (
-    <div className="space-y-1">
-      <NavSection title="Billing" links={billing} onNavigate={onNavigate} />
-      <NavSection title="Collections" links={collections} onNavigate={onNavigate} />
-      <NavSection title="Accounting" links={accounting} onNavigate={onNavigate} />
     </div>
   );
 }

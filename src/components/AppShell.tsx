@@ -6,11 +6,16 @@ import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight, PanelLeft, PanelLeftClose } from "lucide-react";
 import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
 import { BillingStaffNavTree } from "@/components/BillingStaffNavTree";
+import { CompanyDirectoryNavTree } from "@/components/CompanyDirectoryNavTree";
 import { ContractsAgreementsNavTree } from "@/components/ContractsAgreementsNavTree";
 import { CustomerBillingNavTree } from "@/components/CustomerBillingNavTree";
+import { SystemNavTree } from "@/components/SystemNavTree";
+import { UserAccessNavTree } from "@/components/UserAccessNavTree";
+import { HeaderPageSearch } from "@/components/HeaderPageSearch";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { UserSettingsPanel } from "@/components/UserSettingsPanel";
 import { isManagerRole, ROLE_NAV, roleHomePath, type Profile, type UserRole } from "@/lib/constants";
+import { hrefAllowedByPageKeys } from "@/lib/role-permissions";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
 import { applyPreferencesToDom, loadPreferences } from "@/lib/user-preferences";
@@ -26,6 +31,7 @@ function SideNav({
   showSettings,
   onOpenSettings,
   restrictedCustomer = false,
+  allowedPageKeys = null,
 }: {
   profile: Profile;
   pathname: string;
@@ -33,6 +39,7 @@ function SideNav({
   showSettings?: boolean;
   onOpenSettings?: () => void;
   restrictedCustomer?: boolean;
+  allowedPageKeys?: Set<string> | null;
 }) {
   const nav = restrictedCustomer
     ? [{ href: "/pending-approval", label: "Pending Approval" }]
@@ -41,7 +48,13 @@ function SideNav({
   const isBilling = profile.role === "billing";
   const isManager = isManagerRole(profile.role);
   const isTechnician = profile.role === "technician";
+  const isAdmin = profile.role === "admin";
   const homeHref = restrictedCustomer ? "/pending-approval" : roleHomePath(profile.role as UserRole);
+
+  function canShowHref(href: string) {
+    if (isAdmin) return true;
+    return hrefAllowedByPageKeys(href, allowedPageKeys);
+  }
 
   return (
     <>
@@ -70,6 +83,7 @@ function SideNav({
       </div>
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3" aria-label="Main">
         {nav.map((item) => {
+          if (!canShowHref(item.href)) return null;
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Fragment key={item.href}>
@@ -82,24 +96,43 @@ function SideNav({
               >
                 {item.label}
               </Link>
-              {isCustomer && item.href === "/my-contracts" ? (
-                <CustomerBillingNavTree onNavigate={onNavigate} />
+              {isAdmin && item.href === "/admin" ? (
+                <>
+                  <UserAccessNavTree onNavigate={onNavigate} />
+                  <CompanyDirectoryNavTree
+                    onNavigate={onNavigate}
+                    allowedPageKeys={allowedPageKeys}
+                  />
+                  <SystemNavTree onNavigate={onNavigate} />
+                </>
               ) : null}
-              {isManager && item.href === "/customers" ? (
+              {isCustomer && item.href === "/my-contracts" ? (
+                <CustomerBillingNavTree onNavigate={onNavigate} allowedPageKeys={allowedPageKeys} />
+              ) : null}
+              {isManager && !isAdmin && item.href === "/customers" ? (
                 <ContractsAgreementsNavTree
                   showReports
                   showNewContract
                   showCustomerContractData
                   onNavigate={onNavigate}
+                  allowedPageKeys={allowedPageKeys}
                 />
               ) : null}
               {isTechnician && item.href === "/dashboard" ? (
-                <ContractsAgreementsNavTree showReports={false} onNavigate={onNavigate} />
+                <ContractsAgreementsNavTree
+                  showReports={false}
+                  onNavigate={onNavigate}
+                  allowedPageKeys={allowedPageKeys}
+                />
               ) : null}
               {isBilling && item.href === "/dashboard" ? (
                 <>
-                  <ContractsAgreementsNavTree showReports onNavigate={onNavigate} />
-                  <BillingStaffNavTree onNavigate={onNavigate} />
+                  <ContractsAgreementsNavTree
+                    showReports
+                    onNavigate={onNavigate}
+                    allowedPageKeys={allowedPageKeys}
+                  />
+                  <BillingStaffNavTree onNavigate={onNavigate} allowedPageKeys={allowedPageKeys} />
                 </>
               ) : null}
             </Fragment>
@@ -130,10 +163,12 @@ function SideNav({
 export function AppShell({
   profile,
   customerStatus = null,
+  allowedPageKeys = null,
   children,
 }: {
   profile: Profile;
   customerStatus?: CustomerStatus | null;
+  allowedPageKeys?: string[] | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -143,8 +178,8 @@ export function AppShell({
   const [settingsPathname, setSettingsPathname] = useState(pathname);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const allowedSet = allowedPageKeys == null ? null : new Set(allowedPageKeys);
 
-  // Dismiss the settings panel when the route changes.
   if (settingsPathname !== pathname) {
     setSettingsPathname(pathname);
     setSettingsOpen(false);
@@ -247,6 +282,7 @@ export function AppShell({
               profile={profile}
               pathname={pathname}
               restrictedCustomer={restrictedCustomer}
+              allowedPageKeys={allowedSet}
               showSettings
               onOpenSettings={() => setSettingsOpen(true)}
             />
@@ -284,6 +320,11 @@ export function AppShell({
             <DemoRoleSwitcher currentRole={profile.role as UserRole} />
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <HeaderPageSearch
+              role={profile.role as UserRole}
+              allowedPageKeys={allowedSet}
+              restrictedCustomer={restrictedCustomer}
+            />
             <button
               type="button"
               className="flex items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-base-200"

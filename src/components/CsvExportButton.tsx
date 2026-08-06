@@ -1,12 +1,13 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { downloadCsv, toCsv } from "@/lib/csv";
 
 type Props = {
   filename: string;
   headers: string[];
   rows: (string | number | boolean | null | undefined)[][];
-  label?: string;
+  label?: ReactNode;
   className?: string;
 };
 

@@ -13,18 +13,15 @@ export default async function AdminUsersPage() {
   if (!isAdminRole(profile.role)) redirect("/dashboard");
 
   const supabase = await createClient();
-  const [usersRes, customersRes] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("id, email, full_name, role, customer_id, internal_cost_rate, is_demo_user, is_active")
-      .order("full_name"),
-    supabase.from("customers").select("id, name").order("name"),
-  ]);
+  const usersRes = await supabase
+    .from("profiles")
+    .select("id, email, full_name, role, is_demo_user, is_active")
+    .order("full_name");
 
   if (usersRes.error) {
     return (
       <div>
-        <PageHeader title="User & Role Management" />
+        <PageHeader title="Manage Access" />
         <ErrorState message={usersRes.error.message} />
       </div>
     );
@@ -36,11 +33,11 @@ export default async function AdminUsersPage() {
   return (
     <div>
       <PageHeader
-        title="User & Role Management"
-        description="Assign roles, link customers, and activate or deactivate access."
+        title="Manage Access"
+        description="Create and maintain portal logins, assign each person a C2C role, and activate or deactivate access."
         actions={
           <Link href="/admin" className="btn btn-sm btn-outline">
-            Back to Admin Console
+            Back to Admin Home
           </Link>
         }
       />
@@ -56,12 +53,11 @@ export default async function AdminUsersPage() {
       ) : null}
 
       <div className="mb-6">
-        <AdminCreateUserForm customers={customersRes.data ?? []} />
+        <AdminCreateUserForm />
       </div>
 
       <AdminUserManager
         users={users.map((u) => ({ ...u, role: u.role as UserRole }))}
-        customers={customersRes.data ?? []}
         currentUserId={profile.id}
       />
     </div>

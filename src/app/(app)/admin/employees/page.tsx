@@ -43,11 +43,9 @@ export default async function AdminEmployeesPage() {
             : "View the ServiceSync staff directory. Only administrators can add, edit, or remove employees."
         }
         actions={
-          canEdit ? (
-            <Link href="/admin" className="btn btn-sm btn-outline">
-              Back to Admin Console
-            </Link>
-          ) : null
+          <Link href="/admin" className="btn btn-sm btn-outline">
+            Back to Admin Home
+          </Link>
         }
       />
 

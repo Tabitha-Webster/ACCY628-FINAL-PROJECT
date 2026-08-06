@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Minus, Plus } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { hrefAllowedByPageKeys } from "@/lib/role-permissions";
 
 type NavLink = { href: string; label: string };
 
 function pathActive(pathname: string, href: string) {
   if (href === "/contracts") {
-    // Avoid treating submenu routes as Manage Contracts.
     return (
       pathname === "/contracts" ||
       /^\/contracts\/(?!reports(?:\/|$)|renewals(?:\/|$)|customers(?:\/|$)|new(?:\/|$)).+/.test(
@@ -29,25 +29,36 @@ export function ContractsAgreementsNavTree({
   showNewContract = false,
   showCustomerContractData = false,
   onNavigate,
+  allowedPageKeys = null,
 }: {
   showReports?: boolean;
   showNewContract?: boolean;
   showCustomerContractData?: boolean;
   onNavigate?: () => void;
+  allowedPageKeys?: Set<string> | null;
 }) {
   const pathname = usePathname();
-  const links: NavLink[] = [
-    ...(showReports ? [{ href: "/contracts/reports", label: "Contracts Dashboard" }] : []),
-    { href: "/contracts", label: "Manage Contracts" },
-    ...(showNewContract ? [{ href: "/contracts/new", label: "New Contract" }] : []),
-    { href: "/contracts/renewals", label: "Renewal & Expiration" },
-    ...(showCustomerContractData
-      ? [{ href: "/contracts/customers", label: "Customer Contract Data" }]
-      : []),
-  ];
-  const [open, setOpen] = useState(
-    () => sectionActive(pathname, links) || pathname.startsWith("/contracts")
+  const allLinks: NavLink[] = useMemo(
+    () => [
+      ...(showReports ? [{ href: "/contracts/reports", label: "Contracts Dashboard" }] : []),
+      { href: "/contracts", label: "Manage Contracts" },
+      ...(showNewContract ? [{ href: "/contracts/new", label: "New Contract" }] : []),
+      { href: "/contracts/renewals", label: "Renewal & Expiration" },
+      ...(showCustomerContractData
+        ? [{ href: "/contracts/customers", label: "Customer Contract Data" }]
+        : []),
+    ],
+    [showReports, showNewContract, showCustomerContractData]
   );
+  const links = useMemo(
+    () => allLinks.filter((link) => hrefAllowedByPageKeys(link.href, allowedPageKeys)),
+    [allLinks, allowedPageKeys]
+  );
+  const [open, setOpen] = useState(
+    () => sectionActive(pathname, allLinks) || pathname.startsWith("/contracts")
+  );
+
+  if (links.length === 0) return null;
 
   return (
     <div className="space-y-1">

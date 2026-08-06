@@ -8,9 +8,6 @@ type Body = {
   password?: string;
   fullName?: string;
   role?: string;
-  customerId?: string | null;
-  isDemoUser?: boolean;
-  internalCostRate?: number | null;
 };
 
 export async function POST(request: Request) {
@@ -44,12 +41,6 @@ export async function POST(request: Request) {
   const password = body.password ?? "";
   const fullName = body.fullName?.trim() ?? "";
   const role = body.role as UserRole;
-  const customerId = body.customerId || null;
-  const isDemoUser = Boolean(body.isDemoUser);
-  const internalCostRate =
-    body.internalCostRate == null || Number.isNaN(Number(body.internalCostRate))
-      ? null
-      : Number(body.internalCostRate);
 
   if (!email || !email.includes("@")) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
@@ -62,9 +53,6 @@ export async function POST(request: Request) {
   }
   if (!ASSIGNABLE_ROLES.includes(role)) {
     return NextResponse.json({ error: "Choose a valid role." }, { status: 400 });
-  }
-  if (role === "customer" && !customerId) {
-    return NextResponse.json({ error: "Customer users need a linked customer." }, { status: 400 });
   }
 
   try {
@@ -92,9 +80,9 @@ export async function POST(request: Request) {
         email,
         full_name: fullName,
         role,
-        customer_id: role === "customer" ? customerId : null,
-        internal_cost_rate: internalCostRate,
-        is_demo_user: isDemoUser,
+        customer_id: null,
+        internal_cost_rate: null,
+        is_demo_user: false,
         is_active: true,
       },
       { onConflict: "id" }
