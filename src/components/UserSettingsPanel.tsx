@@ -7,42 +7,24 @@ import {
   ChevronRight,
   CreditCard,
   Download,
-  LayoutDashboard,
   LogOut,
-  Palette,
-  ShieldCheck,
-  Type,
   User,
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
-import { ThemeSelector } from "@/components/ThemeSelector";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
 import type { Profile, UserRole } from "@/lib/constants";
 import {
   NOTIFICATION_OPTIONS,
-  TIME_ZONE_OPTIONS,
   applyPreferencesToDom,
-  landingOptionsForRole,
   loadPreferences,
-  previewCurrency,
-  previewDate,
   savePreferences,
   type UserPreferences,
 } from "@/lib/user-preferences";
 
-type PaneId =
-  | "root"
-  | "account"
-  | "notifications"
-  | "workspace"
-  | "formats"
-  | "appearance"
-  | "exports"
-  | "billingContact"
-  | "security";
+type PaneId = "root" | "account" | "notifications" | "exports" | "billingContact";
 
 type Section = {
   id: Exclude<PaneId, "root">;
@@ -124,7 +106,10 @@ export function UserSettingsPanel({
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
-  const [passwordMessage, setPasswordMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [passwordMessage, setPasswordMessage] = useState<{
+    tone: "success" | "error";
+    text: string;
+  } | null>(null);
 
   function update(patch: Partial<UserPreferences>) {
     const next = { ...preferences, ...patch };
@@ -158,18 +143,9 @@ export function UserSettingsPanel({
     setPasswordMessage({ tone: "success", text: "Password updated." });
   }
 
-  async function signOutEverywhere() {
-    const supabase = createClient();
-    await supabase.auth.signOut({ scope: "global" });
-    onLogout();
-  }
-
   const sections: Section[] = [
     { id: "account", icon: User, title: "Account", subtitle: "Name, email, role, and password" },
     { id: "notifications", icon: Bell, title: "Notifications", subtitle: "Choose which alerts you receive" },
-    { id: "workspace", icon: LayoutDashboard, title: "Workspace", subtitle: "Start page, density, page size" },
-    { id: "formats", icon: Type, title: "Formats", subtitle: "Currency, dates, and time zone" },
-        { id: "appearance", icon: Palette, title: "Appearance", subtitle: "Light, dark, or match system" },
     ...(isStaff
       ? [{ id: "exports" as const, icon: Download, title: "Data & exports", subtitle: "CSV export defaults" }]
       : []),
@@ -183,13 +159,10 @@ export function UserSettingsPanel({
           },
         ]
       : []),
-    { id: "security", icon: ShieldCheck, title: "Security", subtitle: "Active session and sign out" },
   ];
 
   const activeSection = sections.find((section) => section.id === pane);
   const notifications = NOTIFICATION_OPTIONS.filter((option) => option.roles.includes(role));
-  const landingOptions = landingOptionsForRole(role);
-  const sampleDate = new Date();
 
   return (
     <div className="fixed inset-0 z-[60]">
@@ -233,7 +206,9 @@ export function UserSettingsPanel({
                   <p className="truncate font-semibold">{profile.full_name}</p>
                   <p className="truncate text-sm opacity-70">{profile.email}</p>
                   <p className="mt-1">
-                    <span className="badge badge-primary badge-outline badge-sm">{statusLabel(role)}</span>
+                    <span className="badge badge-primary badge-outline badge-sm">
+                      {statusLabel(role)}
+                    </span>
                   </p>
                 </div>
               </section>
@@ -334,106 +309,6 @@ export function UserSettingsPanel({
             </div>
           ) : null}
 
-          {pane === "workspace" ? (
-            <div className="space-y-4">
-              <Field label="Start page" hint="Where you land after signing in.">
-                <select
-                  className="select select-bordered select-sm w-full"
-                  value={preferences.defaultLanding}
-                  onChange={(e) => update({ defaultLanding: e.target.value })}
-                >
-                  {landingOptions.map((option) => (
-                    <option key={option.href} value={option.href}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Table density" hint="Compact fits more rows on screen.">
-                <select
-                  className="select select-bordered select-sm w-full"
-                  value={preferences.tableDensity}
-                  onChange={(e) => update({ tableDensity: e.target.value as UserPreferences["tableDensity"] })}
-                >
-                  <option value="comfortable">Comfortable</option>
-                  <option value="compact">Compact</option>
-                </select>
-              </Field>
-
-              <Field label="Rows per page" hint="Applies to long lists such as invoices and receivables.">
-                <select
-                  className="select select-bordered select-sm w-full"
-                  value={String(preferences.rowsPerPage)}
-                  onChange={(e) => update({ rowsPerPage: Number(e.target.value) })}
-                >
-                  {[10, 25, 50, 100].map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-          ) : null}
-
-          {pane === "formats" ? (
-            <div className="space-y-4">
-              <Field label="Currency">
-                <select
-                  className="select select-bordered select-sm w-full"
-                  value={preferences.currencyStyle}
-                  onChange={(e) => update({ currencyStyle: e.target.value as UserPreferences["currencyStyle"] })}
-                >
-                  <option value="symbol">Symbol — $1,234.00</option>
-                  <option value="accounting">Accounting — ($1,234.00)</option>
-                  <option value="plain">Plain number — 1,234.00</option>
-                </select>
-              </Field>
-
-              <Field label="Date">
-                <select
-                  className="select select-bordered select-sm w-full"
-                  value={preferences.dateStyle}
-                  onChange={(e) => update({ dateStyle: e.target.value as UserPreferences["dateStyle"] })}
-                >
-                  <option value="medium">Short month — Aug 5, 2026</option>
-                  <option value="numeric">Numeric — 08/05/2026</option>
-                  <option value="iso">ISO — 2026-08-05</option>
-                </select>
-              </Field>
-
-              <Field label="Time zone" hint="Used for due dates and aging calculations.">
-                <select
-                  className="select select-bordered select-sm w-full"
-                  value={preferences.timeZone}
-                  onChange={(e) => update({ timeZone: e.target.value })}
-                >
-                  {TIME_ZONE_OPTIONS.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <section className="rounded-box border border-base-300 p-3">
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-60">Preview</h3>
-                <p className="text-sm">
-                  Amount: <span className="font-medium">{previewCurrency(-1234, preferences.currencyStyle)}</span>
-                </p>
-                <p className="text-sm">
-                  Date:{" "}
-                  <span className="font-medium">
-                    {previewDate(sampleDate, preferences.dateStyle, preferences.timeZone)}
-                  </span>
-                </p>
-              </section>
-            </div>
-          ) : null}
-
-          {pane === "appearance" ? <ThemeSelector /> : null}
-
           {pane === "exports" ? (
             <div className="space-y-4">
               <p className="text-xs opacity-60">
@@ -449,7 +324,9 @@ export function UserSettingsPanel({
                 <select
                   className="select select-bordered select-sm w-full"
                   value={preferences.csvDelimiter}
-                  onChange={(e) => update({ csvDelimiter: e.target.value as UserPreferences["csvDelimiter"] })}
+                  onChange={(e) =>
+                    update({ csvDelimiter: e.target.value as UserPreferences["csvDelimiter"] })
+                  }
                 >
                   <option value="comma">Comma (,)</option>
                   <option value="semicolon">Semicolon (;)</option>
@@ -482,24 +359,6 @@ export function UserSettingsPanel({
                   <option value="wire">Wire transfer</option>
                 </select>
               </Field>
-            </div>
-          ) : null}
-
-          {pane === "security" ? (
-            <div className="space-y-4">
-              <section className="rounded-box border border-base-300 px-3 py-1">
-                <ReadOnlyRow label="Signed in as" value={profile.email} />
-                <ReadOnlyRow label="Role" value={statusLabel(role)} />
-                <ReadOnlyRow label="Account status" value={profile.is_active ? "Active" : "Inactive"} />
-              </section>
-              <div className="space-y-2">
-                <button type="button" className="btn btn-outline btn-sm btn-block" onClick={signOutEverywhere}>
-                  Sign out on all devices
-                </button>
-                <p className="text-xs opacity-60">
-                  Ends every active session for this account, including other browsers.
-                </p>
-              </div>
             </div>
           ) : null}
         </div>
