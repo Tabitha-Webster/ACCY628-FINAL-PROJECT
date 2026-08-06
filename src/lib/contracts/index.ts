@@ -46,7 +46,7 @@ export * from "./customerMetrics";
 export * from "./calendarTypes";
 export * from "./calendarEvents";
 export * from "./signature-packets";
-export * from "./build-contract-pdf";
+// build-contract-pdf pulls jspdf/canvg — import it directly where needed, not from this barrel.
 export * from "./demo-signature";
 
 

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { buildContractPdfBlob, downloadPdfBlob, packetSignaturesForPdf } from "@/lib/contracts";
+import { packetSignaturesForPdf } from "@/lib/contracts";
+import { buildContractPdfBlob, downloadPdfBlob } from "@/lib/contracts/build-contract-pdf";
 import type { ContractPdfInput, ContractSignaturePacket } from "@/lib/contracts/signature-packets";
 
 type Props = {

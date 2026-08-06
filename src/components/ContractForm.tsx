@@ -20,7 +20,6 @@ import {
   WORK_LOCATIONS,
   CONTRACT_COVERED_SERVICE_OPTIONS,
   CONTRACT_EXCLUDED_SERVICE_OPTIONS,
-  buildContractPdfBlob,
   buildDemoSignatureDataUrl,
   contractFormToPayload,
   emptyContractFormValues,
@@ -33,6 +32,7 @@ import {
   type ContractFormFieldErrors,
   type ContractFormValues,
 } from "@/lib/contracts";
+import { buildContractPdfBlob } from "@/lib/contracts/build-contract-pdf";
 import { formatCurrency } from "@/lib/format";
 
 export type ContractFormOption = { id: string; label: string };
