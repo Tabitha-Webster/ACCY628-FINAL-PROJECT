@@ -18,6 +18,8 @@ import type { ControlFailure } from "@/lib/control-failures";
 
 type Props = {
   failures: ControlFailure[];
+  /** Soft-cap notices when exception scans could not load every matching row. */
+  truncationNotes?: string[];
 };
 
 type DayPoint = {
@@ -53,7 +55,7 @@ function shortAxisLabel(dateKey: string) {
 }
 
 /** Vertical bar chart of control failures by date; click a bar for when and why. */
-export function ControlFailuresChart({ failures }: Props) {
+export function ControlFailuresChart({ failures, truncationNotes = [] }: Props) {
   const [severity, setSeverity] = useState<"all" | ControlFailure["severity"]>("all");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -175,6 +177,13 @@ export function ControlFailuresChart({ failures }: Props) {
           </button>
         </div>
       </div>
+
+      {truncationNotes.length > 0 ? (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+          Exception counts may be incomplete — scan capped for{" "}
+          {truncationNotes.join("; ")}.
+        </div>
+      ) : null}
 
       {filtered.length === 0 ? (
         <EmptyState

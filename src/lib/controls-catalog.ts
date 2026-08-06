@@ -3,6 +3,13 @@
  * Used by the interactive Controls explorer (managers / admins).
  */
 
+export type ControlWhereLink = {
+  href: string;
+  label: string;
+  /** Hidden for non-admin viewers (managers cannot open these screens). */
+  adminOnly?: boolean;
+};
+
 export type ControlItem = {
   id: string;
   category: string;
@@ -13,7 +20,7 @@ export type ControlItem = {
   /** Judge-friendly "What if…" scenario shown on the card face. */
   whatIf: string;
   /** Deep links so the panel can jump into the live control. */
-  where: Array<{ href: string; label: string }>;
+  where: ControlWhereLink[];
 };
 
 export const CONTROL_CATEGORY_ORDER = [
@@ -36,7 +43,7 @@ export const CONTROLS_CATALOG: ControlItem[] = [
     whatIf: "What if a technician tries to open billing or change contract prices?",
     where: [
       { href: "/login", label: "Demo role login" },
-      { href: "/admin/role-permissions", label: "Role permissions" },
+      { href: "/admin/role-permissions", label: "Role permissions", adminOnly: true },
     ],
   },
   {
@@ -60,7 +67,6 @@ export const CONTROLS_CATALOG: ControlItem[] = [
     whatIf: "What if a newly signed-up customer tries to open invoices before approval?",
     where: [
       { href: "/customer-approvals", label: "Customer approvals" },
-      { href: "/pending-approval", label: "Pending approval screen" },
     ],
   },
   {
@@ -71,8 +77,8 @@ export const CONTROLS_CATALOG: ControlItem[] = [
       "the system audit log records insert, update, and delete events with actor, entity, changed fields, and before/after values so managers and admins can reconstruct access and financial changes",
     whatIf: "What if we need to prove who changed a user's role or an invoice total?",
     where: [
-      { href: "/admin/audit", label: "System audit log" },
-      { href: "/admin/role-permissions", label: "Role permissions" },
+      { href: "/admin/audit", label: "System audit log", adminOnly: true },
+      { href: "/admin/role-permissions", label: "Role permissions", adminOnly: true },
     ],
   },
   {
@@ -83,8 +89,8 @@ export const CONTROLS_CATALOG: ControlItem[] = [
       "the Security & Access Review screen shows a role-by-area matrix of who can reach financial and customer information, so admins can periodically confirm that access still matches job responsibilities",
     whatIf: "What if we need to show auditors which roles can see AR and customer records?",
     where: [
-      { href: "/admin/access-review", label: "Security & Access Review" },
-      { href: "/admin/users", label: "Manage users" },
+      { href: "/admin/access-review", label: "Security & Access Review", adminOnly: true },
+      { href: "/admin/users", label: "Manage users", adminOnly: true },
     ],
   },
   {
@@ -95,8 +101,8 @@ export const CONTROLS_CATALOG: ControlItem[] = [
       "admins maintain a page-level role permission matrix that determines which application screens each C2C role can open; middleware enforces those grants, and admin access itself cannot be reduced",
     whatIf: "What if billing should no longer open profitability, or HR needs a new screen?",
     where: [
-      { href: "/admin/role-permissions", label: "Role permissions" },
-      { href: "/admin/access-review", label: "Security & Access Review" },
+      { href: "/admin/role-permissions", label: "Role permissions", adminOnly: true },
+      { href: "/admin/access-review", label: "Security & Access Review", adminOnly: true },
     ],
   },
   {
@@ -141,7 +147,6 @@ export const CONTROLS_CATALOG: ControlItem[] = [
     whatIf: "What if a live contract has no signed agreement uploaded?",
     where: [
       { href: "/contracts", label: "Manage contracts (document checklist)" },
-      { href: "/controls", label: "Control exceptions chart" },
     ],
   },
   {
@@ -338,8 +343,10 @@ export const CONTROLS_CATALOG: ControlItem[] = [
       "admin Data Quality scans customers, contracts, tickets, users, and projects for missing links and required fields, while the Exception Log highlights stale drafts, pending approvals, and other technical exceptions that need cleanup",
     whatIf: "What if active contracts are missing billing terms or tickets have no contract link?",
     where: [
-      { href: "/admin/data-quality", label: "Data quality" },
-      { href: "/admin/exceptions", label: "Exception log" },
+      { href: "/admin/data-quality", label: "Data quality", adminOnly: true },
+      { href: "/admin/exceptions", label: "Exception log", adminOnly: true },
+      { href: "/contracts", label: "Manage contracts" },
+      { href: "/time-cost-approvals", label: "Approvals queue" },
     ],
   },
   {

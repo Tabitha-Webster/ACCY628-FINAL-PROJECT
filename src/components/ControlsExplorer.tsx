@@ -7,7 +7,9 @@ import {
   CONTROLS_CATALOG,
   CONTROL_CATEGORY_ORDER,
   type ControlItem,
+  type ControlWhereLink,
 } from "@/lib/controls-catalog";
+import { isAdminRole, type UserRole } from "@/lib/constants";
 
 function categoryTone(category: string) {
   switch (category) {
@@ -30,8 +32,14 @@ function categoryTone(category: string) {
   }
 }
 
-function ControlCard({ item }: { item: ControlItem }) {
+function visibleWhereLinks(links: ControlWhereLink[], isAdmin: boolean) {
+  return links.filter((link) => isAdmin || !link.adminOnly);
+}
+
+function ControlCard({ item, isAdmin }: { item: ControlItem; isAdmin: boolean }) {
   const [open, setOpen] = useState(false);
+  const whereLinks = visibleWhereLinks(item.where, isAdmin);
+  const hasHiddenAdminLinks = !isAdmin && item.where.some((link) => link.adminOnly);
 
   return (
     <article className="rounded-box border border-base-300 bg-base-100 shadow-sm overflow-hidden">
@@ -87,18 +95,27 @@ function ControlCard({ item }: { item: ControlItem }) {
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-60">
               Where to see it in the app
             </p>
-            <div className="flex flex-wrap gap-2">
-              {item.where.map((link) => (
-                <Link
-                  key={`${item.id}-${link.href}-${link.label}`}
-                  href={link.href}
-                  className="btn btn-outline btn-sm gap-1.5"
-                >
-                  {link.label}
-                  <ExternalLink className="h-3.5 w-3.5 opacity-60" aria-hidden />
-                </Link>
-              ))}
-            </div>
+            {whereLinks.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {whereLinks.map((link) => (
+                  <Link
+                    key={`${item.id}-${link.href}-${link.label}`}
+                    href={link.href}
+                    className="btn btn-outline btn-sm gap-1.5"
+                  >
+                    {link.label}
+                    <ExternalLink className="h-3.5 w-3.5 opacity-60" aria-hidden />
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+            {hasHiddenAdminLinks ? (
+              <p className={`text-xs opacity-60 ${whereLinks.length ? "mt-2" : ""}`}>
+                {whereLinks.length
+                  ? "Additional admin-only screens are available when signed in as Admin."
+                  : "Demo screens for this control are admin-only — sign in as Admin to open them."}
+              </p>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -107,7 +124,8 @@ function ControlCard({ item }: { item: ControlItem }) {
 }
 
 /** Interactive risk → control → “open in app” explorer for Controls and Exceptions. */
-export function ControlsExplorer() {
+export function ControlsExplorer({ role }: { role: UserRole }) {
+  const isAdmin = isAdminRole(role);
   const [category, setCategory] = useState<string>("All");
   const [query, setQuery] = useState("");
   const [expandedCategory, setExpandedCategory] = useState<string | null>("Contract");
@@ -208,7 +226,7 @@ export function ControlsExplorer() {
               {open ? (
                 <div className="space-y-3">
                   {group.items.map((item) => (
-                    <ControlCard key={item.id} item={item} />
+                    <ControlCard key={item.id} item={item} isAdmin={isAdmin} />
                   ))}
                 </div>
               ) : null}
