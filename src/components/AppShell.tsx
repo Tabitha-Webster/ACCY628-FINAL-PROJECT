@@ -365,7 +365,9 @@ export function AppShell({
         <UserSettingsPanel profile={profile} onClose={() => setSettingsOpen(false)} onLogout={logout} />
       ) : null}
 
-      {!restrictedCustomer ? <HelpChatBubble /> : null}
+      {!restrictedCustomer ? (
+        <HelpChatBubble role={profile.role as UserRole} />
+      ) : null}
     </div>
   );
 }

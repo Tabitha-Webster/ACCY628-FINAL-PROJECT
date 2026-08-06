@@ -143,6 +143,12 @@ export const DEMO_ACCOUNTS = [
     name: "Evan Bean",
   },
   {
+    role: "customer" as UserRole,
+    label: "Customer",
+    email: "casey.ortiz@chadcorporation.demo",
+    name: "Casey Ortiz",
+  },
+  {
     role: "technician" as UserRole,
     label: "Technician",
     email: "tech@servicesync.demo",
@@ -159,12 +165,6 @@ export const DEMO_ACCOUNTS = [
     label: "HR",
     email: "hr@servicesync.demo",
     name: "Lily Walker",
-  },
-  {
-    role: "customer" as UserRole,
-    label: "Customer",
-    email: "casey.ortiz@chadcorporation.demo",
-    name: "Casey Ortiz",
   },
 ] as const;
 

@@ -24,7 +24,7 @@ export function CustomerApprovalActions({ customerId, managerId, currentStatus }
     const nextStatus = approved ? "active" : "rejected";
     const reviewedAt = new Date().toISOString();
 
-    const { error: updateError } = await supabase
+    const { data: updated, error: updateError } = await supabase
       .from("customers")
       .update({
         status: nextStatus,
@@ -34,40 +34,54 @@ export function CustomerApprovalActions({ customerId, managerId, currentStatus }
         reviewed_by: managerId,
       })
       .eq("id", customerId)
-      .eq("status", "pending_approval");
+      .eq("status", "pending_approval")
+      .select("id, status, name")
+      .maybeSingle();
 
-    if (updateError) {
+    if (updateError || !updated) {
       // Fallback when manager-approval columns / rejected enum are not applied yet.
-      const preferRejected = await supabase
+      let preferRejected = await supabase
         .from("customers")
         .update({
           status: nextStatus,
           customer_status: nextStatus,
         })
         .eq("id", customerId)
-        .eq("status", "pending_approval");
+        .eq("status", "pending_approval")
+        .select("id, status, name")
+        .maybeSingle();
 
-      let fallbackError = preferRejected.error;
-      if (fallbackError && !approved && /rejected/i.test(fallbackError.message)) {
-        const inactiveFallback = await supabase
+      if (preferRejected.error && !approved && /rejected/i.test(preferRejected.error.message)) {
+        preferRejected = await supabase
           .from("customers")
           .update({
             status: "inactive",
             customer_status: "inactive",
           })
           .eq("id", customerId)
-          .eq("status", "pending_approval");
-        fallbackError = inactiveFallback.error;
+          .eq("status", "pending_approval")
+          .select("id, status, name")
+          .maybeSingle();
       }
 
-      if (fallbackError) {
+      if (preferRejected.error || !preferRejected.data) {
         setLoading(null);
-        setError(fallbackError.message || updateError.message);
+        setError(
+          preferRejected.error?.message ||
+            updateError?.message ||
+            "Could not update this customer. Refresh and try again."
+        );
         return;
       }
     }
 
     setLoading(null);
+    // Active customers appear on the shared Customers directory for all internal roles.
+    if (approved) {
+      router.push("/customers");
+      router.refresh();
+      return;
+    }
     router.refresh();
   }
 
