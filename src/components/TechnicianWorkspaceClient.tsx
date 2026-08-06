@@ -250,15 +250,9 @@ function TicketCard({
   const isOverdue = live.overdue;
   const isOpen = OPEN_STATUSES.has(ticket.status);
   const awFriendly = friendlyAwStatus(aw?.approval_status ?? null);
-  const border =
-    isCritical || isOverdue
-      ? "border-rose-400/30 bg-rose-500/10"
-      : ticket.priority === "high" || live.overall === "at_risk"
-        ? "border-amber-400/30 bg-amber-500/10"
-        : "border-base-300 bg-base-100/50";
 
   return (
-    <article className={`rounded-xl border p-3 shadow-sm ${border}`}>
+    <article className="rounded-xl border border-neutral-200 bg-white p-3 text-neutral-900 shadow-sm">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">

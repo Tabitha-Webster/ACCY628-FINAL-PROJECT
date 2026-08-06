@@ -432,17 +432,11 @@ export function TicketListClient({
               {filtered.map(({ ticket: t, sla }) => {
                 const isCritical = t.priority === "critical";
                 const overall = sla.overall as SlaCondition;
-                const border =
-                  isCritical || sla.overdue
-                    ? "border-rose-400/30 bg-rose-500/10"
-                    : overall === "at_risk"
-                      ? "border-amber-400/30 bg-amber-500/10"
-                      : "border-base-300 bg-base-100/40";
                 return (
                   <li key={t.id}>
                     <Link
                       href={`/tickets/${t.id}`}
-                      className={`block rounded-xl border px-3 py-2.5 shadow-sm transition hover:border-primary/40 ${border}`}
+                      className="block rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-neutral-900 shadow-sm transition hover:border-primary/50"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
