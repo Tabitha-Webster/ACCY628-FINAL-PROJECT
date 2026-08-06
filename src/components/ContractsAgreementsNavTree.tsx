@@ -12,7 +12,9 @@ function pathActive(pathname: string, href: string) {
     // Avoid treating submenu routes as Manage Contracts.
     return (
       pathname === "/contracts" ||
-      /^\/contracts\/(?!reports(?:\/|$)|renewals(?:\/|$)|customers(?:\/|$)|new(?:\/|$)).+/.test(pathname)
+      /^\/contracts\/(?!reports(?:\/|$)|renewals(?:\/|$)|customers(?:\/|$)|new(?:\/|$)).+/.test(
+        pathname
+      )
     );
   }
   return pathname === href || pathname.startsWith(href + "/");
@@ -35,15 +37,17 @@ export function ContractsAgreementsNavTree({
 }) {
   const pathname = usePathname();
   const links: NavLink[] = [
-    { href: "/contracts", label: "Manage Contracts" },
     ...(showReports ? [{ href: "/contracts/reports", label: "Contracts Dashboard" }] : []),
+    { href: "/contracts", label: "Manage Contracts" },
+    ...(showNewContract ? [{ href: "/contracts/new", label: "New Contract" }] : []),
     { href: "/contracts/renewals", label: "Renewal & Expiration" },
     ...(showCustomerContractData
       ? [{ href: "/contracts/customers", label: "Customer Contract Data" }]
       : []),
-    ...(showNewContract ? [{ href: "/contracts/new", label: "New Contract" }] : []),
   ];
-  const [open, setOpen] = useState(() => sectionActive(pathname, links) || pathname.startsWith("/contracts"));
+  const [open, setOpen] = useState(
+    () => sectionActive(pathname, links) || pathname.startsWith("/contracts")
+  );
 
   return (
     <div className="space-y-1">
@@ -54,7 +58,11 @@ export function ContractsAgreementsNavTree({
         onClick={() => setOpen((value) => !value)}
       >
         <span>Contracts &amp; Agreements</span>
-        {open ? <Minus className="h-4 w-4 shrink-0 opacity-70" aria-hidden /> : <Plus className="h-4 w-4 shrink-0 opacity-70" aria-hidden />}
+        {open ? (
+          <Minus className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
+        ) : (
+          <Plus className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
+        )}
       </button>
 
       {open ? (

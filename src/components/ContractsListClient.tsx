@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Search, X } from "lucide-react";
 import { EmptyState, Money, StatusBadge } from "@/components/ui";
+import { ExportContractsButton } from "@/components/ExportContractsButton";
 import { formatDate, statusLabel } from "@/lib/format";
+import type { UserRole } from "@/lib/constants";
 import {
   CONTRACT_STATUSES,
   CONTRACT_STATUS_LABELS,
@@ -97,10 +99,12 @@ export function ContractsListClient({
   contracts,
   initialStatus = "",
   canEdit = false,
+  role,
 }: {
   contracts: ContractsListItem[];
   initialStatus?: string;
   canEdit?: boolean;
+  role?: UserRole;
 }) {
   const now = useMemo(() => new Date(), []);
   const [search, setSearch] = useState("");
@@ -527,19 +531,24 @@ export function ContractsListClient({
           </div>
         ) : null}
 
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-          <span className="opacity-60">
-            Showing {filtered.length} of {contracts.length}
-          </span>
-          <span className="badge badge-ghost badge-sm">90-day: {highlightCounts.renewal_90}</span>
-          <span className="badge badge-info badge-sm">60-day: {highlightCounts.renewal_60}</span>
-          <span className="badge badge-warning badge-sm">30-day: {highlightCounts.renewal_30}</span>
-          <span className="badge badge-warning badge-outline badge-sm">
-            Expiring soon: {highlightCounts.ends_soon}
-          </span>
-          <span className="badge badge-error badge-sm">
-            Past end date: {highlightCounts.past_end_date}
-          </span>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="opacity-60">
+              Showing {filtered.length} of {contracts.length}
+            </span>
+            <span className="badge badge-ghost badge-sm">90-day: {highlightCounts.renewal_90}</span>
+            <span className="badge badge-info badge-sm">60-day: {highlightCounts.renewal_60}</span>
+            <span className="badge badge-warning badge-sm">30-day: {highlightCounts.renewal_30}</span>
+            <span className="badge badge-warning badge-outline badge-sm">
+              Expiring soon: {highlightCounts.ends_soon}
+            </span>
+            <span className="badge badge-error badge-sm">
+              Past end date: {highlightCounts.past_end_date}
+            </span>
+          </div>
+          {role ? (
+            <ExportContractsButton rows={filtered.map((item) => item.row)} role={role} />
+          ) : null}
         </div>
       </div>
 
@@ -605,13 +614,14 @@ export function ContractsListClient({
                       {row.name}
                     </Link>
                   </td>
-                  <td>
+                  <td className="min-w-[7.5rem] max-w-[11rem]">
                     <StatusBadge
                       status={row.status}
                       label={
                         CONTRACT_STATUS_LABELS[row.status as keyof typeof CONTRACT_STATUS_LABELS] ??
                         statusLabel(row.status)
                       }
+                      className="badge-sm h-auto max-w-full whitespace-normal px-2.5 py-1 text-left text-[0.7rem] font-medium leading-snug"
                     />
                   </td>
                   <td className="text-xs">
@@ -630,13 +640,13 @@ export function ContractsListClient({
                     ) : null}
                   </td>
                   <td className="text-xs">{manager?.full_name ?? "—"}</td>
-                  <td>
+                  <td className="min-w-[11rem] max-w-[16rem]">
                     {warnings.length > 0 ? (
-                      <div className="flex flex-col gap-1">
+                      <div className="flex flex-col items-start gap-1">
                         {warnings.map((warning) => (
                           <span
                             key={warning.code}
-                            className={`badge badge-sm ${
+                            className={`badge badge-sm h-auto max-w-full whitespace-normal px-2.5 py-1 text-left text-[0.7rem] font-medium leading-snug ${
                               warning.code === "past_end_date"
                                 ? "badge-error"
                                 : warning.code === "renewal_90"

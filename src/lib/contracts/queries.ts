@@ -156,6 +156,51 @@ export async function listContractServices(supabase: SupabaseClient, contractIds
     .order("service_name");
 }
 
+/** Active contracts that have no current signed agreement on file. */
+export async function listActiveContractsMissingSignedDocument(supabase: SupabaseClient) {
+  const [contractsRes, docsRes] = await Promise.all([
+    supabase
+      .from("contracts")
+      .select(
+        "id, contract_number, name, status, start_date, end_date, customers(id, name), assigned_manager:profiles!contracts_assigned_manager_id_fkey(full_name)"
+      )
+      .eq("status", "active")
+      .order("name"),
+    supabase
+      .from("contract_documents")
+      .select("contract_id, document_type, is_current")
+      .eq("is_current", true),
+  ]);
+
+  if (contractsRes.error) {
+    return { data: null, error: contractsRes.error, missing: [] as never[] };
+  }
+  if (docsRes.error) {
+    return { data: null, error: docsRes.error, missing: [] as never[] };
+  }
+
+  const signedIds = new Set(
+    (docsRes.data ?? [])
+      .filter((d) => d.document_type === "signed_contract" && d.is_current)
+      .map((d) => d.contract_id)
+  );
+
+  const docCounts = new Map<string, number>();
+  for (const doc of docsRes.data ?? []) {
+    if (!doc.is_current) continue;
+    docCounts.set(doc.contract_id, (docCounts.get(doc.contract_id) ?? 0) + 1);
+  }
+
+  const missing = (contractsRes.data ?? [])
+    .filter((c) => !signedIds.has(c.id))
+    .map((c) => ({
+      ...c,
+      other_document_count: docCounts.get(c.id) ?? 0,
+    }));
+
+  return { data: missing, error: null, missing };
+}
+
 export async function listContractModifications(supabase: SupabaseClient, contractId: string) {
   return supabase
     .from("contract_modifications")

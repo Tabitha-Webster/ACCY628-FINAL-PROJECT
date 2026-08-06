@@ -92,6 +92,16 @@ export function canViewCustomerContractData(role: UserRole): boolean {
   return role === "manager" || role === "admin";
 }
 
+/** Export filtered contracts list to Excel. */
+export function canExportContracts(role: UserRole): boolean {
+  return role === "manager" || role === "admin" || role === "billing";
+}
+
+/** Document checklist — managers and admins. */
+export function canViewContractDocumentChecklist(role: UserRole): boolean {
+  return role === "manager" || role === "admin";
+}
+
 /** Any write/lifecycle capability (create/edit/delete/approve/renew/cancel). */
 export function canManageContracts(role: UserRole): boolean {
   return (

@@ -62,13 +62,15 @@ function Section({
   title,
   children,
   actions,
+  id,
 }: {
   title: string;
   children: React.ReactNode;
   actions?: React.ReactNode;
+  id?: string;
 }) {
   return (
-    <div className="rounded-box border border-base-300 bg-base-100 p-4">
+    <div id={id} className="rounded-box border border-base-300 bg-base-100 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">{title}</h2>
         {actions}
@@ -570,7 +572,7 @@ export default async function ContractDetailPage({
         </Section>
       </div>
 
-      <Section title="Contract Documents">
+      <Section title="Contract Documents" id="documents">
         <ContractDocumentsPanel
           contractId={id}
           profileId={profile.id}
