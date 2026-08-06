@@ -144,29 +144,3 @@ export function DateText({ value }: { value: string | null | undefined }) {
 
 export { DataTable } from "@/components/DataTable";
 
-export function AccountingExplainer() {
-  return (
-    <div className="rounded-box border border-base-300 bg-base-200/50 p-4 text-sm leading-relaxed">
-      <p className="font-semibold">How this system thinks about money (simplified)</p>
-      <ul className="mt-2 list-disc space-y-1 pl-5 opacity-80">
-        <li>
-          <strong>Earned / recognized revenue</strong> is work or service already delivered.
-        </li>
-        <li>
-          <strong>Deferred revenue</strong> is money billed or collected before the service month is
-          finished.
-        </li>
-        <li>
-          <strong>Unbilled revenue</strong> is earned work not yet placed on an invoice.
-        </li>
-        <li>
-          <strong>Accounts receivable</strong> is issued invoices not yet collected.
-        </li>
-      </ul>
-      <p className="mt-3 text-xs opacity-60">
-        This is an educational contract-to-cash model for class use. It does not replace a full
-        accounting system or professional accounting judgment.
-      </p>
-    </div>
-  );
-}

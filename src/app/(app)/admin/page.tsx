@@ -142,7 +142,7 @@ export default async function AdminHomePage() {
     <div>
       <PageHeader
         title="Admin Home"
-        description={`Welcome, ${profile.full_name}. Manage access, keep the platform healthy, and unblock the contract-to-cash pipeline.`}
+        description={`Welcome, ${profile.full_name}.`}
         actions={
           <div className="flex flex-wrap gap-2">
             <Link href="/admin/users" className="btn btn-sm btn-primary">

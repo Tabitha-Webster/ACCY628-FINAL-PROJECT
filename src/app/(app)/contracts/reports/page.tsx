@@ -42,10 +42,7 @@ export default async function ContractReportsPage() {
         ) : null}
       </div>
 
-      <PageHeader
-        title="Contracts Dashboard"
-        description="Portfolio money, term risk, SLA health, and hour-pool pressure — with drill-downs below."
-      />
+      <PageHeader title="Contracts Dashboard" />
 
       <ContractPermissionActions items={permissions} showDenied />
 

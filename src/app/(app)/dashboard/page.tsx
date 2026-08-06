@@ -136,7 +136,7 @@ async function HrDashboard({ profile }: { profile: Profile }) {
     <div className="space-y-6">
       <PageHeader
         title="HR Home"
-        description={`Welcome, ${profile.full_name}. Manage contractor roles and workforce analytics.`}
+        description={`Welcome, ${profile.full_name}. Review applicants, open roles, and workforce analytics.`}
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -150,7 +150,10 @@ async function HrDashboard({ profile }: { profile: Profile }) {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Link href="/hr-analytics" className="btn btn-primary">
+        <Link href="/hr-applicants" className="btn btn-primary">
+          Applicants
+        </Link>
+        <Link href="/hr-analytics" className="btn btn-outline">
           HR Analytics
         </Link>
         <Link href="/hr-positions" className="btn btn-outline">
@@ -1052,10 +1055,7 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
 
   return (
     <div>
-      <PageHeader
-        title="My Assignments"
-        description="Action-oriented technician workspace for completing your assigned support work."
-      />
+      <PageHeader title="My Assignments" />
       <TechnicianWorkspaceClient
         technicianId={profile.id}
         technicianName={profile.full_name}
@@ -1327,7 +1327,7 @@ async function BillingDashboard({
         title="Billing Dashboard"
         description={
           period.view === "all"
-            ? `Welcome back, ${profile.full_name}. Showing data for the life of the company.`
+            ? `Welcome back, ${profile.full_name}.`
             : `Welcome back, ${profile.full_name}. Showing ${period.label} in ${period.view} view.`
         }
         actions={<PeriodViewControls {...periodViewControlProps(period)} />}
@@ -1659,7 +1659,7 @@ async function BillingDashboard({
         </div>
       </DashboardSection>
 
-      <DashboardSection title="Collections" description={`Aging and the oldest overdue invoices in ${period.label}.`}>
+      <DashboardSection title="Collections">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {agingSummary.map((row) => (
             <Link
