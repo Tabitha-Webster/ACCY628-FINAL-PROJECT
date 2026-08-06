@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -99,31 +99,29 @@ export function ControlFailuresChart({ failures, truncationNotes = [] }: Props) 
       });
   }, [byDate]);
 
-  const dayFailures = selectedDate ? byDate.get(selectedDate) ?? [] : [];
-  const selected = selectedId
-    ? dayFailures.find((row) => row.id === selectedId) ?? null
-    : dayFailures.length === 1
-      ? dayFailures[0]
-      : null;
+  // Derive a valid selection from current filter data (no effect setState).
+  const activeDate = selectedDate && byDate.has(selectedDate) ? selectedDate : null;
+  const dayFailures = activeDate ? byDate.get(activeDate) ?? [] : [];
+  const activeId =
+    activeDate == null
+      ? null
+      : selectedId && dayFailures.some((row) => row.id === selectedId)
+        ? selectedId
+        : dayFailures.length === 1
+          ? dayFailures[0].id
+          : null;
+  const selected = activeId ? dayFailures.find((row) => row.id === activeId) ?? null : null;
 
-  useEffect(() => {
-    if (selectedDate && !byDate.has(selectedDate)) {
+  function selectDay(dateKey: string | null) {
+    if (!dateKey) {
       setSelectedDate(null);
       setSelectedId(null);
       return;
     }
-    if (selectedId && selectedDate) {
-      const stillThere = (byDate.get(selectedDate) ?? []).some((r) => r.id === selectedId);
-      if (!stillThere) setSelectedId(null);
-    }
-  }, [byDate, selectedDate, selectedId]);
-
-  // Auto-select the single failure when a day has only one
-  useEffect(() => {
-    if (!selectedDate) return;
-    const rows = byDate.get(selectedDate) ?? [];
-    if (rows.length === 1) setSelectedId(rows[0].id);
-  }, [selectedDate, byDate]);
+    const rows = byDate.get(dateKey) ?? [];
+    setSelectedDate(dateKey);
+    setSelectedId(rows.length === 1 ? rows[0].id : null);
+  }
 
   const criticalCount = failures.filter((f) => f.severity === "critical").length;
   const warningCount = failures.filter((f) => f.severity === "warning").length;
@@ -147,8 +145,7 @@ export function ControlFailuresChart({ failures, truncationNotes = [] }: Props) 
             className={`btn btn-sm ${severity === "all" ? "btn-primary" : "btn-ghost"}`}
             onClick={() => {
               setSeverity("all");
-              setSelectedDate(null);
-              setSelectedId(null);
+              selectDay(null);
             }}
           >
             All ({failures.length})
@@ -158,8 +155,7 @@ export function ControlFailuresChart({ failures, truncationNotes = [] }: Props) 
             className={`btn btn-sm ${severity === "critical" ? "btn-error" : "btn-ghost"}`}
             onClick={() => {
               setSeverity("critical");
-              setSelectedDate(null);
-              setSelectedId(null);
+              selectDay(null);
             }}
           >
             Critical ({criticalCount})
@@ -169,8 +165,7 @@ export function ControlFailuresChart({ failures, truncationNotes = [] }: Props) 
             className={`btn btn-sm ${severity === "warning" ? "btn-warning" : "btn-ghost"}`}
             onClick={() => {
               setSeverity("warning");
-              setSelectedDate(null);
-              setSelectedId(null);
+              selectDay(null);
             }}
           >
             Warning ({warningCount})
@@ -267,8 +262,7 @@ export function ControlFailuresChart({ failures, truncationNotes = [] }: Props) 
                     onClick={(data) => {
                       const point = data as unknown as DayPoint;
                       if (!point?.dateKey) return;
-                      setSelectedDate((prev) => (prev === point.dateKey ? null : point.dateKey));
-                      setSelectedId(null);
+                      selectDay(activeDate === point.dateKey ? null : point.dateKey);
                     }}
                   />
                   <Bar
@@ -282,8 +276,7 @@ export function ControlFailuresChart({ failures, truncationNotes = [] }: Props) 
                     onClick={(data) => {
                       const point = data as unknown as DayPoint;
                       if (!point?.dateKey) return;
-                      setSelectedDate((prev) => (prev === point.dateKey ? null : point.dateKey));
-                      setSelectedId(null);
+                      selectDay(activeDate === point.dateKey ? null : point.dateKey);
                     }}
                   />
                 </BarChart>
@@ -291,11 +284,11 @@ export function ControlFailuresChart({ failures, truncationNotes = [] }: Props) 
             </div>
           </div>
 
-          {selectedDate ? (
+          {activeDate ? (
             <div className="space-y-3 rounded-box border border-base-300 bg-base-100 p-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide opacity-60">
-                  Failures on {formatDate(selectedDate)}
+                  Failures on {formatDate(activeDate)}
                 </p>
                 <p className="mt-1 text-sm opacity-70">
                   {dayFailures.length} control failure{dayFailures.length === 1 ? "" : "s"} — select
@@ -305,7 +298,7 @@ export function ControlFailuresChart({ failures, truncationNotes = [] }: Props) 
 
               <ul className="space-y-2">
                 {dayFailures.map((row) => {
-                  const isActive = (selected?.id ?? selectedId) === row.id;
+                  const isActive = activeId === row.id;
                   return (
                     <li key={row.id}>
                       <button
