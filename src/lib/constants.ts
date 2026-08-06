@@ -282,6 +282,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     // System dropdown renders via SystemNavTree in AppShell
     { href: "/admin/audit", label: "Audit Trail" },
     { href: "/admin/configurations", label: "Configurations" },
+    { href: "/controls", label: "Controls and Exceptions" },
   ],
   manager: MANAGER_NAV,
   technician: [
