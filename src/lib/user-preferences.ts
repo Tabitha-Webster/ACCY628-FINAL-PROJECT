@@ -76,6 +76,7 @@ export function applyPreferencesToDom(preferences: UserPreferences) {
 
 /** Routes that live inside nav dropdowns and are not top-level ROLE_NAV entries. */
 const EXTRA_LANDING_OPTIONS: Partial<Record<UserRole, NavItem[]>> = {
+  admin: [{ href: "/customer-approvals", label: "Customer Approvals" }],
   manager: [{ href: "/contracts", label: "Manage Contracts" }],
   billing: [
     { href: "/contracts", label: "Manage Contracts" },

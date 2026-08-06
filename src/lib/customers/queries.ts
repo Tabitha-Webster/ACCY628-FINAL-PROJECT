@@ -9,8 +9,8 @@ export const CUSTOMER_VIEW_ROLES: UserRole[] = ["admin", "manager", "billing", "
 /** Roles that can add and edit customer master data (Admin matches Manager). */
 export const CUSTOMER_MANAGE_ROLES: UserRole[] = ["admin", "manager"];
 
-/** Roles that can approve or reject Pending Approval signups. */
-export const CUSTOMER_APPROVE_ROLES: UserRole[] = ["admin", "manager"];
+/** Roles that can approve or reject Pending Approval signups (Admin only). */
+export const CUSTOMER_APPROVE_ROLES: UserRole[] = ["admin"];
 
 /** Roles allowed to export the customer list to Excel (Admin matches Manager). */
 export const CUSTOMER_EXPORT_ROLES: UserRole[] = ["admin", "manager", "billing"];

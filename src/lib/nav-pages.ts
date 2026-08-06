@@ -12,6 +12,7 @@ const ADMIN_EXTRA_PAGES: SearchablePage[] = [
   { href: "/admin/role-permissions", label: "Role Permissions", group: "User Access" },
   { href: "/admin/employees", label: "Employees", group: "Company Directory" },
   { href: "/customers", label: "Customers", group: "Company Directory" },
+  { href: "/customer-approvals", label: "New Customers", group: "Approvals" },
   { href: "/admin/alerts", label: "Alerts", group: "System" },
   { href: "/admin/system", label: "Platform Status", group: "System" },
   { href: "/admin/exceptions", label: "Exception Log", group: "System" },

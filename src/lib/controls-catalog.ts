@@ -63,7 +63,7 @@ export const CONTROLS_CATALOG: ControlItem[] = [
     category: "Access",
     risk: "a self-registered customer could reach invoices, tickets, or account data before management has vetted the account",
     control:
-      "new customer portal accounts stay non-active until a manager approves them; middleware redirects unapproved customers to Pending Approval and blocks the rest of the app until the customer status is active",
+      "new customer portal accounts stay non-active until an admin approves them; middleware redirects unapproved customers to Pending Approval and blocks the rest of the app until the customer status is active",
     whatIf: "What if a newly signed-up customer tries to open invoices before approval?",
     where: [
       { href: "/customer-approvals", label: "Customer approvals" },

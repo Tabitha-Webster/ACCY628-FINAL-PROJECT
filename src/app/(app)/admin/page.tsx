@@ -38,6 +38,15 @@ const ACCESS_TOOLS: AdminTool[] = [
   },
 ];
 
+const APPROVAL_TOOLS: AdminTool[] = [
+  {
+    href: "/customer-approvals",
+    title: "New Customers",
+    description:
+      "Approve or reject newly registered customer accounts. Pending accounts can sign in but cannot use contracts, tickets, or billing.",
+  },
+];
+
 const SYSTEM_TOOLS: AdminTool[] = [
   {
     href: "/admin/configurations",
@@ -102,9 +111,10 @@ export default async function AdminHomePage() {
   const profile = await requireAdmin();
   const supabase = await createClient();
 
-  const [usersRes, customersRes] = await Promise.all([
+  const [usersRes, customersRes, pendingRes] = await Promise.all([
     supabase.from("profiles").select("id, full_name, role, is_active, is_demo_user, customer_id"),
     supabase.from("customers").select("id").eq("status", "active"),
+    supabase.from("customers").select("id").eq("status", "pending_approval"),
   ]);
 
   const error = usersRes.error || customersRes.error;
@@ -116,6 +126,9 @@ export default async function AdminHomePage() {
       </div>
     );
   }
+
+  const pendingCustomers = pendingRes.error ? [] : (pendingRes.data ?? []);
+  const pendingCount = pendingCustomers.length;
 
   const users = usersRes.data ?? [];
   const limitedVisibility = users.length <= 1;
@@ -145,7 +158,13 @@ export default async function AdminHomePage() {
         description={`Welcome, ${profile.full_name}.`}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link href="/admin/users" className="btn btn-sm btn-primary">
+            <Link href="/customer-approvals" className="btn btn-sm btn-primary">
+              Customer Approvals
+              {pendingCount > 0 ? (
+                <span className="badge badge-warning badge-sm ml-1">{pendingCount}</span>
+              ) : null}
+            </Link>
+            <Link href="/admin/users" className="btn btn-sm btn-outline">
               Manage Access
             </Link>
             <Link href="/admin/role-permissions" className="btn btn-sm btn-outline">
@@ -219,6 +238,19 @@ export default async function AdminHomePage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="mt-8">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide opacity-60">Approvals</h2>
+        <ToolGrid tools={APPROVAL_TOOLS} />
+        {pendingCount > 0 ? (
+          <p className="mt-2 text-sm opacity-70">
+            {pendingCount} customer{pendingCount === 1 ? "" : "s"} waiting for approval.{" "}
+            <Link href="/customer-approvals" className="link link-primary">
+              Review now
+            </Link>
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-8">

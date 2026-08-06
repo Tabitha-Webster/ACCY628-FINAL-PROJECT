@@ -121,9 +121,9 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
   {
     key: "customer_approvals",
     label: "Customer Approvals",
-    description: "Approve or reject new customer signup requests.",
+    description: "Admin only: approve or reject newly registered customer accounts.",
     pathPrefixes: ["/customer-approvals"],
-    defaultRoles: ["admin", "manager"],
+    defaultRoles: ["admin"],
     group: "Company Directory",
   },
   {

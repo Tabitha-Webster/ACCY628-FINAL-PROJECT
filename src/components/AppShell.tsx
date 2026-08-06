@@ -7,6 +7,7 @@ import { ChevronRight, PanelLeft, PanelLeftClose } from "lucide-react";
 import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
 import { BillingStaffNavTree } from "@/components/BillingStaffNavTree";
 import { CompanyDirectoryNavTree } from "@/components/CompanyDirectoryNavTree";
+import { AdminApprovalsNavTree } from "@/components/AdminApprovalsNavTree";
 import { ContractsAgreementsNavTree } from "@/components/ContractsAgreementsNavTree";
 import { SystemNavTree } from "@/components/SystemNavTree";
 import { UserAccessNavTree } from "@/components/UserAccessNavTree";
@@ -102,6 +103,7 @@ function SideNav({
                     onNavigate={onNavigate}
                     allowedPageKeys={allowedPageKeys}
                   />
+                  <AdminApprovalsNavTree onNavigate={onNavigate} />
                   <SystemNavTree onNavigate={onNavigate} />
                 </>
               ) : null}

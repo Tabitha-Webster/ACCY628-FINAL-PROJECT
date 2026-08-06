@@ -56,7 +56,7 @@ export default async function PendingApprovalPage() {
 
       <Card title="What happens next">
         <ol className="list-decimal space-y-1 pl-5 text-sm opacity-80">
-          <li>A manager reviews your signup on the Customer Approvals page.</li>
+          <li>An admin reviews your signup on the Customer Approvals page.</li>
           <li>Once approved, your Customer Dashboard and service tools unlock automatically.</li>
           <li>If more information is needed, the company will contact you using your signup email.</li>
         </ol>

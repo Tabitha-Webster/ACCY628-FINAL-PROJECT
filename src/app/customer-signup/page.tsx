@@ -303,7 +303,7 @@ export default function CustomerSignupPage() {
 
     setLoading(false);
     setSuccessMessage(
-      "Account created successfully. Your registration is pending approval. Sign in after confirming your email (if required) to view your Pending Approval page."
+      "Account created successfully. Your registration is pending admin approval. Sign in after confirming your email (if required) to view your Pending Approval page."
     );
     setValues((prev) => ({ ...prev, password: "", confirmPassword: "" }));
   }
@@ -326,7 +326,7 @@ export default function CustomerSignupPage() {
         <div className="w-full max-w-md">
           <Card
             title="New Customer Sign Up"
-            description="Register your organization with ServiceSync"
+            description="Register your organization. An admin must approve your account before you can use contracts, tickets, or billing."
             className="shadow-2xl"
           >
             <div className="space-y-4">

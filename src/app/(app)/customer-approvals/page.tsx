@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { ButtonLink } from "@/components/Button";
 import { CustomerApprovalActions } from "@/components/CustomerApprovalActions";
+import { CustomerApprovalsSchemaNotice } from "@/components/CustomerApprovalsSchemaNotice";
 import { PageLayout } from "@/components/PageLayout";
 import { DataTable, EmptyState, ErrorState, StatusBadge } from "@/components/ui";
 import { canApproveCustomers } from "@/lib/customers/queries";
@@ -19,17 +20,27 @@ type ApprovalRow = {
   approval_note: string | null;
 };
 
+function isSchemaGap(message: string) {
+  return (
+    message.includes("approval_note") ||
+    message.includes("signup_at") ||
+    message.includes("pending_approval") ||
+    message.includes("rejected") ||
+    message.includes("customer_status")
+  );
+}
+
 export default async function CustomerApprovalsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  // Admin + Manager only — approve/reject Pending Approval signups.
+  // Admin only — approve/reject Pending Approval signups.
   if (!canApproveCustomers(profile.role)) redirect("/dashboard");
 
   const supabase = await createClient();
 
-  // Prefer the full manager-approval schema; fall back when migration is not applied yet.
   let rows: ApprovalRow[] = [];
   let errorMessage: string | null = null;
+  let schemaIncomplete = false;
 
   const full = await supabase
     .from("customers")
@@ -39,41 +50,35 @@ export default async function CustomerApprovalsPage() {
 
   if (!full.error) {
     rows = (full.data ?? []) as ApprovalRow[];
-  } else {
-    const schemaGap =
-      full.error.message.includes("approval_note") ||
-      full.error.message.includes("signup_at") ||
-      full.error.message.includes("pending_approval") ||
-      full.error.message.includes("rejected");
-    if (schemaGap && full.error.message.includes("signup_at")) {
-      const withoutSignup = await supabase
-        .from("customers")
-        .select("id, name, primary_contact, contact_email, status, created_at, approval_note")
-        .in("status", ["pending_approval", "rejected"])
-        .order("created_at", { ascending: false });
-      if (!withoutSignup.error) {
-        rows = (withoutSignup.data ?? []).map((row) => ({
-          ...row,
-          signup_at: null,
-        })) as ApprovalRow[];
-      } else if (
-        !withoutSignup.error.message.includes("approval_note") &&
-        !withoutSignup.error.message.includes("pending_approval") &&
-        !withoutSignup.error.message.includes("rejected")
-      ) {
-        errorMessage = withoutSignup.error.message;
-      }
-    } else if (!schemaGap) {
-      // Without the manager-approval migration, the dedicated queue cannot run.
-      errorMessage = full.error.message;
+  } else if (isSchemaGap(full.error.message)) {
+    // Fall back through optional columns / enum support.
+    const core = await supabase
+      .from("customers")
+      .select("id, name, primary_contact, contact_email, status, created_at")
+      .in("status", ["pending_approval", "rejected"])
+      .order("created_at", { ascending: false });
+
+    if (!core.error) {
+      rows = (core.data ?? []).map((row) => ({
+        ...row,
+        signup_at: null,
+        approval_note: null,
+      })) as ApprovalRow[];
+      schemaIncomplete = true;
+    } else if (isSchemaGap(core.error.message)) {
+      schemaIncomplete = true;
+    } else {
+      errorMessage = core.error.message;
     }
+  } else {
+    errorMessage = full.error.message;
   }
 
   if (errorMessage) {
     return (
       <PageLayout
         title="Customer Approvals"
-        description="Review newly registered customer accounts."
+        description="Admin only: approve or reject newly registered customer accounts."
         actions={
           <ButtonLink href="/customers" variant="secondary" size="sm">
             View customers
@@ -90,19 +95,23 @@ export default async function CustomerApprovalsPage() {
   return (
     <PageLayout
       title="Customer Approvals"
-      description="Approve or reject newly registered customer accounts. Pending accounts can sign in but cannot use contracts, tickets, or billing."
+      description="Admin only. Approve or reject newly registered customer accounts. Pending accounts can sign in but cannot use contracts, tickets, or billing."
       actions={
         <ButtonLink href="/customers" variant="secondary" size="sm">
           View customers
         </ButtonLink>
       }
     >
-      {pending.length === 0 && rows.length === 0 ? (
+      {schemaIncomplete && rows.length === 0 ? <CustomerApprovalsSchemaNotice /> : null}
+
+      {!schemaIncomplete && pending.length === 0 && rows.length === 0 ? (
         <EmptyState
           title="No customers awaiting review"
           description="New customer signups with Pending Approval status will appear here."
         />
-      ) : (
+      ) : null}
+
+      {rows.length > 0 ? (
         <DataTable headers={["Customer name", "Contact name", "Email", "Signup date", "Status", "Decision"]}>
           {rows.map((row) => (
             <tr key={row.id}>
@@ -126,7 +135,7 @@ export default async function CustomerApprovalsPage() {
             </tr>
           ))}
         </DataTable>
-      )}
+      ) : null}
     </PageLayout>
   );
 }

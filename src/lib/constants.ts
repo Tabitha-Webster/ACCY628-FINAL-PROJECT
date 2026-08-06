@@ -255,7 +255,6 @@ export type NavItem = {
 const MANAGER_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/customers", label: "Customers" },
-  { href: "/customer-approvals", label: "Approvals" },
   { href: "/admin/employees", label: "Employees" },
   // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
   { href: "/projects", label: "Projects" },
@@ -384,7 +383,6 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
     "/time-costs",
     "/contracts",
     "/billing-cost-approvals",
-    "/customer-approvals",
     "/operations",
     "/controls",
     "/hr-analytics",
@@ -394,6 +392,7 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       ...managerShared,
       "/admin",
       "/customers",
+      "/customer-approvals",
       "/assignments",
       "/support-requests",
       "/billing-collections",

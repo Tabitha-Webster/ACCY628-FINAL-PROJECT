@@ -3,14 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Minus, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
-import { hrefAllowedByPageKeys } from "@/lib/role-permissions";
+import { useState } from "react";
 
 type NavLink = { href: string; label: string };
 
-const COMPANY_DIRECTORY_LINKS: NavLink[] = [
-  { href: "/admin/employees", label: "Employees" },
-  { href: "/customers", label: "Customers" },
+const APPROVAL_LINKS: NavLink[] = [
+  { href: "/customer-approvals", label: "New Customers" },
 ];
 
 function pathActive(pathname: string, href: string) {
@@ -21,21 +19,10 @@ function sectionActive(pathname: string, links: NavLink[]) {
   return links.some((link) => pathActive(pathname, link.href));
 }
 
-export function CompanyDirectoryNavTree({
-  onNavigate,
-  allowedPageKeys = null,
-}: {
-  onNavigate?: () => void;
-  allowedPageKeys?: Set<string> | null;
-}) {
+/** Admin-only sidebar section for approving newly registered customers. */
+export function AdminApprovalsNavTree({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const links = useMemo(
-    () => COMPANY_DIRECTORY_LINKS.filter((link) => hrefAllowedByPageKeys(link.href, allowedPageKeys)),
-    [allowedPageKeys]
-  );
-  const [open, setOpen] = useState(() => sectionActive(pathname, COMPANY_DIRECTORY_LINKS));
-
-  if (links.length === 0) return null;
+  const [open, setOpen] = useState(() => sectionActive(pathname, APPROVAL_LINKS));
 
   return (
     <div className="space-y-1">
@@ -45,7 +32,7 @@ export function CompanyDirectoryNavTree({
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <span>Company Directory</span>
+        <span>Approvals</span>
         {open ? (
           <Minus className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
         ) : (
@@ -55,7 +42,7 @@ export function CompanyDirectoryNavTree({
 
       {open ? (
         <div className="ml-2 space-y-1 border-l border-base-300 pl-2">
-          {links.map((link) => {
+          {APPROVAL_LINKS.map((link) => {
             const active = pathActive(pathname, link.href);
             return (
               <Link

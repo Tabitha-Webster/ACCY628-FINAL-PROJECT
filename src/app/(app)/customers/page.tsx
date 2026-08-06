@@ -109,7 +109,7 @@ export default async function CustomersPage() {
   const description = isTechnician
     ? "Customers linked to your assigned tickets — search, filter, and open a profile for contact details."
     : canManage
-      ? "Shared live customer list from public.customers. Visibility depends on role; Admin and Manager can also review Pending Approval signups."
+      ? "Shared live customer list from public.customers. Visibility depends on role; Admin can review Pending Approval signups."
       : "Shared live customer list — filtered for your role. Open a card to view the latest profile.";
 
   return (
