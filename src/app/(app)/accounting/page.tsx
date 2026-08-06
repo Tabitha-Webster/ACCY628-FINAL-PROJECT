@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { canUseBillingTools } from "@/lib/constants";
-import { AccountingExplainer, DataTable, EmptyState, ErrorState, Money, PageHeader, StatCard } from "@/components/ui";
+import { DataTable, EmptyState, ErrorState, Money, PageHeader, StatCard } from "@/components/ui";
 import { PeriodViewControls } from "@/components/PeriodViewControls";
 import { formatCurrency, statusLabel } from "@/lib/format";
 import { monthKeyInDashboardPeriod, periodViewControlProps, resolveDashboardPeriod } from "@/lib/dashboard-period";
@@ -54,7 +54,7 @@ export default async function AccountingPage({
         title="Accounting Review"
         description={
           period.view === "all"
-            ? "Revenue recorded across the life of the company, broken out by type and recognition status."
+            ? "Revenue recorded, broken out by type and recognition status."
             : `Revenue recorded in ${period.label}, broken out by type and recognition status.`
         }
         actions={<PeriodViewControls {...periodViewControlProps(period)} />}
@@ -128,8 +128,6 @@ export default async function AccountingPage({
           <EmptyState title="No revenue has been recorded for this period" />
         )}
       </div>
-
-      <AccountingExplainer />
     </div>
   );
 }

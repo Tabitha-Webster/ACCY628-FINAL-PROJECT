@@ -4,8 +4,6 @@ import { getCurrentProfile } from "@/lib/auth";
 import { isManagerRole } from "@/lib/constants";
 import { PageHeader, DataTable, EmptyState, StatusBadge, Money, Hours, DateText } from "@/components/ui";
 import { TimeCostForm } from "@/components/TimeCostForm";
-import { LARGE_COST_THRESHOLD } from "@/lib/time-cost-config";
-import { formatCurrency } from "@/lib/format";
 import Link from "next/link";
 
 export default async function TimeCostsPage({
@@ -101,7 +99,7 @@ export default async function TimeCostsPage({
     <div>
       <PageHeader
         title="Submit Time and Costs"
-        description={`Log billable and included hours, plus direct costs. Daily hours over 8 are flagged; costs ${formatCurrency(LARGE_COST_THRESHOLD)}+, late entries, and after-invoice costs need manager then billing approval.`}
+        description="Log billable and included hours, plus direct costs."
       />
 
       <TimeCostForm
