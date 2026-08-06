@@ -149,7 +149,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
     label: "Renewal & Expiration",
     description: "Contracts nearing renewal or past end date.",
     pathPrefixes: ["/contracts/renewals"],
-    defaultRoles: ["admin", "manager", "billing", "technician", "executive"],
+    defaultRoles: ["admin", "manager", "billing", "technician"],
     group: "Contracts",
   },
   {
@@ -194,7 +194,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
   },
   {
     key: "operations",
-    label: "Service Operations",
+    label: "Service Tickets",
     description: "SLA monitoring and open work overview.",
     pathPrefixes: ["/operations"],
     defaultRoles: ["admin", "manager"],

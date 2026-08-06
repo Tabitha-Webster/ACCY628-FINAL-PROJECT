@@ -63,14 +63,6 @@ async function CustomerListContent({ role, profileId }: { role: UserRole; profil
   }
 
   if (customers.length === 0) {
-    if (role === "technician") {
-      return (
-        <EmptyState
-          title="No assigned customers"
-          description="Active customers appear here when you are assigned to their support tickets."
-        />
-      );
-    }
     if (role === "admin") {
       return (
         <div className="space-y-4">
@@ -85,7 +77,7 @@ async function CustomerListContent({ role, profileId }: { role: UserRole; profil
     return (
       <EmptyState
         title="No customers found"
-        description="There are no customer records visible for your role yet. When matching customers are added, they will show up here automatically."
+        description="There are no customer records visible for your role yet. When an admin approves a signup (Active), it will show up here automatically."
       />
     );
   }
@@ -105,12 +97,9 @@ export default async function CustomersPage() {
 
   const canManage = canEditCustomers(profile.role);
   const canApprove = canApproveCustomers(profile.role);
-  const isTechnician = profile.role === "technician";
-  const description = isTechnician
-    ? "Customers linked to your assigned tickets — search, filter, and open a profile for contact details."
-    : canManage
-      ? "Shared live customer list from public.customers. Visibility depends on role; Admin can review Pending Approval signups."
-      : "Shared live customer list — filtered for your role. Open a card to view the latest profile.";
+  const description = canManage
+    ? "Shared live customer list. Admin-approved signups become Active and appear here for every role."
+    : "Shared live customer list — Active (and other allowed) accounts for your role, including newly approved signups.";
 
   return (
     <PageLayout

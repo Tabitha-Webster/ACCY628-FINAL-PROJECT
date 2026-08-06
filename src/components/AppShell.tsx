@@ -9,6 +9,7 @@ import { BillingStaffNavTree } from "@/components/BillingStaffNavTree";
 import { CompanyDirectoryNavTree } from "@/components/CompanyDirectoryNavTree";
 import { AdminApprovalsNavTree } from "@/components/AdminApprovalsNavTree";
 import { ContractsAgreementsNavTree } from "@/components/ContractsAgreementsNavTree";
+import { ManagerBillingFinanceNavTree } from "@/components/ManagerBillingFinanceNavTree";
 import { SystemNavTree } from "@/components/SystemNavTree";
 import { UserAccessNavTree } from "@/components/UserAccessNavTree";
 import { HeaderPageSearch } from "@/components/HeaderPageSearch";
@@ -85,6 +86,14 @@ function SideNav({
         </div>
       </div>
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3" aria-label="Main">
+        {!restrictedCustomer && isAdmin ? (
+          <>
+            <UserAccessNavTree onNavigate={onNavigate} />
+            <CompanyDirectoryNavTree onNavigate={onNavigate} allowedPageKeys={allowedPageKeys} />
+            <AdminApprovalsNavTree onNavigate={onNavigate} />
+            <SystemNavTree onNavigate={onNavigate} />
+          </>
+        ) : null}
         {nav.map((item) => {
           if (!restrictedCustomer && !canShowHref(item.href)) return null;
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
@@ -99,26 +108,24 @@ function SideNav({
               >
                 {item.label}
               </Link>
-              {!restrictedCustomer && isAdmin && item.href === "/admin" ? (
+              {!restrictedCustomer && isManager && !isAdmin && item.href === "/dashboard" ? (
                 <>
-                  <UserAccessNavTree onNavigate={onNavigate} />
-                  <CompanyDirectoryNavTree
+                  <ContractsAgreementsNavTree
+                    showReports
+                    showNewContract
+                    showCustomerContractData
+                    showViewEditContracts
                     onNavigate={onNavigate}
                     allowedPageKeys={allowedPageKeys}
                   />
-                  <AdminApprovalsNavTree onNavigate={onNavigate} />
-                  <SystemNavTree onNavigate={onNavigate} />
+                  <ManagerBillingFinanceNavTree
+                    onNavigate={onNavigate}
+                    allowedPageKeys={allowedPageKeys}
+                  />
                 </>
               ) : null}
-              {!restrictedCustomer && isManager && !isAdmin && item.href === "/customers" ? (
-                <ContractsAgreementsNavTree
-                  showReports
-                  showNewContract
-                  showCustomerContractData
-                  showViewEditContracts
-                  onNavigate={onNavigate}
-                  allowedPageKeys={allowedPageKeys}
-                />
+              {!restrictedCustomer && isManager && !isAdmin && item.href === "/projects" ? (
+                <CompanyDirectoryNavTree onNavigate={onNavigate} allowedPageKeys={allowedPageKeys} />
               ) : null}
               {!restrictedCustomer && isExecutive && item.href === "/customers" ? (
                 <ContractsAgreementsNavTree
@@ -126,6 +133,7 @@ function SideNav({
                   showNewContract={false}
                   showCustomerContractData={false}
                   showAwaitingSignature
+                  showRenewals={false}
                   onNavigate={onNavigate}
                   allowedPageKeys={allowedPageKeys}
                 />
@@ -367,7 +375,9 @@ export function AppShell({
         <UserSettingsPanel profile={profile} onClose={() => setSettingsOpen(false)} onLogout={logout} />
       ) : null}
 
-      {!restrictedCustomer ? <HelpChatBubble /> : null}
+      {!restrictedCustomer ? (
+        <HelpChatBubble role={profile.role as UserRole} />
+      ) : null}
     </div>
   );
 }

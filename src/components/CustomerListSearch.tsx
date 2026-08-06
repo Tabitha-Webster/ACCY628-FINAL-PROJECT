@@ -128,7 +128,13 @@ function customerStatusBadgeClass(status: string) {
 }
 
 function CustomerStatusBadge({ status }: { status: string }) {
-  return <span className={`badge ${customerStatusBadgeClass(status)}`}>{statusLabel(status)}</span>;
+  return (
+    <span
+      className={`badge inline-flex h-auto min-h-5 w-max shrink-0 items-center justify-center whitespace-nowrap px-2.5 py-1 leading-tight ${customerStatusBadgeClass(status)}`}
+    >
+      {statusLabel(status)}
+    </span>
+  );
 }
 
 function matchesCustomerSearch(row: CustomerListRow, query: string) {
@@ -239,14 +245,18 @@ export function CustomerListSearch({
           : String(counts.pending),
       tone: "violet" as const,
       icon: <Building2 className="h-4 w-4" />,
-      hint: role === "technician" ? "Among assigned accounts" : "Awaiting approval",
+      hint: role === "technician" ? "Across the shared directory" : "Awaiting approval",
     },
   ];
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid gap-3 lg:grid-cols-12">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:col-span-7">
+      <div className={role === "executive" ? "grid gap-3" : "grid gap-3 lg:grid-cols-12"}>
+        <div
+          className={`grid grid-cols-2 gap-3 sm:grid-cols-4 ${
+            role === "executive" ? "" : "lg:col-span-7"
+          }`}
+        >
           {metricTiles.map((m) => {
             const tone = TONE[m.tone];
             return (
@@ -265,35 +275,37 @@ export function CustomerListSearch({
             );
           })}
         </div>
-        <div className="flex min-h-[11rem] flex-col rounded-2xl border border-base-300 bg-base-100 p-3 shadow-sm lg:col-span-5">
-          <p className="mb-0.5 text-xs font-semibold">Status mix</p>
-          <p className="mb-2 text-[10px] opacity-60">How your customer list is distributed</p>
-          <div className="h-40 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={statusMix} layout="vertical" margin={{ top: 4, right: 12, left: 4, bottom: 0 }}>
-                <XAxis type="number" hide domain={[0, Math.ceil(mixMax * 1.15) || 1]} />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={80}
-                  tick={{ fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  cursor={{ fill: "rgba(0,0,0,0.04)" }}
-                  formatter={(value) => [value ?? 0, "Customers"]}
-                  contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                />
-                <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={16}>
-                  {statusMix.map((entry) => (
-                    <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? STATUS_COLORS.Other} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+        {role === "executive" ? null : (
+          <div className="flex min-h-[11rem] flex-col rounded-2xl border border-base-300 bg-base-100 p-3 shadow-sm lg:col-span-5">
+            <p className="mb-0.5 text-xs font-semibold">Status mix</p>
+            <p className="mb-2 text-[10px] opacity-60">How your customer list is distributed</p>
+            <div className="h-40 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={statusMix} layout="vertical" margin={{ top: 4, right: 12, left: 4, bottom: 0 }}>
+                  <XAxis type="number" hide domain={[0, Math.ceil(mixMax * 1.15) || 1]} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={80}
+                    tick={{ fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                    formatter={(value) => [value ?? 0, "Customers"]}
+                    contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                  />
+                  <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={16}>
+                    {statusMix.map((entry) => (
+                      <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? STATUS_COLORS.Other} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-3 rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50/70 to-base-100 p-3 shadow-sm lg:flex-row lg:items-end lg:justify-between">
@@ -354,7 +366,7 @@ export function CustomerListSearch({
       <section className="overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-b from-violet-50/70 to-base-100 shadow-sm">
         <div className="border-b border-violet-200/70 px-3 py-2">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-violet-900/80">
-            {role === "technician" ? "Assigned customers" : "Customer directory"} ({filtered.length})
+            Customer directory ({filtered.length})
           </h2>
         </div>
         <div className="p-3">
@@ -373,7 +385,7 @@ export function CustomerListSearch({
                     ? `Nothing matched “${activeQuery}”. Try another name, customer ID, industry, or contact detail.`
                     : `No customers are currently marked as ${filterStatusLabel(statusFilter as CustomerStatus)}. Choose All statuses to see everyone.`
                   : role === "technician"
-                    ? "Active customers appear here when you are assigned to their support tickets."
+                    ? "Active customers appear here after an admin approves their signup."
                     : "There are no customer records in Supabase yet."
               }
             />
@@ -393,13 +405,15 @@ export function CustomerListSearch({
                       aria-label={`Open customer ${displayName(customer)}`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold">{displayName(customer)}</p>
                           <p className="mt-0.5 font-mono text-[11px] tabular-nums opacity-60">
                             {displayIdentifier(customer)}
                           </p>
                         </div>
-                        <CustomerStatusBadge status={status} />
+                        <div className="shrink-0 pt-0.5">
+                          <CustomerStatusBadge status={status} />
+                        </div>
                       </div>
                       <dl className="mt-2 space-y-1 text-[11px]">
                         <div className="flex justify-between gap-2">

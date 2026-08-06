@@ -13,7 +13,7 @@ export const CUSTOMER_MANAGE_ROLES: UserRole[] = ["admin", "manager"];
 export const CUSTOMER_APPROVE_ROLES: UserRole[] = ["admin"];
 
 /** Roles allowed to export the customer list to Excel (Admin matches Manager). */
-export const CUSTOMER_EXPORT_ROLES: UserRole[] = ["admin", "manager", "billing"];
+export const CUSTOMER_EXPORT_ROLES: UserRole[] = ["admin", "manager", "billing", "executive"];
 
 export function canViewCustomers(role: UserRole) {
   return CUSTOMER_VIEW_ROLES.includes(role);
@@ -33,10 +33,11 @@ export function canExportCustomers(role: UserRole) {
 
 /** Statuses each internal role may see on the shared customers list (canonical: status). */
 export function customerListStatusesForRole(role: UserRole): string[] | "all" {
+  // Admin/manager see the full lifecycle including pending/rejected.
   if (role === "admin" || role === "manager") return "all";
   if (role === "hr") return ["active", "inactive"];
   if (role === "billing") return ["active", "on_hold", "inactive"];
-  if (role === "technician") return ["active"];
+  // Executive + technician (+ default): approved/active customers from the shared directory.
   return ["active"];
 }
 
@@ -136,25 +137,10 @@ export async function listCustomersForInternalRoles(
   noStore();
 
   const role = options?.role;
-  const profileId = options?.profileId;
-  let allowedIds: string[] | null = null;
 
-  if (role === "technician" && profileId) {
-    const { data: tickets } = await supabase
-      .from("support_tickets")
-      .select("customer_id")
-      .eq("assigned_technician_id", profileId);
-    allowedIds = [
-      ...new Set(
-        (tickets ?? [])
-          .map((row) => row.customer_id as string | null)
-          .filter((id): id is string => Boolean(id))
-      ),
-    ];
-    if (allowedIds.length === 0) {
-      return { customers: [] as CustomerListRow[], error: null, schemaIncomplete: false };
-    }
-  }
+  // Shared Customers directory: every internal viewer sees the same approved/active
+  // accounts (plus role-specific statuses). Newly admin-approved signups are status=active
+  // and appear here for admin, manager, executive, billing, and technician.
 
   let query = supabase.from("customers").select(LIST_SELECT).order("name", { ascending: true });
 
@@ -163,10 +149,6 @@ export async function listCustomersForInternalRoles(
     if (statuses !== "all") {
       query = query.in("status", statuses);
     }
-  }
-
-  if (allowedIds) {
-    query = query.in("id", allowedIds);
   }
 
   let { data, error } = await query;
@@ -181,9 +163,6 @@ export async function listCustomersForInternalRoles(
       if (statuses !== "all") {
         fallbackQuery = fallbackQuery.in("status", statuses);
       }
-    }
-    if (allowedIds) {
-      fallbackQuery = fallbackQuery.in("id", allowedIds);
     }
     const fallback = await fallbackQuery;
     const rows = (fallback.data ?? []) as Array<Omit<CustomerListRow, "customer_identifier">>;

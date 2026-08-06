@@ -96,7 +96,9 @@ export function StatusBadge({
   className?: string;
 }) {
   return (
-    <span className={`badge badge-outline ${statusBadgeClass(status)} ${className}`.trim()}>
+    <span
+      className={`badge badge-outline inline-flex h-auto min-h-5 w-max shrink-0 items-center justify-center whitespace-nowrap px-2.5 py-1 leading-tight ${statusBadgeClass(status)} ${className}`.trim()}
+    >
       {label ?? statusLabel(status)}
     </span>
   );

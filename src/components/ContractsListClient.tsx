@@ -649,7 +649,7 @@ export function ContractsListClient({
                                 row.status as keyof typeof CONTRACT_STATUS_LABELS
                               ] ?? statusLabel(row.status)
                             }
-                            className="badge-sm h-auto max-w-full whitespace-normal px-2.5 py-1 text-left text-[0.7rem] font-medium leading-snug"
+                            className="badge-sm h-auto max-w-none shrink-0 whitespace-nowrap px-2.5 py-1 text-[0.7rem] font-medium leading-tight"
                           />
                         </td>
                         <td className="text-xs">
@@ -688,7 +688,7 @@ export function ContractsListClient({
                               {warnings.map((warning) => (
                                 <span
                                   key={warning.code}
-                                  className={`badge badge-sm h-auto max-w-full whitespace-normal px-2.5 py-1 text-left text-[0.7rem] font-medium leading-snug ${
+                                  className={`badge badge-sm h-auto max-w-none shrink-0 whitespace-nowrap px-2.5 py-1 text-[0.7rem] font-medium leading-tight ${
                                     warning.code === "past_end_date"
                                       ? "badge-error"
                                       : warning.code === "renewal_90"

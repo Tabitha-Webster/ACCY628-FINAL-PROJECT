@@ -1,7 +1,17 @@
 "use client";
 
-import { FormEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  FormEvent,
+  PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { Send, X } from "lucide-react";
+import { helpChatSuggestionsForRole } from "@/lib/help-chat-suggestions";
+import type { UserRole } from "@/lib/constants";
 
 type ChatTurn = {
   role: "user" | "assistant";
@@ -9,7 +19,7 @@ type ChatTurn = {
 };
 
 const STARTER =
-  "Hi! Welcome to ServiceSync Help. Ask me anything about your account—balances, requests, contracts—or how to get somewhere in the app.";
+  "Hi! Welcome to ServiceSync Help. Pick a suggested question below, or type your own—about balances, requests, contracts, or how to get somewhere in the app.";
 
 const STORAGE_KEY = "servicesync-help-chat-top-v1";
 const BUTTON_SIZE = 56;
@@ -53,7 +63,7 @@ function isMobileViewport() {
   return typeof window !== "undefined" && window.matchMedia(`(max-width: ${MOBILE_MAX_WIDTH}px)`).matches;
 }
 
-export function HelpChatBubble() {
+export function HelpChatBubble({ role }: { role?: UserRole }) {
   const panelId = useId();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -72,6 +82,9 @@ export function HelpChatBubble() {
     moved: boolean;
   } | null>(null);
   const suppressClickRef = useRef(false);
+
+  const suggestions = helpChatSuggestionsForRole(role ?? "customer");
+  const showSuggestions = !loading && turns.every((t) => t.role === "assistant");
 
   const reclamp = useCallback(() => {
     const mobile = isMobileViewport();
@@ -149,9 +162,8 @@ export function HelpChatBubble() {
     setOpen((value) => !value);
   }
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    const message = input.trim();
+  async function sendMessage(rawMessage: string) {
+    const message = rawMessage.trim();
     if (!message || loading) return;
 
     setError(null);
@@ -199,6 +211,11 @@ export function HelpChatBubble() {
     }
   }
 
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    await sendMessage(input);
+  }
+
   const positionStyle =
     mobileFixed || top == null
       ? undefined
@@ -216,107 +233,131 @@ export function HelpChatBubble() {
       style={positionStyle}
     >
       <div className="relative flex flex-col items-end">
-      {open ? (
-        <section
-          id={panelId}
-          className="pointer-events-auto absolute bottom-full mb-3 flex h-[min(28rem,70vh)] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-2xl shadow-base-content/15"
-          aria-label="Help chat"
-        >
-          <header className="flex items-center justify-between gap-2 border-b border-base-300 bg-primary px-3 py-2.5 text-primary-content">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold">Help</p>
-              <p className="truncate text-[11px] opacity-80">Account answers &amp; navigation help</p>
-            </div>
-            <button
-              type="button"
-              className="btn btn-ghost btn-xs text-primary-content"
-              onClick={() => setOpen(false)}
-              aria-label="Close help chat"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </header>
-
-          <div className="flex-1 space-y-2.5 overflow-y-auto bg-base-200/40 p-3">
-            {turns.map((turn, index) => (
-              <div
-                key={`${turn.role}-${index}`}
-                className={`flex ${turn.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
-                    turn.role === "user"
-                      ? "rounded-br-md bg-primary text-primary-content"
-                      : "rounded-bl-md border border-base-300 bg-base-100"
-                  }`}
-                >
-                  {turn.content}
-                </div>
+        {open ? (
+          <section
+            id={panelId}
+            className="pointer-events-auto absolute bottom-full mb-3 flex h-[min(28rem,70vh)] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-2xl shadow-base-content/15"
+            aria-label="Help chat"
+          >
+            <header className="flex items-center justify-between gap-2 border-b border-base-300 bg-primary px-3 py-2.5 text-primary-content">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Help</p>
+                <p className="truncate text-[11px] opacity-80">
+                  Suggested questions &amp; account answers
+                </p>
               </div>
-            ))}
-            {loading ? <p className="text-xs opacity-60">Thinking…</p> : null}
-            {error ? <p className="text-xs text-error">{error}</p> : null}
-            <div ref={bottomRef} />
-          </div>
-
-          <form className="border-t border-base-300 bg-base-100 p-2.5" onSubmit={onSubmit}>
-            <label className="sr-only" htmlFor={`${panelId}-input`}>
-              Ask a question
-            </label>
-            <div className="flex items-end gap-2">
-              <textarea
-                id={`${panelId}-input`}
-                ref={inputRef}
-                rows={2}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about your balance, tickets, contracts…"
-                className="textarea textarea-bordered textarea-sm min-h-[2.75rem] flex-1 resize-none"
-                maxLength={800}
-                disabled={loading}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    void onSubmit(e as unknown as FormEvent);
-                  }
-                }}
-              />
               <button
-                type="submit"
-                className="btn btn-primary btn-sm"
-                disabled={loading || !input.trim()}
-                aria-label="Send question"
+                type="button"
+                className="btn btn-ghost btn-xs text-primary-content"
+                onClick={() => setOpen(false)}
+                aria-label="Close help chat"
               >
-                <Send className="h-4 w-4" />
+                <X className="h-4 w-4" />
               </button>
-            </div>
-          </form>
-        </section>
-      ) : null}
+            </header>
 
-      <button
-        type="button"
-        className={`help-chat-fab pointer-events-auto flex size-14 items-center justify-center rounded-full text-2xl font-semibold shadow-lg transition-[transform,box-shadow] duration-200 ease-out hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
-          mobileFixed ? "cursor-pointer" : dragging ? "cursor-grabbing" : "cursor-grab"
-        } ${dragging ? "scale-105 shadow-xl" : ""}`}
-        style={{
-          touchAction: mobileFixed ? "manipulation" : "none",
-          backgroundColor: "#123B5D",
-          borderColor: "#0d2f4a",
-          color: "#ffffff",
-        }}
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
-        aria-label={open ? "Close help chat" : "Open help chat"}
-        title={mobileFixed ? undefined : "Drag up or down to reposition"}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onClick={onBubbleClick}
-      >
-        {open ? <X className="h-6 w-6" /> : <span aria-hidden>?</span>}
-      </button>
+            <div className="flex-1 space-y-2.5 overflow-y-auto bg-base-200/40 p-3">
+              {turns.map((turn, index) => (
+                <div
+                  key={`${turn.role}-${index}`}
+                  className={`flex ${turn.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
+                      turn.role === "user"
+                        ? "rounded-br-md bg-primary text-primary-content"
+                        : "rounded-bl-md border border-base-300 bg-base-100"
+                    }`}
+                  >
+                    {turn.content}
+                  </div>
+                </div>
+              ))}
+
+              {showSuggestions ? (
+                <div className="space-y-2 pt-1" aria-label="Suggested questions">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide opacity-55">
+                    Try asking
+                  </p>
+                  <div className="flex flex-col gap-1.5">
+                    {suggestions.map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        className="rounded-xl border border-sky-200/80 bg-sky-50/90 px-3 py-2 text-left text-sm leading-snug text-sky-950 transition hover:border-sky-300 hover:bg-sky-100/90 disabled:opacity-60"
+                        disabled={loading}
+                        onClick={() => void sendMessage(suggestion)}
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {loading ? <p className="text-xs opacity-60">Thinking…</p> : null}
+              {error ? <p className="text-xs text-error">{error}</p> : null}
+              <div ref={bottomRef} />
+            </div>
+
+            <form className="border-t border-base-300 bg-base-100 p-2.5" onSubmit={onSubmit}>
+              <label className="sr-only" htmlFor={`${panelId}-input`}>
+                Ask a question
+              </label>
+              <div className="flex items-end gap-2">
+                <textarea
+                  id={`${panelId}-input`}
+                  ref={inputRef}
+                  rows={2}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask about your balance, tickets, contracts…"
+                  className="textarea textarea-bordered textarea-sm min-h-[2.75rem] flex-1 resize-none"
+                  maxLength={800}
+                  disabled={loading}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void onSubmit(e as unknown as FormEvent);
+                    }
+                  }}
+                />
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={loading || !input.trim()}
+                  aria-label="Send question"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
+            </form>
+          </section>
+        ) : null}
+
+        <button
+          type="button"
+          className={`help-chat-fab pointer-events-auto flex size-14 items-center justify-center rounded-full text-2xl font-semibold shadow-lg transition-[transform,box-shadow] duration-200 ease-out hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+            mobileFixed ? "cursor-pointer" : dragging ? "cursor-grabbing" : "cursor-grab"
+          } ${dragging ? "scale-105 shadow-xl" : ""}`}
+          style={{
+            touchAction: mobileFixed ? "manipulation" : "none",
+            backgroundColor: "#123B5D",
+            borderColor: "#0d2f4a",
+            color: "#ffffff",
+          }}
+          aria-expanded={open}
+          aria-controls={open ? panelId : undefined}
+          aria-label={open ? "Close help chat" : "Open help chat"}
+          title={mobileFixed ? undefined : "Drag up or down to reposition"}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onClick={onBubbleClick}
+        >
+          {open ? <X className="h-6 w-6" /> : <span aria-hidden>?</span>}
+        </button>
       </div>
     </div>
   );

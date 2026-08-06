@@ -6,6 +6,7 @@ import { statusLabel } from "@/lib/format";
 export type SupportStatusSlice = {
   status: string;
   count: number;
+  label?: string;
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -16,7 +17,13 @@ const STATUS_COLORS: Record<string, string> = {
   waiting_on_approval: "#ec4899",
   resolved: "#22c55e",
   closed: "#64748b",
-  canceled: "#94a3b8",
+  canceled: "#ef4444",
+  draft: "#d4d4d8",
+  pending_approval: "#f59e0b",
+  active: "#22c55e",
+  on_hold: "#8b5cf6",
+  expired: "#737373",
+  renewed: "#38bdf8",
 };
 
 const FALLBACK_COLORS = ["#0ea5e9", "#8b5cf6", "#f97316", "#14b8a6", "#e11d48", "#84cc16"];
@@ -29,17 +36,23 @@ export function CustomerSupportStatusChart({
   data = [],
   year,
   compact = false,
+  title,
+  emptyMessage,
 }: {
   data?: SupportStatusSlice[];
   year: number;
   compact?: boolean;
+  title?: string;
+  emptyMessage?: string;
 }) {
   const rows = Array.isArray(data) ? data : [];
   const total = rows.reduce((sum, row) => sum + row.count, 0);
   const chartData = rows.map((row) => ({
     ...row,
-    label: statusLabel(row.status),
+    label: row.label ?? statusLabel(row.status),
   }));
+  const heading = title ?? `Support Requests (${year})`;
+  const empty = emptyMessage ?? "No support requests yet this year.";
 
   return (
     <div
@@ -48,15 +61,15 @@ export function CustomerSupportStatusChart({
       }`}
     >
       <div className={compact ? "mb-1" : "mb-2"}>
-        <p className={`font-semibold ${compact ? "text-xs" : "text-sm"}`}>Support Requests ({year})</p>
-        {!compact ? (
+        <p className={`font-semibold ${compact ? "text-xs" : "text-sm"}`}>{heading}</p>
+        {!compact && !title ? (
           <p className="text-xs opacity-60">Total requests by status for the year</p>
         ) : null}
       </div>
 
       {total === 0 ? (
         <div className="flex flex-1 items-center justify-center py-6 text-sm opacity-60">
-          No support requests yet this year.
+          {empty}
         </div>
       ) : (
         <div
@@ -66,7 +79,7 @@ export function CustomerSupportStatusChart({
         >
           <div
             className={`relative mx-auto w-full ${
-              compact ? "h-36 max-w-[11rem]" : "h-56 max-w-[16rem]"
+              compact ? "h-full min-h-[8rem] max-h-[14rem] max-w-[12rem]" : "h-56 max-w-[16rem]"
             }`}
           >
             <ResponsiveContainer width="100%" height="100%">

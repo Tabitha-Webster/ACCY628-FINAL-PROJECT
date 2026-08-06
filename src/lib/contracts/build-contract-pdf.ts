@@ -1,4 +1,3 @@
-import { jsPDF } from "jspdf";
 import type { ContractPdfInput } from "./signature-packets";
 
 function money(n: number | null | undefined) {
@@ -26,8 +25,10 @@ function fmtDateTime(value: string) {
 
 /**
  * Build a ServiceSync contract PDF from agreement fields and optional signature images.
+ * jspdf is loaded dynamically so missing installs fail at PDF time, not page load.
  */
 export async function buildContractPdfBlob(input: ContractPdfInput): Promise<Blob> {
+  const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 48;

@@ -83,7 +83,7 @@ export default async function OperationsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Service Operations"
+        title="Service Tickets"
         description="Ticket load, SLA exposure, pending work requests, and hour usage across active contracts."
       />
 
