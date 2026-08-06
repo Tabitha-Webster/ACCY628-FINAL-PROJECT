@@ -178,7 +178,7 @@ function Section({
   count,
   tone,
   children,
-  defaultOpen = true,
+  defaultOpen = false,
 }: {
   id: string;
   title: string;
@@ -498,7 +498,7 @@ export function TechnicianWorkspaceClient({
   const router = useRouter();
   const [activeWorkId, setActiveWorkId] = useState<string | null>(null);
   const [workFocus, setWorkFocus] = useState<WorkFocus>(null);
-  const [filter, setFilter] = useState<QueueFilter>("open");
+  const [filter, setFilter] = useState<QueueFilter>("all_sections");
   const [startingId, setStartingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -743,6 +743,7 @@ export function TechnicianWorkspaceClient({
 
       {!showSections ? (
         <Section
+          key={filter}
           id="filtered-queue"
           title={
             filter === "due_today"
@@ -758,6 +759,7 @@ export function TechnicianWorkspaceClient({
                       : "Open assigned tickets (urgency order)"
           }
           count={filteredQueue.length}
+          defaultOpen
           tone={
             filter === "overdue" || filter === "critical_high"
               ? "error"
