@@ -91,27 +91,78 @@ body {
 }
 
 /*
- * Navy side pane. Remapping the base tokens rather than hardcoding a
- * background keeps the nested base-color utilities in the nav trees legible
- * without touching those components.
+ * Login-aligned navy / powder-blue side pane.
+ * Remapping DaisyUI base/primary tokens here keeps AppShell + every nested
+ * nav tree (all roles) in sync without per-page styling.
  */
 .app-sidebar {
-  --color-base-100: oklch(21% 0.05 225);
-  --color-base-200: oklch(27% 0.06 222);
-  --color-base-300: oklch(34% 0.07 220);
-  --color-base-content: oklch(95% 0.013 225);
-  --color-primary: oklch(66% 0.11 205);
-  --color-primary-content: oklch(15% 0.04 225);
-  background-color: var(--color-base-100);
-  color: var(--color-base-content);
+  --sidebar-bg: #123b5d;
+  --sidebar-hover: #d4ebf8;
+  --sidebar-active: #b7ddf2;
+  --sidebar-active-border: #8fc5e3;
+  --sidebar-text: #f4f8fc;
+  --sidebar-divider: #3e5f7a;
+  --sidebar-ink: #123b5d;
+
+  --color-base-100: var(--sidebar-bg);
+  --color-base-200: var(--sidebar-hover);
+  --color-base-300: var(--sidebar-divider);
+  --color-base-content: var(--sidebar-text);
+  --color-primary: var(--sidebar-active);
+  --color-primary-content: var(--sidebar-ink);
+  background-color: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  border-color: var(--sidebar-divider);
+}
+
+.app-sidebar nav a,
+.app-sidebar nav button {
+  border: 1px solid transparent;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease;
+}
+
+/* Hover text goes navy against the lighter powder-blue token (base-200) */
+.app-sidebar nav a:hover,
+.app-sidebar nav button:hover {
+  color: var(--sidebar-ink);
+}
+
+/* Active / selected: powder blue fill + accent border (primary tokens) */
+.app-sidebar nav a.bg-primary,
+.app-sidebar nav a.bg-primary:hover {
+  border-color: var(--sidebar-active-border);
+  color: var(--sidebar-ink);
+}
+
+/* Settings row at bottom of sidebar */
+.app-sidebar .border-t button {
+  border: 1px solid transparent;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.app-sidebar .border-t button:hover {
+  color: var(--sidebar-ink);
 }
 
 /* Floating collapse control sits on the sidebar edge */
 .app-sidebar-toggle {
-  color: oklch(21% 0.05 225);
+  background-color: #ffffff;
+  border-color: var(--sidebar-active-border, #8fc5e3);
+  color: #123b5d;
 }
 
-/* Same brand mark as login; lightened so it reads on the dark sidebar */
+.app-sidebar-toggle:hover {
+  background-color: #d4ebf8;
+  border-color: #8fc5e3;
+  color: #123b5d;
+}
+
+/* Same brand mark as login; lightened so it reads on the navy sidebar */
 .app-sidebar .sidebar-brand-logo {
   filter: brightness(0) invert(1);
   opacity: 0.96;
