@@ -1055,10 +1055,7 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
 
   return (
     <div>
-      <PageHeader
-        title="My Assignments"
-        description="Action-oriented technician workspace for completing your assigned support work."
-      />
+      <PageHeader title="My Assignments" />
       <TechnicianWorkspaceClient
         technicianId={profile.id}
         technicianName={profile.full_name}
@@ -1330,7 +1327,7 @@ async function BillingDashboard({
         title="Billing Dashboard"
         description={
           period.view === "all"
-            ? `Welcome back, ${profile.full_name}. Showing data for the life of the company.`
+            ? `Welcome back, ${profile.full_name}.`
             : `Welcome back, ${profile.full_name}. Showing ${period.label} in ${period.view} view.`
         }
         actions={<PeriodViewControls {...periodViewControlProps(period)} />}
@@ -1662,7 +1659,7 @@ async function BillingDashboard({
         </div>
       </DashboardSection>
 
-      <DashboardSection title="Collections" description={`Aging and the oldest overdue invoices in ${period.label}.`}>
+      <DashboardSection title="Collections">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {agingSummary.map((row) => (
             <Link

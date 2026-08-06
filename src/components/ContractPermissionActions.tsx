@@ -58,10 +58,6 @@ export function ContractPermissionActions({
           )
         )}
       </div>
-      <p className="mt-3 text-xs opacity-60">
-        Create opens the new-contract form. Edit, Delete, Approve, and Cancel take you to the matching
-        list filter — open a contract to finish the action. Renew and Reporting open their dedicated pages.
-      </p>
     </div>
   );
 }

@@ -95,7 +95,7 @@ export default async function AccountsReceivablePage({
         title="Accounts Receivable"
         description={
           period.view === "all"
-            ? "Unpaid invoices across the life of the company, grouped by how far past the due date they are."
+            ? "Unpaid invoices, grouped by how far past the due date they are."
             : `Unpaid invoices from ${period.label}, grouped by how far past the due date they are.`
         }
         actions={<PeriodViewControls {...periodViewControlProps(period)} />}

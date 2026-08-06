@@ -54,7 +54,7 @@ export default async function AccountingPage({
         title="Accounting Review"
         description={
           period.view === "all"
-            ? "Revenue recorded across the life of the company, broken out by type and recognition status."
+            ? "Revenue recorded, broken out by type and recognition status."
             : `Revenue recorded in ${period.label}, broken out by type and recognition status.`
         }
         actions={<PeriodViewControls {...periodViewControlProps(period)} />}

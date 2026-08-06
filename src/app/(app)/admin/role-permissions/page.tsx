@@ -27,7 +27,7 @@ export default async function AdminRolePermissionsPage() {
     <div>
       <PageHeader
         title="Role Permissions"
-        description="Choose which application screens each C2C role can see and open. Admin access is fixed and cannot be reduced."
+        description="Choose which application screens each C2C role can see and open."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link href="/admin/users" className="btn btn-sm btn-outline">

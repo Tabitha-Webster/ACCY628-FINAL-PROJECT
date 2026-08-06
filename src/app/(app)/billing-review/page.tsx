@@ -31,7 +31,7 @@ export default async function BillingReviewPage({
         title="Overview"
         description={
           period.view === "all"
-            ? "Preview monthly contract charges, included hours, overage, approved projects, and equipment or software across the life of the company."
+            ? "Preview monthly contract charges, included hours, overage, approved projects, and equipment or software."
             : `Preview ${period.label} monthly contract charges, included hours, overage, approved projects, and equipment or software before generating invoices.`
         }
         actions={<PeriodViewControls {...periodViewControlProps(period)} />}
