@@ -85,6 +85,14 @@ function SideNav({
         </div>
       </div>
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3" aria-label="Main">
+        {!restrictedCustomer && isAdmin ? (
+          <>
+            <UserAccessNavTree onNavigate={onNavigate} />
+            <CompanyDirectoryNavTree onNavigate={onNavigate} allowedPageKeys={allowedPageKeys} />
+            <AdminApprovalsNavTree onNavigate={onNavigate} />
+            <SystemNavTree onNavigate={onNavigate} />
+          </>
+        ) : null}
         {nav.map((item) => {
           if (!restrictedCustomer && !canShowHref(item.href)) return null;
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
@@ -99,17 +107,6 @@ function SideNav({
               >
                 {item.label}
               </Link>
-              {!restrictedCustomer && isAdmin && item.href === "/admin" ? (
-                <>
-                  <UserAccessNavTree onNavigate={onNavigate} />
-                  <CompanyDirectoryNavTree
-                    onNavigate={onNavigate}
-                    allowedPageKeys={allowedPageKeys}
-                  />
-                  <AdminApprovalsNavTree onNavigate={onNavigate} />
-                  <SystemNavTree onNavigate={onNavigate} />
-                </>
-              ) : null}
               {!restrictedCustomer && isManager && !isAdmin && item.href === "/customers" ? (
                 <ContractsAgreementsNavTree
                   showReports

@@ -278,10 +278,7 @@ const MANAGER_NAV: NavItem[] = [
 
 export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   admin: [
-    { href: "/admin", label: "Home" },
-    // User Access dropdown renders via UserAccessNavTree in AppShell
-    // Company Directory dropdown renders via CompanyDirectoryNavTree in AppShell
-    // System dropdown renders via SystemNavTree in AppShell
+    // User Access / Company Directory / Approvals / System trees render in AppShell
     { href: "/admin/audit", label: "Change Log" },
     { href: "/admin/configurations", label: "Configurations" },
     { href: "/controls", label: "Controls and Exceptions" },
