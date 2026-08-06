@@ -2,15 +2,14 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { isManagerRole, type UserRole } from "@/lib/constants";
 import { ButtonLink } from "@/components/Button";
 import { CustomerListRetryButton } from "@/components/CustomerListRetryButton";
 import { CustomerListSearch } from "@/components/CustomerListSearch";
 import { CustomerSchemaNotice } from "@/components/CustomerSchemaNotice";
 import { AdminCustomerAccessNotice } from "@/components/AdminCustomerAccessNotice";
-import { HrCustomerAccessNotice } from "@/components/HrCustomerAccessNotice";
 import { PageLayout } from "@/components/PageLayout";
 import { EmptyState, ErrorState } from "@/components/ui";
-import type { UserRole } from "@/lib/constants";
 import {
   canEditCustomers,
   canViewCustomers,
@@ -67,17 +66,6 @@ async function CustomerListContent({ role }: { role: UserRole }) {
   }
 
   if (customers.length === 0) {
-    if (role === "hr") {
-      return (
-        <div className="space-y-4">
-          <EmptyState
-            title="No customers found"
-            description="HR is allowed in the app, but Supabase is not returning customer rows for this login yet."
-          />
-          <HrCustomerAccessNotice />
-        </div>
-      );
-    }
     if (role === "admin") {
       return (
         <div className="space-y-4">
@@ -111,9 +99,10 @@ export default async function CustomersPage() {
   if (!canViewCustomers(profile.role)) redirect("/dashboard");
 
   const canManage = canEditCustomers(profile.role);
+  const canReviewApprovals = isManagerRole(profile.role);
   const description = canManage
-    ? "Shared live customer list. Admin, Manager, and HR can add or edit customers; Technician and Billing can view the same records."
-    : "Shared live customer list — same records Admin, Manager, and HR maintain. Open a row to view the latest profile.";
+    ? "Shared live customer list. Admin and Manager can add or edit customers; Technician and Billing can view the same records."
+    : "Shared live customer list — same records Admin and Manager maintain. Open a row to view the latest profile.";
 
   return (
     <PageLayout
@@ -121,7 +110,7 @@ export default async function CustomersPage() {
       description={description}
       actions={
         <>
-          {canManage ? (
+          {canReviewApprovals ? (
             <ButtonLink href="/customer-approvals" variant="secondary" size="sm">
               Review approvals
             </ButtonLink>

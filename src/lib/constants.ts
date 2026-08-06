@@ -301,8 +301,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   ],
   hr: [
     { href: "/dashboard", label: "HR Home" },
-    { href: "/customers", label: "Customers" },
-    { href: "/customer-approvals", label: "Approvals" },
+    { href: "/hr-applicants", label: "Applicants" },
     { href: "/admin/employees", label: "Employees" },
     { href: "/hr-analytics", label: "HR Analytics" },
     { href: "/hr-positions", label: "Positions" },
@@ -420,7 +419,7 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/accounting",
       "/hr-analytics",
     ],
-    hr: ["/contracts", "/customers", "/customer-approvals", "/admin/hr"],
+    hr: ["/contracts", "/hr-applicants", "/hr-positions", "/admin/hr", "/admin/employees"],
     customer: ["/projects", "/my-invoices", "/make-payment", "/tickets", "/pending-approval"],
   };
 

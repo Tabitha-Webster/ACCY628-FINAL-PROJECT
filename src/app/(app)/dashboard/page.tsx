@@ -136,7 +136,7 @@ async function HrDashboard({ profile }: { profile: Profile }) {
     <div className="space-y-6">
       <PageHeader
         title="HR Home"
-        description={`Welcome, ${profile.full_name}. Manage contractor roles and workforce analytics.`}
+        description={`Welcome, ${profile.full_name}. Review applicants, open roles, and workforce analytics.`}
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -150,7 +150,10 @@ async function HrDashboard({ profile }: { profile: Profile }) {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Link href="/hr-analytics" className="btn btn-primary">
+        <Link href="/hr-applicants" className="btn btn-primary">
+          Applicants
+        </Link>
+        <Link href="/hr-analytics" className="btn btn-outline">
           HR Analytics
         </Link>
         <Link href="/hr-positions" className="btn btn-outline">
