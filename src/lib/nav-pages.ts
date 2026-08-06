@@ -52,6 +52,13 @@ const MANAGER_COMPANY_DIRECTORY_PAGES: SearchablePage[] = [
   { href: "/admin/employees", label: "Employees", group: "Company Directory" },
 ];
 
+const SERVICE_DELIVERY_PAGES: SearchablePage[] = [
+  { href: "/tickets", label: "Support Tickets", group: "Service Delivery" },
+  { href: "/projects", label: "Project Tasks", group: "Service Delivery" },
+  { href: "/time-costs", label: "Submit Time and Costs", group: "Service Delivery" },
+  { href: "/additional-work", label: "Additional Work Requests", group: "Service Delivery" },
+];
+
 function dedupePages(pages: SearchablePage[]) {
   const seen = new Set<string>();
   const result: SearchablePage[] = [];
@@ -104,6 +111,10 @@ export function pagesForRole(
 
   if (role === "manager") {
     pages.push(...MANAGER_BILLING_FINANCE_PAGES, ...MANAGER_COMPANY_DIRECTORY_PAGES);
+  }
+
+  if (role === "technician") {
+    pages.push(...SERVICE_DELIVERY_PAGES);
   }
 
   if (role === "customer") {

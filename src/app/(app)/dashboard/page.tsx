@@ -38,6 +38,7 @@ import {
   EXECUTIVE_SIGNATURE_OVERDUE_DAYS,
   fetchContractReportMetrics,
   listAwaitingExecutiveSignatures,
+  listOpenContractCompletionRequests,
   summarizeContractsByStatus,
 } from "@/lib/contracts";
 import { round2, withDerivedInvoiceStatus } from "@/lib/billing";
@@ -418,6 +419,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
     proposedProjectsRes,
     awaitingCustomerRes,
     pendingMilestonesRes,
+    completionRequestsRes,
   ] = await Promise.all([
     supabase.from("customers").select("id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("contracts").select("id", { count: "exact", head: true }).eq("status", "active"),
@@ -463,6 +465,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
       .eq("approval_status", "pending")
       .order("due_date", { ascending: true, nullsFirst: false })
       .limit(8),
+    listOpenContractCompletionRequests(supabase),
   ]);
 
   const customerName = new Map((customersRes.data ?? []).map((c) => [c.id, c.name as string]));
@@ -491,8 +494,12 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
     approval_status: string | null;
     projects: { id: string; name: string; customer_id: string } | { id: string; name: string; customer_id: string }[] | null;
   }>;
+  const completionRequests = completionRequestsRes.data ?? [];
   const pendingApprovalsTotal =
-    additionalWork.length + projectsNeedingCustomerAction.length + pendingMilestones.length;
+    additionalWork.length +
+    projectsNeedingCustomerAction.length +
+    pendingMilestones.length +
+    completionRequests.length;
   const timeEntries = (timeEntriesRes.data ?? []) as Pick<
     TimeEntry,
     "contract_id" | "customer_id" | "hours_worked" | "classification" | "work_date"
@@ -544,6 +551,12 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
   })).filter((row) => row.count > 0);
 
   const approvalChips = [
+    ...completionRequests.slice(0, 4).map((r) => ({
+      id: `cc-${r.id}`,
+      label: r.contract_name,
+      detail: `${r.contract_number ?? "Contract"} · ready to complete`,
+      href: `/contracts/${r.contract_id}`,
+    })),
     ...additionalWork.slice(0, 4).map((w) => ({
       id: `aw-${w.id}`,
       label: w.title,

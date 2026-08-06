@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { UserRole } from "@/lib/constants";
-import { TechnicianWorkPanel } from "@/components/TechnicianWorkPanel";
 import { formatDateTime } from "@/lib/format";
 
 type TechnicianOption = { id: string; full_name: string };
@@ -56,18 +55,9 @@ function fromLocalInputValue(value: string) {
 
 export function TicketActions({
   ticketId,
-  customerId,
-  contractId,
   status,
-  priority,
   assignedTechnicianId,
-  actualResponseAt,
-  technicianNotes,
-  completionNotes,
-  customerResolutionSummary,
   customerConfirmed,
-  classification,
-  billableApprovalStatus,
   noTimeExplanation,
   reopenedAt,
   reopenReason,
@@ -76,12 +66,8 @@ export function TicketActions({
   serviceMode = null,
   serviceLocation = null,
   scheduleNotes = null,
-  currentUserId,
   role,
-  internalCostRate,
-  contractHourlyRate,
   recordedHours,
-  hasTimeEntryDescriptions,
   technicians = [],
 }: Props) {
   const router = useRouter();
@@ -412,27 +398,7 @@ export function TicketActions({
 
   if (role !== "technician") return null;
 
-  return (
-    <TechnicianWorkPanel
-      ticketId={ticketId}
-      customerId={customerId}
-      contractId={contractId}
-      status={status}
-      priority={priority}
-      assignedTechnicianId={assignedTechnicianId}
-      actualResponseAt={actualResponseAt}
-      technicianNotes={technicianNotes}
-      completionNotes={completionNotes}
-      customerResolutionSummary={customerResolutionSummary}
-      classification={classification}
-      billableApprovalStatus={billableApprovalStatus}
-      currentUserId={currentUserId}
-      internalCostRate={internalCostRate}
-      contractHourlyRate={contractHourlyRate}
-      recordedHours={recordedHours}
-      hasTimeEntryDescriptions={hasTimeEntryDescriptions}
-      serviceMode={serviceMode}
-      serviceLocation={serviceLocation}
-    />
-  );
+  // Technician work documentation / Mark Work Complete live on My Assignments,
+  // not on Support Ticket detail.
+  return null;
 }

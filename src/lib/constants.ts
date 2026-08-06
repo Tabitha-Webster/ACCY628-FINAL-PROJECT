@@ -290,11 +290,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/dashboard", label: "My Assignments" },
     { href: "/assignments", label: "Assignments Workbench" },
     { href: "/customers", label: "Customers" },
-    // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
-    { href: "/tickets", label: "Support Tickets" },
-    { href: "/projects", label: "Project Tasks" },
-    { href: "/time-costs", label: "Submit Time and Costs" },
-    { href: "/additional-work", label: "Additional Work Requests" },
+    // Contracts & Agreements + Service Delivery trees render in AppShell
   ],
   billing: [
     { href: "/dashboard", label: "Dashboard" },
@@ -425,7 +421,15 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/accounts-receivable",
       "/admin/employees",
     ],
-    technician: ["/contracts", "/customers", "/assignments"],
+    technician: [
+      "/contracts",
+      "/customers",
+      "/assignments",
+      "/tickets",
+      "/projects",
+      "/time-costs",
+      "/additional-work",
+    ],
     billing: [
       "/customers",
       "/contracts",

@@ -10,6 +10,7 @@ import { CompanyDirectoryNavTree } from "@/components/CompanyDirectoryNavTree";
 import { AdminApprovalsNavTree } from "@/components/AdminApprovalsNavTree";
 import { ContractsAgreementsNavTree } from "@/components/ContractsAgreementsNavTree";
 import { ManagerBillingFinanceNavTree } from "@/components/ManagerBillingFinanceNavTree";
+import { ServiceDeliveryNavTree } from "@/components/ServiceDeliveryNavTree";
 import { SystemNavTree } from "@/components/SystemNavTree";
 import { UserAccessNavTree } from "@/components/UserAccessNavTree";
 import { HeaderPageSearch } from "@/components/HeaderPageSearch";
@@ -141,6 +142,12 @@ function SideNav({
               {isTechnician && item.href === "/dashboard" ? (
                 <ContractsAgreementsNavTree
                   showReports={false}
+                  onNavigate={onNavigate}
+                  allowedPageKeys={allowedPageKeys}
+                />
+              ) : null}
+              {isTechnician && item.href === "/assignments" ? (
+                <ServiceDeliveryNavTree
                   onNavigate={onNavigate}
                   allowedPageKeys={allowedPageKeys}
                 />
