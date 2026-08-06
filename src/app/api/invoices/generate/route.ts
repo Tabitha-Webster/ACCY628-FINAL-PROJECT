@@ -6,6 +6,7 @@ import {
   ONE_TIME_BILLING_SOURCES,
   directCostBillingBlockReason,
   hasDuplicateIds,
+  isAdditionalWorkBlockingBilling,
   milestoneBillingBlockReason,
   pendingAdditionalWorkBlockReason,
   projectBillingBlockReason,
@@ -142,20 +143,26 @@ export async function POST(request: Request) {
     pendingAwFilters.length > 0
       ? await supabase
           .from("additional_work_requests")
-          .select("id, project_id, support_ticket_id, title")
-          .eq("approval_status", "pending")
+          .select("id, project_id, support_ticket_id, title, approval_status, customer_approval_status")
+          .or("approval_status.eq.pending,customer_approval_status.eq.pending")
           .or(pendingAwFilters.join(","))
-      : { data: [] as { id: string; project_id: string | null; support_ticket_id: string | null; title: string }[], error: null };
+      : { data: [] as { id: string; project_id: string | null; support_ticket_id: string | null; title: string; approval_status: string; customer_approval_status: string | null }[], error: null };
 
   if (pendingAwRes.error) {
     return NextResponse.json({ error: pendingAwRes.error.message }, { status: 500 });
   }
 
-  const pendingAwByProject = new Set(
-    (pendingAwRes.data ?? []).map((r) => r.project_id).filter((id): id is string => Boolean(id))
+  const blockingAw = (pendingAwRes.data ?? []).filter((r) =>
+    isAdditionalWorkBlockingBilling({
+      approval_status: r.approval_status,
+      customer_approval_status: r.customer_approval_status,
+      project_id: r.project_id,
+    })
   );
+
+  const pendingAwByProject = new Set(blockingAw.map((r) => r.project_id).filter((id): id is string => Boolean(id)));
   const pendingAwByTicket = new Set(
-    (pendingAwRes.data ?? []).map((r) => r.support_ticket_id).filter((id): id is string => Boolean(id))
+    blockingAw.map((r) => r.support_ticket_id).filter((id): id is string => Boolean(id))
   );
 
   const conflicts: string[] = [];

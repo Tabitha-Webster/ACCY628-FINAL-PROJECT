@@ -2,12 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { PageHeader, DataTable, EmptyState, StatusBadge, Money, DateText, ErrorState, StatCard } from "@/components/ui";
+import { PageHeader, DataTable, EmptyState, StatusBadge, Money, DateText, ErrorState } from "@/components/ui";
 import { grossMarginPct, marginBand } from "@/lib/calculations";
 import type { ApprovalStatus, Project, ProjectMilestone, ProjectStatus } from "@/lib/types";
 import { ProjectActions, ProjectChangeRequestPanel } from "@/components/ProjectActions";
 import { ProjectProgressCard, projectCompletionPercent } from "@/components/ProjectProgressCard";
-import { ManagerApprovalQueue } from "@/components/ManagerApprovals";
+import ProjectsOverviewPanel from "@/components/ProjectsOverviewPanel";
 
 type ProjectRow = Pick<
   Project,
@@ -58,7 +58,22 @@ export default async function ProjectsPage({
     );
   }
 
-  const rows = (projects ?? []) as ProjectRow[];
+  const rowsAll = (projects ?? []) as ProjectRow[];
+
+  let assignedProjectIds: Set<string> | null = null;
+  if (profile.role === "technician") {
+    const { data: assignments } = await supabase
+      .from("technician_assignments")
+      .select("project_id")
+      .eq("technician_id", profile.id)
+      .not("project_id", "is", null);
+    assignedProjectIds = new Set(
+      (assignments ?? []).map((a) => a.project_id).filter((id): id is string => Boolean(id))
+    );
+  }
+
+  const rows =
+    assignedProjectIds != null ? rowsAll.filter((p) => assignedProjectIds!.has(p.id)) : rowsAll;
   const customerIds = Array.from(new Set(rows.map((p) => p.customer_id)));
   const projectIds = rows.map((p) => p.id);
   const managerIds = Array.from(new Set(rows.map((p) => p.project_manager_id).filter(Boolean))) as string[];
@@ -237,6 +252,8 @@ export default async function ProjectsPage({
     project_name: string;
     estimated_hours: number | null;
     estimated_amount: number | null;
+    approval_status: ApprovalStatus;
+    customer_approval_status?: string | null;
   }[] = [];
   let managerPendingMilestones: {
     id: string;
@@ -249,7 +266,7 @@ export default async function ProjectsPage({
     const [mgrCrRes, mgrMsRes] = await Promise.all([
       supabase
         .from("additional_work_requests")
-        .select("id, title, project_id, estimated_hours, estimated_amount, approval_status")
+        .select("id, title, project_id, estimated_hours, estimated_amount, approval_status, customer_approval_status")
         .in("project_id", projectIds)
         .eq("approval_status", "pending")
         .order("created_at", { ascending: false }),
@@ -266,6 +283,8 @@ export default async function ProjectsPage({
       project_name: rows.find((p) => p.id === r.project_id)?.name ?? "Project",
       estimated_hours: r.estimated_hours,
       estimated_amount: r.estimated_amount,
+      approval_status: r.approval_status as ApprovalStatus,
+      customer_approval_status: r.customer_approval_status,
     }));
     managerPendingMilestones = (mgrMsRes.data ?? []).map((m) => ({
       id: m.id,
@@ -275,41 +294,75 @@ export default async function ProjectsPage({
     }));
   }
 
+  const technicianAttention =
+    profile.role === "technician"
+      ? [
+          ...rows.flatMap((p) => {
+            const openMs = (milestonesByProject.get(p.id) ?? []).filter((m) => !m.completed);
+            return openMs.slice(0, 3).map((m) => ({
+              id: `ms-${m.id}`,
+              title: m.name,
+              detail: `${p.name} · milestone open`,
+              href: `/projects?selected=${p.id}`,
+              tone: "default" as const,
+            }));
+          }),
+          ...rows
+            .filter((p) => (pendingCrByProject.get(p.id) ?? 0) > 0)
+            .map((p) => ({
+              id: `oos-${p.id}`,
+              title: p.name,
+              detail: `${pendingCrByProject.get(p.id)} out-of-scope / change request(s) pending`,
+              href: `/projects?selected=${p.id}`,
+              tone: "warning" as const,
+            })),
+        ].slice(0, 8)
+      : [];
+
   return (
     <div>
       <PageHeader
         title="Projects"
-        description="Track delivery progress, approvals, change requests, time, and materials."
+        description={
+          profile.role === "technician"
+            ? "Your assigned projects — progress, out-of-scope flags, and actions."
+            : "Track delivery progress, approvals, change requests, time, and materials."
+        }
       />
 
-      {profile.role === "manager" ? (
-        <ManagerApprovalQueue
+      <div className="mb-6">
+        <ProjectsOverviewPanel
+          role={profile.role}
           currentUserId={profile.id}
+          projects={rows.map((p) => ({
+            id: p.id,
+            name: p.name,
+            status: p.status,
+            customer_name: customerName.get(p.customer_id) ?? "—",
+          }))}
           proposedProjects={proposedProjects}
           projectsAwaitingCustomer={projectsAwaitingCustomer}
           pendingChangeRequests={managerPendingCrs}
           pendingMilestones={managerPendingMilestones}
-        />
-      ) : null}
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Projects" value={String(rows.length)} />
-        <StatCard label="In Progress" value={String(inProgress)} tone="default" />
-        <StatCard
-          label="Awaiting Approval"
-          value={String(awaitingApproval)}
-          tone={awaitingApproval > 0 ? "warning" : "default"}
-          hint="Customer or scope approval pending"
-        />
-        <StatCard
-          label="Open Out-of-Scope"
-          value={String(pendingChangeRequests)}
-          tone={pendingChangeRequests > 0 ? "warning" : "success"}
-          hint="Pending manager approval"
+          technicianItems={technicianAttention}
+          counts={{
+            total: rows.length,
+            inProgress,
+            awaitingApproval,
+            openOutOfScope: pendingChangeRequests,
+          }}
         />
       </div>
 
       {rows.length === 0 ? (
-        <EmptyState title="No projects yet" description="Projects created for customers will appear here." />
+        <EmptyState
+          title={profile.role === "technician" ? "No assigned projects" : "No projects yet"}
+          description={
+            profile.role === "technician"
+              ? "When a manager assigns you to a project, it will show up here."
+              : "Projects created for customers will appear here."
+          }
+        />
       ) : (
         <div className="grid gap-6 xl:grid-cols-5">
           <div className="xl:col-span-3">

@@ -13,7 +13,7 @@ export default async function AdditionalWorkPage() {
   const { data: requests, error } = await supabase
     .from("additional_work_requests")
     .select(
-      "id, customer_id, contract_id, project_id, support_ticket_id, requested_by, title, description, estimated_hours, estimated_amount, approval_status, reviewed_by, reviewed_at, review_notes, created_at"
+      "id, customer_id, contract_id, project_id, support_ticket_id, requested_by, title, description, estimated_hours, estimated_amount, approval_status, customer_approval_status, reviewed_by, reviewed_at, review_notes, created_at"
     )
     .order("created_at", { ascending: false });
 
@@ -116,7 +116,13 @@ export default async function AdditionalWorkPage() {
                 </td>
                 <td>
                   {profile.role === "manager" ? (
-                    <AdditionalWorkActions requestId={r.id} supportTicketId={r.support_ticket_id} reviewerId={profile.id} />
+                    <AdditionalWorkActions
+                      requestId={r.id}
+                      supportTicketId={r.support_ticket_id}
+                      reviewerId={profile.id}
+                      projectId={r.project_id}
+                      customerApprovalStatus={r.customer_approval_status}
+                    />
                   ) : (
                     <StatusBadge status={r.approval_status} />
                   )}

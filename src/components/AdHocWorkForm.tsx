@@ -54,6 +54,8 @@ export function AdHocWorkForm({ technicianId, customers, contracts }: Props) {
       description: description.trim(),
       estimated_hours: estimatedHours ? Number(estimatedHours) : null,
       estimated_amount: estimatedAmount ? Number(estimatedAmount) : null,
+      approval_status: "pending",
+      customer_approval_status: "not_required",
     });
     setLoading(false);
 

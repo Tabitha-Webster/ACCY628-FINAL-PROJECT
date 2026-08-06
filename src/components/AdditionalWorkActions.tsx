@@ -3,14 +3,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { isAdditionalWorkFullyApproved } from "@/lib/additional-work-approvals";
 
 type Props = {
   requestId: string;
   supportTicketId: string | null;
   reviewerId: string;
+  projectId?: string | null;
+  customerApprovalStatus?: string | null;
 };
 
-export function AdditionalWorkActions({ requestId, supportTicketId, reviewerId }: Props) {
+export function AdditionalWorkActions({
+  requestId,
+  supportTicketId,
+  reviewerId,
+  projectId = null,
+  customerApprovalStatus = null,
+}: Props) {
   const router = useRouter();
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState<"approve" | "reject" | null>(null);
@@ -21,15 +30,18 @@ export function AdditionalWorkActions({ requestId, supportTicketId, reviewerId }
     setLoading(decision === "approved" ? "approve" : "reject");
     const supabase = createClient();
 
-    const { error: updateError } = await supabase
-      .from("additional_work_requests")
-      .update({
-        approval_status: decision,
-        reviewed_by: reviewerId,
-        reviewed_at: new Date().toISOString(),
-        review_notes: notes.trim() || null,
-      })
-      .eq("id", requestId);
+    const patch: Record<string, unknown> = {
+      approval_status: decision,
+      reviewed_by: reviewerId,
+      reviewed_at: new Date().toISOString(),
+      review_notes: notes.trim() || null,
+    };
+    // Ticket-only / non-project rows do not need a customer gate.
+    if (!projectId && (customerApprovalStatus == null || customerApprovalStatus === "pending")) {
+      patch.customer_approval_status = "not_required";
+    }
+
+    const { error: updateError } = await supabase.from("additional_work_requests").update(patch).eq("id", requestId);
 
     if (updateError) {
       setLoading(null);
@@ -72,6 +84,26 @@ export function AdditionalWorkActions({ requestId, supportTicketId, reviewerId }
           }
         }
       }
+    } else if (
+      decision === "approved" &&
+      projectId &&
+      isAdditionalWorkFullyApproved({
+        approval_status: decision,
+        customer_approval_status: customerApprovalStatus ?? "pending",
+        project_id: projectId,
+      })
+    ) {
+      const now = new Date().toISOString();
+      await supabase
+        .from("time_entries")
+        .update({
+          approval_status: "approved",
+          approved_by: reviewerId,
+          approved_at: now,
+        })
+        .eq("project_id", projectId)
+        .eq("classification", "out_of_scope")
+        .eq("approval_status", "pending");
     }
 
     setLoading(null);
@@ -81,6 +113,12 @@ export function AdditionalWorkActions({ requestId, supportTicketId, reviewerId }
   return (
     <div className="space-y-2">
       {error ? <p className="text-xs text-error">{error}</p> : null}
+      {projectId ? (
+        <p className="text-xs opacity-70">
+          Manager decision only — customer approval is also required before billing (customer status:{" "}
+          {customerApprovalStatus ?? "pending"}).
+        </p>
+      ) : null}
       <textarea
         className="textarea textarea-bordered textarea-sm w-full"
         rows={1}

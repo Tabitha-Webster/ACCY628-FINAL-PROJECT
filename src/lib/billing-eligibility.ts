@@ -62,6 +62,23 @@ export function pendingAdditionalWorkBlockReason(opts: {
   return `${opts.contextLabel} has unapproved additional work and cannot be invoiced yet.`;
 }
 
+/**
+ * Project OOS / change requests need manager + customer approval before billing.
+ * Ticket-only rows with customer_approval_status = not_required only need manager approval.
+ */
+export function isAdditionalWorkBlockingBilling(request: {
+  approval_status?: string | null;
+  customer_approval_status?: string | null;
+  project_id?: string | null;
+}) {
+  if (request.approval_status === "rejected" || request.customer_approval_status === "rejected") {
+    return false; // rejected work should not bill; other gates handle classification
+  }
+  if (request.approval_status !== "approved") return true;
+  const customer = request.customer_approval_status ?? (request.project_id ? "pending" : "not_required");
+  return customer !== "approved" && customer !== "not_required";
+}
+
 export function directCostBillingBlockReason(cost: {
   description?: string | null;
   approval_status: string;

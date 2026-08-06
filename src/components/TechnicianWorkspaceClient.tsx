@@ -175,7 +175,7 @@ function Section({
   count,
   tone,
   children,
-  defaultOpen = true,
+  defaultOpen = false,
 }: {
   id: string;
   title: string;
@@ -478,7 +478,7 @@ export function TechnicianWorkspaceClient({
   const [workspaceView, setWorkspaceView] = useState<"list" | "calendar">("list");
   const [activeWorkId, setActiveWorkId] = useState<string | null>(null);
   const [workFocus, setWorkFocus] = useState<WorkFocus>(null);
-  const [filter, setFilter] = useState<QueueFilter>("open");
+  const [filter, setFilter] = useState<QueueFilter>("all_sections");
   const [startingId, setStartingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -705,6 +705,7 @@ export function TechnicianWorkspaceClient({
 
       {!showSections ? (
         <Section
+          key={filter}
           id="filtered-queue"
           title={
             filter === "due_today"
@@ -720,6 +721,7 @@ export function TechnicianWorkspaceClient({
                       : "Open assigned tickets (urgency order)"
           }
           count={filteredQueue.length}
+          defaultOpen
           tone={
             filter === "overdue" || filter === "critical_high"
               ? "error"
@@ -781,7 +783,7 @@ export function TechnicianWorkspaceClient({
             <TicketList tickets={waitingApproval} emptyTitle="No tickets waiting on approval" {...listProps} />
           </Section>
 
-          <Section id="open" title="All open assigned tickets" count={openTickets.length} defaultOpen>
+          <Section id="open" title="All open assigned tickets" count={openTickets.length}>
             <TicketList
               tickets={openTickets}
               emptyTitle="No open assigned tickets"
@@ -790,7 +792,7 @@ export function TechnicianWorkspaceClient({
             />
           </Section>
 
-          <Section id="completed" title="Recently completed tickets" count={recentlyCompleted.length} defaultOpen={false}>
+          <Section id="completed" title="Recently completed tickets" count={recentlyCompleted.length}>
             <TicketList tickets={recentlyCompleted} emptyTitle="No recently completed tickets" {...listProps} />
           </Section>
         </>
