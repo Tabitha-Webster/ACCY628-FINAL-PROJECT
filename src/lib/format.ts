@@ -64,10 +64,10 @@ export function statusLabel(status: string) {
 export function statusBadgeClass(status: string) {
   const s = status.toLowerCase();
   // Contract lifecycle — each status gets a distinct color (see View and Edit legend).
-  if (s === "draft") return "border-stone-300 bg-stone-200 text-stone-700";
+  if (s === "draft") return "border-stone-400 text-stone-300";
   if (s === "pending_approval") return "badge-pending-approval";
   if (s === "active") return "badge-success";
-  if (s === "on_hold") return "border-violet-300 bg-violet-100 text-violet-800";
+  if (s === "on_hold") return "border-violet-400 text-violet-300";
   if (s === "expired") return "badge-neutral";
   if (s === "canceled") return "badge-error";
   if (s === "renewed") return "badge-info";

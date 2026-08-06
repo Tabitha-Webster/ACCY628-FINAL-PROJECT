@@ -12,7 +12,6 @@ const SYSTEM_LINKS: NavLink[] = [
   { href: "/admin/system", label: "Platform Status" },
   { href: "/admin/exceptions", label: "Exception Log" },
   { href: "/admin/exports", label: "Data Exports" },
-  { href: "/admin/search", label: "Global Search" },
 ];
 
 function pathActive(pathname: string, href: string) {

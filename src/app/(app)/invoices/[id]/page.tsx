@@ -14,6 +14,7 @@ import {
   isTaxExempt,
   lineSourceLabel,
 } from "@/lib/billing";
+import { loadNumberingSettings, withConfiguredPrefix } from "@/lib/document-numbering";
 
 function unwrap<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
@@ -31,6 +32,7 @@ export default async function InvoiceDetailPage({
 
   const { id } = await params;
   const supabase = await createClient();
+  const { numbering, config: systemConfig } = await loadNumberingSettings();
 
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
@@ -75,6 +77,14 @@ export default async function InvoiceDetailPage({
   const equipmentSoftwareTotal = equipmentSoftwareLines.reduce((sum, li) => sum + Number(li.line_amount ?? 0), 0);
   const calculatedSubtotal = invoiceSubtotal(lines);
   const taxExempt = isTaxExempt(contract?.tax_status);
+  const configuredTaxRatePct = Math.max(0, Number(systemConfig.tax.defaultTaxRatePct) || 0);
+  const displayTaxRatePct =
+    configuredTaxRatePct > 0 ? configuredTaxRatePct : DEFAULT_SALES_TAX_RATE * 100;
+  const displayInvoiceNumber = withConfiguredPrefix(
+    invoice.invoice_number,
+    numbering.invoicePrefix,
+    "invoice"
+  );
   const displayStatus = deriveInvoiceStatus({
     currentStatus: invoice.status,
     dueDate: invoice.due_date,
@@ -86,7 +96,7 @@ export default async function InvoiceDetailPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Invoice ${invoice.invoice_number}`}
+        title={`Invoice ${displayInvoiceNumber}`}
         description={customer ? `${customer.name}${contract ? ` · ${contract.name}` : ""}` : undefined}
         actions={<StatusBadge status={displayStatus} />}
       />
@@ -238,7 +248,7 @@ export default async function InvoiceDetailPage({
           </div>
           <div className="flex justify-between">
             <span className="opacity-60">
-              {taxExempt ? "Tax (exempt)" : `Tax (${(DEFAULT_SALES_TAX_RATE * 100).toFixed(1)}%)`}
+              {taxExempt ? "Tax (exempt)" : `Tax (${displayTaxRatePct.toFixed(1)}%)`}
             </span>
             <Money value={Number(invoice.tax_amount ?? 0)} />
           </div>

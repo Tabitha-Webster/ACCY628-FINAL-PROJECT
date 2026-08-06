@@ -35,10 +35,11 @@ export async function updateSession(request: NextRequest) {
     path === "/signup" ||
     path === "/customer-signup" ||
     path.startsWith("/auth");
-  // Login-page demo autofill must work while signed out.
-  const isPublicDemoAutofill = path === "/api/demo/autofill";
+  // Login-page demo APIs must work while signed out (autofill + one-click switch).
+  const isPublicDemoApi =
+    path === "/api/demo/autofill" || path === "/api/demo/switch-role";
 
-  if (!user && !isAuthPage && !isPublicDemoAutofill && path !== "/") {
+  if (!user && !isAuthPage && !isPublicDemoApi && path !== "/") {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

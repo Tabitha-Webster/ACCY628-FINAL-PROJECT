@@ -176,7 +176,7 @@ function ExpandableReportTable({
       <div className="collapse-title min-h-0 py-3 text-sm font-semibold">
         {titleBadgeClass ? (
           <span
-            className={`badge h-auto max-w-[calc(100%-3rem)] whitespace-normal break-words px-2.5 py-1 text-left text-[0.75rem] font-semibold leading-snug ${titleBadgeClass}`}
+            className={`badge h-auto max-w-none shrink-0 whitespace-nowrap px-2.5 py-1 text-[0.75rem] font-semibold leading-tight ${titleBadgeClass}`}
           >
             {title}
           </span>

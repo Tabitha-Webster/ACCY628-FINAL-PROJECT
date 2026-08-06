@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile, requireApprovedCustomer } from "@/lib/auth";
 import { PageHeader, DataTable, EmptyState, StatusBadge, Money, DateText, ErrorState, StatCard } from "@/components/ui";
 import { CustomerChangeRequestApprovalCard, CustomerProjectApprovalCard } from "@/components/CustomerApprovals";
+import { CustomerProjectNameButton } from "@/components/CustomerProjectSummary";
 import { ProjectProgressCard } from "@/components/ProjectProgressCard";
 import type { ApprovalStatus, Project, ProjectMilestone } from "@/lib/types";
 
@@ -49,11 +49,12 @@ export default async function MyProjectsPage() {
   >[];
 
   const projectIds = rows.map((p) => p.id);
+  const contractIds = Array.from(new Set(rows.map((p) => p.contract_id).filter(Boolean))) as string[];
   const awaitingProjects = rows.filter(
     (p) => p.status === "awaiting_customer_approval" || p.customer_approval_status === "pending"
   );
 
-  const [pendingRequestsRes, milestonesRes] = await Promise.all([
+  const [pendingRequestsRes, milestonesRes, contractsRes] = await Promise.all([
     projectIds.length
       ? supabase
           .from("additional_work_requests")
@@ -85,6 +86,21 @@ export default async function MyProjectsPage() {
             "id" | "project_id" | "name" | "completed" | "approval_status" | "due_date"
           >[],
         }),
+    contractIds.length
+      ? supabase
+          .from("contracts")
+          .select("id, contract_number, name, start_date, end_date, status")
+          .in("id", contractIds)
+      : Promise.resolve({
+          data: [] as {
+            id: string;
+            contract_number: string;
+            name: string;
+            start_date: string | null;
+            end_date: string | null;
+            status: string | null;
+          }[],
+        }),
   ]);
 
   const pendingRequests = pendingRequestsRes.data;
@@ -93,6 +109,7 @@ export default async function MyProjectsPage() {
     (r) => Number(r.estimated_hours ?? 0) > 0 || Number(r.estimated_amount ?? 0) > 0
   );
   const projectName = new Map(rows.map((p) => [p.id, p.name]));
+  const contractById = new Map((contractsRes.data ?? []).map((c) => [c.id, c]));
 
   const milestonesByProject = new Map<
     string,
@@ -179,14 +196,38 @@ export default async function MyProjectsPage() {
             const needsYou =
               p.status === "awaiting_customer_approval" || p.customer_approval_status === "pending";
             const milestones = milestonesByProject.get(p.id) ?? [];
+            const contract = p.contract_id ? contractById.get(p.contract_id) ?? null : null;
             return (
               <tr key={p.id}>
                 <td>
-                  <Link className="link link-hover font-medium" href={`/projects/${p.id}`}>
-                    {p.name}
-                  </Link>
+                  <CustomerProjectNameButton
+                    project={{
+                      id: p.id,
+                      name: p.name,
+                      description: p.description,
+                      status: p.status,
+                      customer_approval_status: p.customer_approval_status,
+                      start_date: p.start_date,
+                      target_completion_date: p.target_completion_date,
+                      fixed_fee: p.fixed_fee,
+                      estimated_billing_amount: p.estimated_billing_amount,
+                      amount_billed: p.amount_billed,
+                      amount_collected: p.amount_collected,
+                      contract: contract
+                        ? {
+                            contract_number: contract.contract_number,
+                            name: contract.name,
+                            start_date: contract.start_date,
+                            end_date: contract.end_date,
+                            status: contract.status,
+                          }
+                        : null,
+                    }}
+                  />
                   {p.description ? <p className="mt-1 max-w-sm truncate text-xs opacity-60">{p.description}</p> : null}
-                  {needsYou ? <p className="mt-1 text-xs text-warning">Use the approval queue above, or open the project.</p> : null}
+                  {needsYou ? (
+                    <p className="mt-1 text-xs text-warning">Action needed in the approval queue above.</p>
+                  ) : null}
                 </td>
                 <td>
                   <StatusBadge status={p.status} />

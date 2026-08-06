@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState, StatusBadge, Hours, DateText } from "@/components/ui";
-import { TicketSlaAlerts, SlaConditionBadge } from "@/components/SlaBadges";
+import { TicketSlaAlerts } from "@/components/SlaBadges";
 import { SlaCountdown } from "@/components/SlaCountdown";
 import { TechnicianWorkPanel } from "@/components/TechnicianWorkPanel";
-import { ServiceModeBadge } from "@/components/ServiceModeBadge";
+import { serviceModeLabel } from "@/components/ServiceModeBadge";
 import {
   TechnicianHomeVisuals,
   type TechMetricFilter,
@@ -18,6 +18,7 @@ import {
   evaluateTicketSla,
   localDateKey,
   localDateKeyFromIso,
+  slaConditionLabel,
   technicianUrgencyRank,
   earliestRelevantDeadlineMs,
 } from "@/lib/sla";
@@ -128,17 +129,6 @@ const OPEN_STATUSES = new Set([
   "waiting_on_approval",
 ]);
 
-function PriorityChip({ priority }: { priority: string }) {
-  if (priority === "critical") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-box border border-error/40 bg-error/10 px-2 py-0.5 text-xs font-semibold text-error">
-        ⚠ Critical
-      </span>
-    );
-  }
-  return <StatusBadge status={priority} />;
-}
-
 function friendlyAwStatus(status: string | null | undefined): {
   key: string;
   label: string;
@@ -191,27 +181,27 @@ function Section({
   const [open, setOpen] = useState(defaultOpen);
   const shell =
     tone === "error"
-      ? "border-rose-200/80 bg-gradient-to-b from-rose-50/80 to-base-100"
+      ? "border-rose-400/25 bg-rose-500/10"
       : tone === "warning"
-        ? "border-amber-200/80 bg-gradient-to-b from-amber-50/80 to-base-100"
+        ? "border-amber-400/25 bg-amber-500/10"
         : tone === "sky"
-          ? "border-sky-200/80 bg-gradient-to-b from-sky-50/80 to-base-100"
+          ? "border-sky-400/25 bg-sky-500/10"
           : tone === "violet"
-            ? "border-violet-200/80 bg-gradient-to-b from-violet-50/80 to-base-100"
+            ? "border-violet-400/25 bg-violet-500/10"
             : tone === "emerald"
-              ? "border-emerald-200/80 bg-gradient-to-b from-emerald-50/80 to-base-100"
-              : "border-base-300 bg-gradient-to-b from-base-200/40 to-base-100";
+              ? "border-emerald-400/25 bg-emerald-500/10"
+              : "border-base-300 bg-base-100/60";
   const headerBorder =
     tone === "error"
-      ? "border-rose-200/70 text-rose-900/80"
+      ? "border-rose-400/20 text-base-content/80"
       : tone === "warning"
-        ? "border-amber-200/70 text-amber-900/80"
+        ? "border-amber-400/20 text-base-content/80"
         : tone === "sky"
-          ? "border-sky-200/70 text-sky-900/80"
+          ? "border-sky-400/20 text-base-content/80"
           : tone === "violet"
-            ? "border-violet-200/70 text-violet-900/80"
+            ? "border-violet-400/20 text-base-content/80"
             : tone === "emerald"
-              ? "border-emerald-200/70 text-emerald-900/80"
+              ? "border-emerald-400/20 text-base-content/80"
               : "border-base-300 text-base-content/80";
   return (
     <section id={id} className={`overflow-hidden rounded-2xl border shadow-sm ${shell}`}>
@@ -223,7 +213,7 @@ function Section({
       >
         <span className="text-xs font-semibold uppercase tracking-wide">{title}</span>
         <span className="flex items-center gap-2">
-          <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold tabular-nums shadow-sm">
+          <span className="rounded-full border border-base-300 bg-base-100/50 px-2 py-0.5 text-[11px] font-semibold tabular-nums">
             {count}
           </span>
           <span className="text-[11px] opacity-60">{open ? "Hide" : "Show"}</span>
@@ -260,29 +250,51 @@ function TicketCard({
   const isOverdue = live.overdue;
   const isOpen = OPEN_STATUSES.has(ticket.status);
   const awFriendly = friendlyAwStatus(aw?.approval_status ?? null);
-  const border =
-    isCritical || isOverdue
-      ? "border-rose-200 bg-white/90"
-      : ticket.priority === "high" || live.overall === "at_risk"
-        ? "border-amber-200 bg-white/90"
-        : "border-base-200 bg-white/90";
 
   return (
-    <article className={`rounded-xl border p-3 shadow-sm ${border}`}>
+    <article className="rounded-xl border border-neutral-200 bg-white p-3 text-neutral-900 shadow-sm">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <Link href={`/tickets/${ticket.id}`} className="link link-hover font-semibold">
               {ticket.ticket_number}
             </Link>
-            <PriorityChip priority={ticket.priority} />
-            <StatusBadge status={ticket.status} />
-            <ServiceModeBadge mode={ticket.service_mode} location={ticket.service_location} />
-            <SlaConditionBadge condition={live.overall} />
-            {ticket.hours_warning && ticket.hours_warning !== "normal" ? (
-              <StatusBadge status={ticket.hours_warning} />
-            ) : null}
+            <StatusBadge status={ticket.status} className="badge-sm" />
           </div>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs opacity-70">
+            <span className={isCritical ? "font-medium text-error" : undefined}>
+              {isCritical ? "⚠ Critical" : statusLabel(ticket.priority)}
+            </span>
+            <span aria-hidden className="opacity-40">
+              ·
+            </span>
+            <span>
+              {serviceModeLabel(ticket.service_mode)}
+              {ticket.service_location?.trim() ? ` · ${ticket.service_location.trim()}` : ""}
+            </span>
+            <span aria-hidden className="opacity-40">
+              ·
+            </span>
+            <span
+              className={
+                live.overall === "missed" || isOverdue
+                  ? "text-error"
+                  : live.overall === "at_risk"
+                    ? "text-warning"
+                    : undefined
+              }
+            >
+              {slaConditionLabel(live.overall)}
+            </span>
+            {ticket.hours_warning && ticket.hours_warning !== "normal" ? (
+              <>
+                <span aria-hidden className="opacity-40">
+                  ·
+                </span>
+                <span className="text-warning">{statusLabel(ticket.hours_warning)}</span>
+              </>
+            ) : null}
+          </p>
           {(isCritical || isOverdue || live.overall === "at_risk") && (
             <div className="mt-2">
               <TicketSlaAlerts ticket={ticket} />
@@ -714,8 +726,8 @@ export function TechnicianWorkspaceClient({
           type="button"
           className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
             filter === "awaiting_approval"
-              ? "border-amber-300 bg-amber-50 text-amber-950"
-              : "border-base-300 bg-base-100 opacity-80 hover:opacity-100"
+              ? "border-amber-400/40 bg-amber-500/15 text-base-content"
+              : "border-base-300 bg-base-100/50 opacity-80 hover:opacity-100"
           }`}
           onClick={() => onMetricClick("awaiting_approval")}
         >
@@ -725,8 +737,8 @@ export function TechnicianWorkspaceClient({
           type="button"
           className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
             filter === "completed_today"
-              ? "border-emerald-300 bg-emerald-50 text-emerald-950"
-              : "border-base-300 bg-base-100 opacity-80 hover:opacity-100"
+              ? "border-emerald-400/40 bg-emerald-500/15 text-base-content"
+              : "border-base-300 bg-base-100/50 opacity-80 hover:opacity-100"
           }`}
           onClick={() => onMetricClick("completed_today")}
         >
@@ -736,8 +748,8 @@ export function TechnicianWorkspaceClient({
           type="button"
           className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
             filter === "all_sections"
-              ? "border-violet-300 bg-violet-50 text-violet-950"
-              : "border-base-300 bg-base-100 opacity-80 hover:opacity-100"
+              ? "border-violet-400/40 bg-violet-500/15 text-base-content"
+              : "border-base-300 bg-base-100/50 opacity-80 hover:opacity-100"
           }`}
           onClick={() => onMetricClick("all_sections")}
         >
@@ -876,7 +888,7 @@ export function TechnicianWorkspaceClient({
             description="Draft or pending time entries will appear here."
           />
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-base-200 bg-white/80">
+          <div className="overflow-x-auto rounded-xl border border-base-300 bg-base-100/40">
             <table className="table table-sm">
               <thead>
                 <tr>
@@ -931,7 +943,7 @@ export function TechnicianWorkspaceClient({
         {pendingAdditionalWork.length === 0 ? (
           <EmptyState title="No pending additional-work requests" />
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-base-200 bg-white/80">
+          <div className="overflow-x-auto rounded-xl border border-base-300 bg-base-100/40">
             <table className="table table-sm">
               <thead>
                 <tr>

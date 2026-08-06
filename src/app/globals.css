@@ -298,9 +298,37 @@ pre {
 }
 
 .app-main .badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  max-width: none;
+  height: auto;
+  min-height: 1.35rem;
+  padding: 0.28rem 0.7rem;
   border-radius: 999px;
   font-weight: 600;
   letter-spacing: 0.02em;
+  line-height: 1.15;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Site-wide: status pills always wrap the full label on one line */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  height: auto !important;
+  min-height: 1.35rem;
+  padding-inline: 0.7rem;
+  padding-block: 0.28rem;
+  white-space: nowrap;
+  line-height: 1.15;
+  flex-shrink: 0;
 }
 
 @media (min-width: 768px) {
@@ -513,17 +541,18 @@ pre {
   color: #000000;
 }
 
-/** Customer / signup Pending Approval — lime (not warning orange). */
+/** Customer / signup Pending Approval — lime outline (not warning orange). */
 .badge.badge-pending-approval {
-  border-color: color-mix(in oklab, oklch(72% 0.19 130) 55%, transparent);
-  background-color: color-mix(in oklab, oklch(72% 0.19 130) 22%, var(--color-base-100));
-  color: oklch(28% 0.08 130);
+  border-color: oklch(72% 0.19 130);
+  background-color: transparent;
+  color: oklch(42% 0.12 130);
+  white-space: nowrap;
 }
 
 [data-theme="servicesync-dark"] .badge.badge-pending-approval {
-  border-color: color-mix(in oklab, oklch(78% 0.18 130) 50%, transparent);
-  background-color: color-mix(in oklab, oklch(78% 0.18 130) 20%, var(--color-base-100));
-  color: oklch(92% 0.08 130);
+  border-color: oklch(78% 0.18 130);
+  background-color: transparent;
+  color: oklch(86% 0.12 130);
 }
 
 .aging-current {

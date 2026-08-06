@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { deriveInvoiceStatus, round2 } from "@/lib/billing";
+import { allocateNextDocumentNumber } from "@/lib/document-numbering";
 
 const VALID_METHODS = ["ach", "check", "credit_card", "wire", "other"];
 const CUSTOMER_METHODS = ["ach", "credit_card"];
@@ -15,13 +16,6 @@ function isValidDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
-}
-
-function generatePaymentNumber(): string {
-  const today = new Date();
-  const stamp = today.toISOString().slice(0, 10).replace(/-/g, "");
-  const suffix = Math.floor(1000 + Math.random() * 9000);
-  return `PMT-${stamp}-${suffix}`;
 }
 
 export async function POST(request: Request) {
@@ -114,10 +108,18 @@ export async function POST(request: Request) {
     );
   }
 
+  const allocated = await allocateNextDocumentNumber("payment");
+  if (allocated.error || !allocated.number) {
+    return NextResponse.json(
+      { error: allocated.error || "Could not allocate the next payment number from Configurations." },
+      { status: 500 }
+    );
+  }
+
   const { data: payment, error: paymentError } = await supabase
     .from("payments")
     .insert({
-      payment_number: generatePaymentNumber(),
+      payment_number: allocated.number,
       customer_id: invoice.customer_id,
       payment_date: paymentDate,
       payment_amount: amount,

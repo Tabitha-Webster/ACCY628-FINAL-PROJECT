@@ -9,8 +9,8 @@ import { hrefAllowedByPageKeys } from "@/lib/role-permissions";
 type NavLink = { href: string; label: string };
 
 const COMPANY_DIRECTORY_LINKS: NavLink[] = [
-  { href: "/admin/employees", label: "Employees" },
   { href: "/customers", label: "Customers" },
+  { href: "/admin/employees", label: "Employees" },
 ];
 
 function pathActive(pathname: string, href: string) {

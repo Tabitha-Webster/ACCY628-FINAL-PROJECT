@@ -28,7 +28,7 @@ export function ServiceModeBadge({
 
   return (
     <span className="inline-flex max-w-full flex-wrap items-center gap-1.5">
-      <span className={`badge ${badgeClass} ${sizeClass} font-semibold`} title={label}>
+      <span className={`badge badge-outline ${badgeClass} ${sizeClass} font-semibold`} title={label}>
         {isOnsite ? "Onsite job" : isRemote ? "Remote job" : label}
       </span>
       {showLocation && location?.trim() ? (

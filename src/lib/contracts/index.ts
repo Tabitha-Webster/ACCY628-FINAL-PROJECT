@@ -47,6 +47,7 @@ export * from "./calendarTypes";
 export * from "./calendarEvents";
 export * from "./signature-packets";
 export * from "./pdf-payload";
+export * from "./completionRequests";
 // build-contract-pdf pulls jspdf/canvg — import it directly where needed, not from this barrel.
 // executive-waiting is re-exported via signature-packets for barrel consumers; client components
 // should import "@/lib/contracts/executive-waiting" directly.

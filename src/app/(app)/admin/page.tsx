@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/admin";
 import { PageHeader, StatCard, ErrorState } from "@/components/ui";
+import { ViewRoleDashboardButton } from "@/components/ViewRoleDashboardButton";
 import { ASSIGNABLE_ROLES, roleLabel } from "@/lib/constants";
 
 type AdminTool = {
@@ -79,11 +80,6 @@ const SYSTEM_TOOLS: AdminTool[] = [
     description: "Download users, exceptions, workload, contracts, and overdue receivables.",
   },
   {
-    href: "/admin/search",
-    title: "Global Search",
-    description: "Find any user, customer, contract, ticket, or invoice when diagnosing an issue.",
-  },
-  {
     href: "/admin/demo",
     title: "Demo Settings",
     description: "Demo accounts and role-switcher guidance for walkthroughs.",
@@ -112,7 +108,7 @@ export default async function AdminHomePage() {
   const supabase = await createClient();
 
   const [usersRes, customersRes, pendingRes] = await Promise.all([
-    supabase.from("profiles").select("id, full_name, role, is_active, is_demo_user, customer_id"),
+    supabase.from("profiles").select("id, full_name, role, is_active, customer_id"),
     supabase.from("customers").select("id").eq("status", "active"),
     supabase.from("customers").select("id").eq("status", "pending_approval"),
   ]);
@@ -139,12 +135,11 @@ export default async function AdminHomePage() {
   const staffUsers = users.length - portalUsers.length;
   const unlinkedPortalUsers = portalUsers.filter((user) => !user.customer_id).length;
 
-  const countsByRole = users.reduce<Record<string, { total: number; active: number; demo: number }>>(
+  const countsByRole = users.reduce<Record<string, { total: number; active: number }>>(
     (acc, user) => {
-      const entry = acc[user.role] ?? { total: 0, active: 0, demo: 0 };
+      const entry = acc[user.role] ?? { total: 0, active: 0 };
       entry.total += 1;
       if (user.is_active) entry.active += 1;
-      if (user.is_demo_user) entry.demo += 1;
       acc[user.role] = entry;
       return acc;
     },
@@ -172,9 +167,6 @@ export default async function AdminHomePage() {
             </Link>
             <Link href="/admin/alerts" className="btn btn-sm btn-outline">
               System Alerts
-            </Link>
-            <Link href="/admin/search" className="btn btn-sm btn-outline">
-              Search
             </Link>
           </div>
         }
@@ -220,7 +212,7 @@ export default async function AdminHomePage() {
                 <th>Role</th>
                 <th>Accounts</th>
                 <th>Active</th>
-                <th>Demo</th>
+                <th>View Dashboard</th>
               </tr>
             </thead>
             <tbody>
@@ -231,7 +223,9 @@ export default async function AdminHomePage() {
                     <td className="font-medium">{roleLabel(role)}</td>
                     <td className="tabular-nums">{entry?.total ?? 0}</td>
                     <td className="tabular-nums">{entry?.active ?? 0}</td>
-                    <td className="tabular-nums">{entry?.demo ?? 0}</td>
+                    <td>
+                      <ViewRoleDashboardButton role={role} />
+                    </td>
                   </tr>
                 );
               })}

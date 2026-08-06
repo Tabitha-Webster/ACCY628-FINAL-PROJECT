@@ -54,9 +54,11 @@ import { ContractDocumentsPanel } from "@/components/ContractDocumentsPanel";
 import { ContractChangesPanel } from "@/components/ContractChangesPanel";
 import { ContractRenewalsPanel } from "@/components/ContractRenewalsPanel";
 import { ContractLifecycleActions } from "@/components/ContractLifecycleActions";
+import { ContractCompletionRequestPanel } from "@/components/ContractCompletionRequestPanel";
 import { EditContractButton } from "@/components/EditContractButton";
 import { ContractModificationsPanel } from "@/components/ContractModificationsPanel";
 import { ContractSignatureWorkflow } from "@/components/ContractSignatureWorkflow";
+import { latestCompletionRequest } from "@/lib/contracts/completionRequests";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -209,6 +211,7 @@ export default async function ContractDetailPage({
   const documents = documentsResult.data ?? [];
   const versions = versionsResult.data ?? [];
   const changes = changesResult.data ?? [];
+  const completionRequest = latestCompletionRequest(changes);
   const signaturePacket = (packetRes.data as ContractSignaturePacket | null) ?? null;
   const statusLabelText =
     status === "pending_approval" && signaturePacket?.status === "awaiting_customer"
@@ -374,6 +377,14 @@ export default async function ContractDetailPage({
             }).reason
           }
         />
+        <div className="mt-4">
+          <ContractCompletionRequestPanel
+            contractId={id}
+            contractStatus={status}
+            role={profile.role}
+            latestRequest={completionRequest}
+          />
+        </div>
       </Section>
 
       {(profile.role === "manager" ||

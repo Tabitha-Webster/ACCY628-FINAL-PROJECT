@@ -13,18 +13,12 @@ import {
   timeEntryBillingBlockReason,
 } from "@/lib/billing-eligibility";
 import { billedMonthlyRecurringFee } from "@/lib/contracts";
+import { allocateNextDocumentNumber, loadNumberingSettings } from "@/lib/document-numbering";
 
 type RequestedItem = {
   type: "time_entry" | "direct_cost" | "project" | "milestone" | "recurring";
   id: string;
 };
-
-function generateInvoiceNumber(): string {
-  const today = new Date();
-  const stamp = today.toISOString().slice(0, 10).replace(/-/g, "");
-  const suffix = Math.floor(1000 + Math.random() * 9000);
-  return `INV-${stamp}-${suffix}`;
-}
 
 export async function POST(request: Request) {
   const profile = await getCurrentProfile();
@@ -430,20 +424,32 @@ export async function POST(request: Request) {
     taxStatus = contract?.tax_status ?? "taxable";
   }
 
+  const { config: systemConfig } = await loadNumberingSettings();
+  const taxRate = Math.max(0, Number(systemConfig.tax.defaultTaxRatePct) || 0) / 100;
+
   const totals = summarizeInvoice(drafts, {
     taxStatus,
     paymentTerms,
     currentStatus: "draft",
+    taxRate,
   });
 
   if (totals.subtotal <= 0) {
     return NextResponse.json({ error: "An invoice must have a positive total." }, { status: 400 });
   }
 
+  const allocated = await allocateNextDocumentNumber("invoice");
+  if (allocated.error || !allocated.number) {
+    return NextResponse.json(
+      { error: allocated.error || "Could not allocate the next invoice number from Configurations." },
+      { status: 500 }
+    );
+  }
+
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
     .insert({
-      invoice_number: generateInvoiceNumber(),
+      invoice_number: allocated.number,
       customer_id: customerId,
       contract_id: contractId,
       invoice_date: totals.invoiceDate,

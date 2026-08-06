@@ -2,12 +2,19 @@
 
 import { useEffect } from "react";
 import {
+  FORCE_LIGHT_ONCE_KEY,
+  THEME_STORAGE_KEY,
   applyAppearance,
   readAppearance,
 } from "@/components/ThemeSelector";
 
 export function ThemeInit() {
   useEffect(() => {
+    if (!window.localStorage.getItem(FORCE_LIGHT_ONCE_KEY)) {
+      window.localStorage.setItem(THEME_STORAGE_KEY, "light");
+      window.localStorage.setItem(FORCE_LIGHT_ONCE_KEY, "1");
+    }
+
     const appearance = readAppearance();
     applyAppearance(appearance);
 

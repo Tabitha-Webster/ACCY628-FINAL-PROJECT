@@ -146,7 +146,12 @@ export function ConfigurationsManager({ initial }: { initial: SystemConfiguratio
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(config),
     });
-    const data = (await res.json()) as { error?: string; config?: SystemConfiguration };
+    const data = (await res.json()) as {
+      error?: string;
+      config?: SystemConfiguration;
+      warning?: string | null;
+      rewrittenTotal?: number;
+    };
     setSaving(false);
     if (!res.ok) {
       setError(data.error ?? "Could not save configurations.");
@@ -155,7 +160,14 @@ export function ConfigurationsManager({ initial }: { initial: SystemConfiguratio
     const next = data.config ?? config;
     setConfig(next);
     setBaseline(next);
-    setMessage("Configurations saved.");
+    if (data.warning) {
+      setError(data.warning);
+    }
+    const rewriteNote =
+      typeof data.rewrittenTotal === "number" && data.rewrittenTotal > 0
+        ? ` Updated ${data.rewrittenTotal} existing document number${data.rewrittenTotal === 1 ? "" : "s"} to match the new prefixes.`
+        : "";
+    setMessage(`Configurations saved.${rewriteNote}`);
     router.refresh();
   }
 
@@ -287,7 +299,7 @@ export function ConfigurationsManager({ initial }: { initial: SystemConfiguratio
 
       <Section
         title="Numbering"
-        description="Prefixes and next sequence numbers for invoices, contracts, tickets, and payments."
+        description="These prefixes and sequences are used when the app creates invoices, contracts, tickets, and payments. Changing a prefix also rewrites existing document numbers that still use the old prefix."
       >
         <div className="grid gap-3 md:grid-cols-2">
           <TextField
@@ -355,7 +367,11 @@ export function ConfigurationsManager({ initial }: { initial: SystemConfiguratio
             onCommit={(v) => requestChange("numbering", "nextPaymentSequence", v)}
           />
         </div>
-        <p className="mt-3 text-xs opacity-60">
+        <p className="mt-3 text-xs opacity-70">
+          Next numbers use these prefixes. Saving a prefix change also rewrites existing invoice,
+          contract, ticket, and payment numbers that still use the previous prefix.
+        </p>
+        <p className="mt-1 text-xs opacity-60">
           Preview: {config.numbering.invoicePrefix}
           {config.numbering.nextInvoiceSequence}, {config.numbering.contractPrefix}
           {config.numbering.nextContractSequence}, {config.numbering.ticketPrefix}

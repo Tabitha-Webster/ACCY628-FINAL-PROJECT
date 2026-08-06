@@ -487,13 +487,19 @@ export function contractFormToPayload(
   return payload;
 }
 
-export function suggestNextContractNumber(existingNumbers: string[]): string {
-  let max = 1000;
+export function suggestNextContractNumber(
+  existingNumbers: string[],
+  prefix = "CTR-",
+  nextSequence = 1001
+): string {
+  let max = nextSequence - 1;
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^${escaped}(\\d+)$`, "i");
   for (const raw of existingNumbers) {
-    const match = /^CTR-(\d+)$/i.exec(raw.trim());
+    const match = re.exec(raw.trim());
     if (match) {
       max = Math.max(max, Number(match[1]));
     }
   }
-  return `CTR-${max + 1}`;
+  return `${prefix}${Math.max(max + 1, nextSequence)}`;
 }
