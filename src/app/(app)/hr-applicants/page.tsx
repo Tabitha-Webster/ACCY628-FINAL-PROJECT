@@ -1,21 +1,56 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth";
+import { DataTable, EmptyState, ErrorState, PageHeader } from "@/components/ui";
+import type { HrDepartment, HrPosition } from "@/lib/types";
 import {
-  DataTable,
-  DateText,
-  EmptyState,
-  ErrorState,
-  Money,
-  PageHeader,
-  StatusBadge,
-} from "@/components/ui";
-import type { HrContractor, HrDepartment, HrPosition } from "@/lib/types";
+  aggregateContractHours,
+  contractHoursFromRpc,
+  rankDemoApplicants,
+  type ContractHoursRow,
+} from "@/lib/hr-applicants";
 
-/**
- * HR Applicants — open roles and people in the hiring pipeline.
- * Uses existing hr_positions (open) + hr_contractors as applicant/hire records.
- */
+function StarRating({ stars }: { stars: number }) {
+  const filled = Math.max(1, Math.min(5, stars));
+  return (
+    <span className="inline-flex items-center gap-0.5" aria-label={`${filled} out of 5 stars`}>
+      {Array.from({ length: 5 }, (_, i) => (
+        <span
+          key={i}
+          className={`text-sm ${i < filled ? "text-warning" : "opacity-25"}`}
+          aria-hidden
+        >
+          ★
+        </span>
+      ))}
+    </span>
+  );
+}
+
+async function loadContractHoursForMatch(
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<ContractHoursRow[]> {
+  const { data, error } = await supabase.rpc("hr_active_contract_hours");
+  if (!error && data) {
+    return contractHoursFromRpc(
+      data as { contract_id: string; hours_worked: number | string | null }[]
+    );
+  }
+
+  // Secondary fallback if RPC missing and service role is configured.
+  try {
+    const admin = createServiceClient();
+    const [{ data: contracts }, { data: timeEntries }] = await Promise.all([
+      admin.from("contracts").select("id, name").eq("status", "active"),
+      admin.from("time_entries").select("contract_id, hours_worked"),
+    ]);
+    return aggregateContractHours(contracts ?? [], timeEntries ?? []);
+  } catch {
+    return [];
+  }
+}
+
 export default async function HrApplicantsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
@@ -26,72 +61,56 @@ export default async function HrApplicantsPage() {
   const [
     { data: departments, error: deptError },
     { data: positions, error: posError },
-    { data: contractors, error: contrError },
+    contractHours,
   ] = await Promise.all([
     supabase.from("hr_departments").select("id, name").order("name"),
     supabase
       .from("hr_positions")
-      .select("*")
+      .select("id, department_id, title, status")
       .eq("status", "open")
       .order("opened_at", { ascending: false }),
-    supabase
-      .from("hr_contractors")
-      .select("*")
-      .order("hired_at", { ascending: false }),
+    loadContractHoursForMatch(supabase),
   ]);
 
-  const error = deptError || posError || contrError;
+  const error = deptError || posError;
   if (error) {
     return (
       <div className="space-y-6">
-        <PageHeader
-          title="Applicants"
-          description="Review open roles and contractor applicants in the hiring pipeline."
-        />
+        <PageHeader title="Applicants" description="Prioritize who to hire." />
         <ErrorState message={error.message} />
       </div>
     );
   }
 
   const depts = (departments ?? []) as Pick<HrDepartment, "id" | "name">[];
-  const openPositions = (positions ?? []) as HrPosition[];
-  const applicants = (contractors ?? []) as HrContractor[];
+  const openPositions = (positions ?? []) as Pick<
+    HrPosition,
+    "id" | "department_id" | "title" | "status"
+  >[];
   const deptName = new Map(depts.map((d) => [d.id, d.name]));
-  const positionTitle = new Map(openPositions.map((p) => [p.id, p.title]));
+  const openTitles = openPositions.map((p) => p.title);
 
-  // Also load all positions so filled applicants show their role title
-  const { data: allPositions } = await supabase.from("hr_positions").select("id, title");
-  for (const p of allPositions ?? []) {
-    positionTitle.set(p.id, p.title);
-  }
+  const rankedApplicants = rankDemoApplicants({
+    contractHours,
+    openPositionTitles: openTitles,
+  });
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        title="Applicants"
-        description="Open roles waiting to be filled, plus contractor hires in your workforce pipeline."
-      />
+      <PageHeader title="Applicants" />
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Open roles</h2>
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold">
+          Open roles ({openPositions.length})
+        </h2>
         {openPositions.length === 0 ? (
-          <EmptyState
-            title="No open roles"
-            description="When a position is marked open, it appears here for hiring."
-          />
+          <p className="text-sm opacity-70">No open roles right now.</p>
         ) : (
-          <DataTable headers={["Role", "Department", "Budgeted cost", "Opened", "Notes"]}>
+          <DataTable headers={["Role", "Department"]}>
             {openPositions.map((p) => (
               <tr key={p.id}>
                 <td className="font-medium">{p.title}</td>
                 <td>{deptName.get(p.department_id) ?? "—"}</td>
-                <td>
-                  <Money value={Number(p.budgeted_cost)} />
-                </td>
-                <td>
-                  <DateText value={p.opened_at} />
-                </td>
-                <td className="max-w-xs truncate text-sm opacity-70">{p.notes ?? "—"}</td>
               </tr>
             ))}
           </DataTable>
@@ -99,34 +118,21 @@ export default async function HrApplicantsPage() {
       </section>
 
       <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">Pipeline (contractors)</h2>
-          <a href="/hr-positions" className="btn btn-outline btn-sm">
-            Manage positions
-          </a>
-        </div>
-        {applicants.length === 0 ? (
-          <EmptyState
-            title="No applicants yet"
-            description="Contractor records linked to departments and positions will show here."
-          />
+        <h2 className="text-lg font-semibold">Who to hire</h2>
+
+        {rankedApplicants.length === 0 ? (
+          <EmptyState title="No applicants" />
         ) : (
-          <DataTable
-            headers={["Name", "Department", "Role", "Status", "Annual cost", "Started"]}
-          >
-            {applicants.map((c) => (
-              <tr key={c.id}>
-                <td className="font-medium">{c.full_name}</td>
-                <td>{deptName.get(c.department_id) ?? "—"}</td>
-                <td>{(c.position_id && positionTitle.get(c.position_id)) || "—"}</td>
+          <DataTable headers={["Name", "Applied for", "Match", "Stars"]}>
+            {rankedApplicants.map((a) => (
+              <tr key={a.id}>
+                <td className="font-medium">{a.fullName}</td>
+                <td>{a.appliedFor}</td>
                 <td>
-                  <StatusBadge status={c.status} />
+                  <span className="font-semibold tabular-nums">{a.matchPercent}%</span>
                 </td>
                 <td>
-                  <Money value={Number(c.annual_cost)} />
-                </td>
-                <td>
-                  <DateText value={c.hired_at} />
+                  <StarRating stars={a.stars} />
                 </td>
               </tr>
             ))}

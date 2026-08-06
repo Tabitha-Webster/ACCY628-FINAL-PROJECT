@@ -264,9 +264,6 @@ export default async function HrAnalyticsPage() {
               <td className="tabular-nums">{statusCounts.closed}</td>
             </tr>
           </DataTable>
-          <p className="mt-2 text-xs opacity-60">
-            Retention is the share of contractors hired in the last 12 months who are still active.
-          </p>
         </div>
       ) : null}
     </div>
