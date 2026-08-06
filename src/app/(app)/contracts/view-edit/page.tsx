@@ -2,15 +2,17 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { ContractStatusLegend } from "@/components/ContractStatusLegend";
 import { EmptyState, ErrorState, PageHeader, StatusBadge } from "@/components/ui";
 import {
+  CONTRACT_STATUS_LABELS,
   canEditContracts,
   canViewContractsModule,
+  contractStatusRowClass,
   listContracts,
   unwrapCustomer,
   type ContractListRow,
 } from "@/lib/contracts";
-import { statusLabel } from "@/lib/format";
 
 export default async function ViewEditContractsPage() {
   const profile = await getCurrentProfile();
@@ -39,6 +41,8 @@ export default async function ViewEditContractsPage() {
 
       {error ? <ErrorState message={error.message} /> : null}
 
+      {!error ? <ContractStatusLegend /> : null}
+
       {!error && contracts.length === 0 ? (
         <EmptyState
           title="No contracts yet"
@@ -61,13 +65,16 @@ export default async function ViewEditContractsPage() {
             <tbody>
               {contracts.map((row) => {
                 const customer = unwrapCustomer(row);
+                const statusLabelText =
+                  CONTRACT_STATUS_LABELS[row.status as keyof typeof CONTRACT_STATUS_LABELS] ??
+                  row.status;
                 return (
-                  <tr key={row.id}>
+                  <tr key={row.id} className={contractStatusRowClass(row.status)}>
                     <td className="font-medium tabular-nums">{row.contract_number}</td>
                     <td>{row.name}</td>
                     <td>{customer?.name ?? "—"}</td>
                     <td>
-                      <StatusBadge status={row.status} label={statusLabel(row.status)} />
+                      <StatusBadge status={row.status} label={statusLabelText} />
                     </td>
                     <td>
                       <div className="flex flex-wrap justify-end gap-2">

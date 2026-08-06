@@ -90,7 +90,7 @@ export const RENEWAL_REMINDER_KIND_BY_DAYS: Record<
 
 export const CONTRACT_STATUS_LABELS: Record<ContractStatus, string> = {
   draft: "Draft",
-  pending_approval: "Awaiting Executive Signature",
+  pending_approval: "Awaiting Approval",
   active: "Active",
   on_hold: "Suspended",
   expired: "Completed",

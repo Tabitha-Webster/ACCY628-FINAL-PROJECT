@@ -65,11 +65,13 @@ const TONE_STYLES: Record<
 
 const STATUS_COLORS: Record<string, string> = {
   Active: "#22c55e",
-  Draft: "#94a3b8",
+  Draft: "#d4d4d8",
+  "Awaiting Approval": "#f59e0b",
+  "Awaiting Executive Signature": "#f59e0b",
   "Pending Approval": "#f59e0b",
-  Suspended: "#a855f7",
-  Completed: "#ef4444",
-  Cancelled: "#64748b",
+  Suspended: "#8b5cf6",
+  Completed: "#737373",
+  Cancelled: "#ef4444",
   Renewed: "#38bdf8",
 };
 

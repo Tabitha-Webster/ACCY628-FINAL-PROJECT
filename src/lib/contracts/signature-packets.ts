@@ -1,5 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Contract } from "@/lib/types";
+import type { AwaitingExecutiveSignatureItem } from "./executive-waiting";
+
+export type { AwaitingExecutiveSignatureItem } from "./executive-waiting";
+export {
+  daysWaitingForExecutiveSignature,
+  EXECUTIVE_SIGNATURE_OVERDUE_DAYS,
+} from "./executive-waiting";
 
 export type SignaturePacketStatus =
   | "draft"
@@ -110,17 +117,6 @@ export function packetSignaturesForPdf(packet: ContractSignaturePacket | null) {
   };
 }
 
-export type AwaitingExecutiveSignatureItem = {
-  id: string;
-  contractId: string;
-  contractNumber: string;
-  contractName: string;
-  customerName: string;
-  managerName: string;
-  signedAt: string | null;
-  readyToSign: boolean;
-};
-
 function unwrapOne<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
   return Array.isArray(value) ? (value[0] ?? null) : value;
@@ -136,7 +132,7 @@ export async function listAwaitingExecutiveSignatures(supabase: SupabaseClient) 
     supabase
       .from("contract_signature_packets")
       .select(
-        "id, contract_id, status, manager_signer_name, manager_signed_at, contracts(id, contract_number, name, customers(name))"
+        "id, contract_id, status, manager_signer_name, manager_signed_at, created_at, contracts(id, contract_number, name, customers(name))"
       )
       .eq("is_current", true)
       .in("status", ["awaiting_executive", "awaiting_admin"])
@@ -144,7 +140,7 @@ export async function listAwaitingExecutiveSignatures(supabase: SupabaseClient) 
     supabase
       .from("contracts")
       .select(
-        "id, contract_number, name, customers(name), assigned_manager:profiles!contracts_assigned_manager_id_fkey(full_name)"
+        "id, contract_number, name, updated_at, customers(name), assigned_manager:profiles!contracts_assigned_manager_id_fkey(full_name)"
       )
       .eq("status", "pending_approval")
       .order("updated_at", { ascending: true }),
@@ -163,6 +159,8 @@ export async function listAwaitingExecutiveSignatures(supabase: SupabaseClient) 
   const fromPackets: AwaitingExecutiveSignatureItem[] = (packets ?? []).map((row) => {
     const contract = unwrapOne(row.contracts as { contract_number?: string; name?: string; customers?: { name?: string } | { name?: string }[] } | null);
     const customer = unwrapOne(contract?.customers ?? null);
+    const signedAt = (row.manager_signed_at as string | null) ?? null;
+    const createdAt = (row.created_at as string | null) ?? null;
     return {
       id: row.id as string,
       contractId: row.contract_id as string,
@@ -170,7 +168,8 @@ export async function listAwaitingExecutiveSignatures(supabase: SupabaseClient) 
       contractName: contract?.name ?? "Contract",
       customerName: customer?.name ?? "—",
       managerName: (row.manager_signer_name as string | null) ?? "Manager",
-      signedAt: (row.manager_signed_at as string | null) ?? null,
+      signedAt,
+      waitingSince: signedAt ?? createdAt,
       readyToSign: true,
     };
   });
@@ -187,6 +186,7 @@ export async function listAwaitingExecutiveSignatures(supabase: SupabaseClient) 
       const manager = unwrapOne(
         row.assigned_manager as { full_name?: string } | { full_name?: string }[] | null
       );
+      const waitingSince = (row.updated_at as string | null) ?? null;
       return {
         id: `status-${row.id}`,
         contractId: row.id as string,
@@ -195,6 +195,7 @@ export async function listAwaitingExecutiveSignatures(supabase: SupabaseClient) 
         customerName: customer?.name ?? "—",
         managerName: manager?.full_name ?? "Account manager",
         signedAt: null,
+        waitingSince,
         readyToSign: false,
       };
     });
