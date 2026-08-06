@@ -1,10 +1,12 @@
-import Link from "next/link";
+﻿import Link from "next/link";
+import { ContractRenewalCalendar } from "@/components/ContractRenewalCalendar";
 import { EmptyState, StatCard, StatusBadge } from "@/components/ui";
 import { formatCurrency, formatDate, statusLabel } from "@/lib/format";
-import type { ContractReportMetrics } from "@/lib/contracts";
+import type { CalendarEvent, ContractReportMetrics } from "@/lib/contracts";
 
 type Props = {
   metrics: ContractReportMetrics;
+  calendarEvents?: CalendarEvent[];
   showTables?: boolean;
   title?: string | null;
   linkToFullReport?: boolean;
@@ -12,6 +14,7 @@ type Props = {
 
 export function ContractMetricsWidgets({
   metrics,
+  calendarEvents = [],
   showTables = true,
   title = "Contracts reporting",
   linkToFullReport = true,
@@ -81,8 +84,11 @@ export function ContractMetricsWidgets({
 
       {showTables ? (
         <div className="space-y-3">
+          <ContractRenewalCalendar events={calendarEvents} />
+
           <ExpandableReportTable
             title="Expiring contracts"
+            titleBadgeClass="badge-error"
             count={metrics.expiringContracts}
             empty="No contracts expiring in the next 90 days."
             headers={["Contract", "End", "Days"]}
@@ -102,6 +108,7 @@ export function ContractMetricsWidgets({
 
           <ExpandableReportTable
             title="Renewals due"
+            titleBadgeClass="badge-warning"
             count={metrics.renewalsDue}
             empty="No renewals due in the next 90 days."
             headers={["Contract", "Renewal", "Type"]}
@@ -125,7 +132,7 @@ export function ContractMetricsWidgets({
             title="Support hours utilization"
             count={metrics.utilizationList.length}
             empty="No active contracts with hour pools."
-            headers={["Contract", "Used", "Util."]}
+            headers={["Contract", "Hours used / included this month", "Utilization %"]}
             rows={metrics.utilizationList.slice(0, 8).map((row) => (
               <tr key={row.id}>
                 <td>
@@ -150,12 +157,14 @@ export function ContractMetricsWidgets({
 
 function ExpandableReportTable({
   title,
+  titleBadgeClass,
   count,
   empty,
   headers,
   rows,
 }: {
   title: string;
+  titleBadgeClass?: string;
   count: number;
   empty: string;
   headers: string[];
@@ -165,7 +174,15 @@ function ExpandableReportTable({
     <div className="collapse collapse-arrow rounded-box border border-base-300 bg-base-100">
       <input type="checkbox" aria-label={`Expand ${title}`} />
       <div className="collapse-title min-h-0 py-3 text-sm font-semibold">
-        {title}
+        {titleBadgeClass ? (
+          <span
+            className={`badge h-auto max-w-full whitespace-normal px-2.5 py-1 text-left text-[0.75rem] font-semibold leading-snug ${titleBadgeClass}`}
+          >
+            {title}
+          </span>
+        ) : (
+          title
+        )}
         <span className="ml-2 font-normal opacity-50">({count})</span>
       </div>
       <div className="collapse-content px-4 pb-4">

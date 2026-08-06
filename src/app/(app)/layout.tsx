@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { getCurrentProfile, getLinkedCustomer } from "@/lib/auth";
-import { canAccessPath, type UserRole } from "@/lib/constants";
+import { isAdminRole, roleHomePath, type UserRole } from "@/lib/constants";
+import { pathAllowedByPageKeys } from "@/lib/role-permissions";
+import { loadAllowedPageKeysForRole } from "@/lib/role-permissions-data";
 import type { CustomerStatus } from "@/lib/types";
 
 export default async function AppLayout({
@@ -18,8 +20,16 @@ export default async function AppLayout({
     customerStatus = linked?.status ?? null;
   }
 
+  const allowedPageKeys = isAdminRole(profile.role)
+    ? null
+    : await loadAllowedPageKeysForRole(profile.role as UserRole);
+
   return (
-    <AppShell profile={profile} customerStatus={customerStatus}>
+    <AppShell
+      profile={profile}
+      customerStatus={customerStatus}
+      allowedPageKeys={allowedPageKeys}
+    >
       {children}
     </AppShell>
   );
@@ -35,6 +45,11 @@ export async function requireRole(roles: UserRole[]) {
 export async function requirePathAccess(pathname: string) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!canAccessPath(profile.role, pathname)) redirect("/dashboard");
+  if (isAdminRole(profile.role)) return profile;
+
+  const allowedKeys = await loadAllowedPageKeysForRole(profile.role as UserRole);
+  if (!pathAllowedByPageKeys(pathname, new Set(allowedKeys))) {
+    redirect(roleHomePath(profile.role as UserRole));
+  }
   return profile;
 }

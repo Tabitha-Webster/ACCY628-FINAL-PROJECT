@@ -6,6 +6,7 @@ import { ButtonLink } from "@/components/Button";
 import { CustomerListRetryButton } from "@/components/CustomerListRetryButton";
 import { CustomerListSearch } from "@/components/CustomerListSearch";
 import { CustomerSchemaNotice } from "@/components/CustomerSchemaNotice";
+import { AdminCustomerAccessNotice } from "@/components/AdminCustomerAccessNotice";
 import { HrCustomerAccessNotice } from "@/components/HrCustomerAccessNotice";
 import { PageLayout } from "@/components/PageLayout";
 import { EmptyState, ErrorState } from "@/components/ui";
@@ -77,6 +78,17 @@ async function CustomerListContent({ role }: { role: UserRole }) {
         </div>
       );
     }
+    if (role === "admin") {
+      return (
+        <div className="space-y-4">
+          <EmptyState
+            title="No customers found"
+            description="Admin is allowed in the app, but Supabase is not returning customer rows for this login yet."
+          />
+          <AdminCustomerAccessNotice />
+        </div>
+      );
+    }
     return (
       <EmptyState
         title="No customers found"
@@ -100,8 +112,8 @@ export default async function CustomersPage() {
 
   const canManage = canEditCustomers(profile.role);
   const description = canManage
-    ? "Shared live customer list. Manager and HR can add or edit customers; Technician and Billing can view the same records."
-    : "Shared live customer list — same records Manager and HR maintain. Open a row to view the latest profile.";
+    ? "Shared live customer list. Admin, Manager, and HR can add or edit customers; Technician and Billing can view the same records."
+    : "Shared live customer list — same records Admin, Manager, and HR maintain. Open a row to view the latest profile.";
 
   return (
     <PageLayout

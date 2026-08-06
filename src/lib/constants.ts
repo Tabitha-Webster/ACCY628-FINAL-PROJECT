@@ -21,6 +21,20 @@ export const ASSIGNABLE_ROLES: UserRole[] = [
   "hr",
 ];
 
+/** Display names for roles — "HR" stays fully capitalized. */
+export const ROLE_LABELS: Record<UserRole, string> = {
+  admin: "Admin",
+  manager: "Manager",
+  technician: "Technician",
+  billing: "Billing",
+  customer: "Customer",
+  hr: "HR",
+};
+
+export function roleLabel(role: UserRole | string) {
+  return ROLE_LABELS[role as UserRole] ?? role.charAt(0).toUpperCase() + role.slice(1);
+}
+
 export function isAdminRole(role: UserRole | string) {
   return role === "admin";
 }
@@ -248,6 +262,7 @@ const MANAGER_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/customers", label: "Customers" },
   { href: "/customer-approvals", label: "Approvals" },
+  { href: "/admin/employees", label: "Employees" },
   // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
   { href: "/projects", label: "Projects" },
   { href: "/operations", label: "Service Operations" },
@@ -261,23 +276,12 @@ const MANAGER_NAV: NavItem[] = [
 
 export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   admin: [
-    { href: "/admin", label: "Admin Console" },
-    { href: "/admin/employees", label: "Employees" },
-    { href: "/admin/alerts", label: "Alerts" },
-    { href: "/admin/approvals", label: "Approvals Inbox" },
-    { href: "/admin/search", label: "Admin Search" },
-    { href: "/admin/users", label: "User Access" },
-    { href: "/admin/assignments-board", label: "Assignment Board" },
-    { href: "/admin/renewals", label: "Contract Renewals" },
-    { href: "/admin/billing-center", label: "Billing Center" },
-    { href: "/admin/exports", label: "CSV Exports" },
-    { href: "/admin/exceptions", label: "Exceptions" },
-    { href: "/admin/system", label: "System Health" },
-    ...MANAGER_NAV,
-    { href: "/ready-to-bill", label: "Ready to Bill" },
-    { href: "/invoices", label: "Invoices" },
-    { href: "/accounts-receivable", label: "Accounts Receivable" },
-    { href: "/accounting", label: "Accounting Review" },
+    { href: "/admin", label: "Home" },
+    // User Access dropdown renders via UserAccessNavTree in AppShell
+    // Company Directory dropdown renders via CompanyDirectoryNavTree in AppShell
+    // System dropdown renders via SystemNavTree in AppShell
+    { href: "/admin/audit", label: "Audit Trail" },
+    { href: "/admin/configurations", label: "Configurations" },
   ],
   manager: MANAGER_NAV,
   technician: [
@@ -299,6 +303,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/dashboard", label: "HR Home" },
     { href: "/customers", label: "Customers" },
     { href: "/customer-approvals", label: "Approvals" },
+    { href: "/admin/employees", label: "Employees" },
     { href: "/hr-analytics", label: "HR Analytics" },
     { href: "/hr-positions", label: "Positions" },
     { href: "/admin/hr", label: "HR Directory" },
@@ -394,6 +399,7 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
     admin: [
       ...managerShared,
       "/admin",
+      "/customers",
       "/assignments",
       "/support-requests",
       "/billing-collections",

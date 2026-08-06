@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
@@ -218,7 +218,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
       .eq("status", "proposed")
       .order("created_at", { ascending: false })
       .limit(8),
-    // Waiting on customer only ΓÇö exclude "proposed" so the same project is not also in proposedProjects.
+    // Waiting on customer only - exclude "proposed" so the same project is not also in proposedProjects.
     supabase
       .from("projects")
       .select("id, name, customer_id, status, customer_approval_status")
@@ -494,7 +494,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
           explanation={{
             title: "Monthly Profit",
             result: formatCurrency(profitThisMonth),
-            formula: "Earned revenue this month ΓêÆ (labor cost this month + direct cost this month)",
+            formula: "Earned revenue this month -> (labor cost this month + direct cost this month)",
             lines: [
               { label: "Earned revenue", value: formatCurrency(revenueThisMonth) },
               { label: "Labor cost", value: formatCurrency(laborCostThisMonth), detail: "Internal labor cost on time entries this month" },
@@ -562,7 +562,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
               .map((invoice) => ({
                 label: invoice.invoice_number,
                 value: formatCurrency(Number(invoice.remaining_balance)),
-                detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} ┬╖ due ${invoice.due_date}`,
+                detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} | due ${invoice.due_date}`,
               })),
           }}
         />
@@ -610,7 +610,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
                       {t.ticket_number}
                     </Link>
                   </td>
-                  <td>{customerName.get(t.customer_id) ?? "ΓÇö"}</td>
+                  <td>{customerName.get(t.customer_id) ?? "-"}</td>
                   <td>
                     {t.priority === "critical" ? (
                       <span className="inline-flex items-center gap-1 rounded-box border border-error/40 bg-error/10 px-2 py-0.5 text-xs font-semibold text-error">
@@ -638,7 +638,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
               {contractsOverHours.map((c) => (
                 <tr key={c.id}>
                   <td>{c.contract_number}</td>
-                  <td>{customerName.get(c.customer_id) ?? "ΓÇö"}</td>
+                  <td>{customerName.get(c.customer_id) ?? "-"}</td>
                   <td>
                     <Hours value={c.used} /> / <Hours value={c.included_hours_per_month} />
                   </td>
@@ -657,7 +657,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
           <div>
             <h2 className="text-sm font-semibold">Pending Approvals</h2>
             <p className="text-xs opacity-70">
-              {pendingApprovalsTotal} item{pendingApprovalsTotal === 1 ? "" : "s"} waiting ΓÇö manage actions on Projects
+              {pendingApprovalsTotal} item{pendingApprovalsTotal === 1 ? "" : "s"} waiting - manage actions on Projects
             </p>
           </div>
           <Link href="/projects" className="btn btn-outline btn-sm">
@@ -682,9 +682,9 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
                           {w.title}
                         </Link>
                       </td>
-                      <td>{customerName.get(w.customer_id) ?? "ΓÇö"}</td>
-                      <td>{w.estimated_hours != null ? <Hours value={Number(w.estimated_hours)} /> : "ΓÇö"}</td>
-                      <td>{w.estimated_amount != null ? <Money value={Number(w.estimated_amount)} /> : "ΓÇö"}</td>
+                      <td>{customerName.get(w.customer_id) ?? "-"}</td>
+                      <td>{w.estimated_hours != null ? <Hours value={Number(w.estimated_hours)} /> : "-"}</td>
+                      <td>{w.estimated_amount != null ? <Money value={Number(w.estimated_amount)} /> : "-"}</td>
                       <td>
                         <DateText value={w.created_at} />
                       </td>
@@ -708,7 +708,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
                             {p.name}
                           </Link>
                         </td>
-                        <td>{customerName.get(p.customer_id) ?? "ΓÇö"}</td>
+                        <td>{customerName.get(p.customer_id) ?? "-"}</td>
                         <td>
                           <StatusBadge
                             status={
@@ -899,7 +899,7 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
   );
   const contractById = new Map((contractsRes.data ?? []).map((c) => [c.id, c]));
   const ticketLabelById = new Map(
-    (ticketLabelsRes.data ?? []).map((t) => [t.id, `${t.ticket_number} ┬╖ ${t.title}`])
+    (ticketLabelsRes.data ?? []).map((t) => [t.id, `${t.ticket_number} | ${t.title}`])
   );
 
   const hoursByContract = new Map<string, number>();
@@ -927,7 +927,7 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
       customer_name: customerName.get(t.customer_id) ?? "Unknown customer",
       contract_id: t.contract_id,
       contract_label: contract
-        ? `${contract.contract_number ?? "Contract"} ┬╖ ${contract.name}`
+        ? `${contract.contract_number ?? "Contract"} | ${contract.name}`
         : null,
       priority: t.priority,
       status: t.status,
@@ -986,7 +986,7 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
   const allAdditionalWork: WorkspaceAdditionalWork[] = (additionalWorkRes.data ?? []).map((w) => ({
     id: w.id,
     title: w.title,
-    customer_name: addlCustomerName.get(w.customer_id) ?? "ΓÇö",
+    customer_name: addlCustomerName.get(w.customer_id) ?? "-",
     approval_status: w.approval_status,
     created_at: w.created_at,
     estimated_hours: w.estimated_hours != null ? Number(w.estimated_hours) : null,
@@ -1005,7 +1005,7 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
       if (status === "normal") return null;
       return {
         contract_id: contractId,
-        label: `${contract.contract_number ?? "Contract"} ┬╖ ${contract.name}`,
+        label: `${contract.contract_number ?? "Contract"} | ${contract.name}`,
         used,
         included,
         status: status as "warning" | "over_limit",
@@ -1172,7 +1172,7 @@ async function BillingDashboard({
     exceptionCount > 0 ? `${exceptionCount} pending approval${exceptionCount === 1 ? "" : "s"}` : null,
     overdueBalance > 0 ? `${formatCurrency(overdueBalance)} overdue` : null,
     disputedInvoices.length > 0 ? `${disputedInvoices.length} dispute${disputedInvoices.length === 1 ? "" : "s"}` : null,
-  ].filter(Boolean);
+  ].filter((bit): bit is string => Boolean(bit));
 
   const readyExplanation = {
     title: "Ready to Bill",
@@ -1183,7 +1183,7 @@ async function BillingDashboard({
       : `Historical view shows uninvoiced monthly fees and overage for ${period.label} only. Total: ${formatCurrency(readyToBillAmount)}.`,
     lines: [
       ...packagesReady.map((pkg) => ({
-        label: `${pkg.customerName} ┬╖ ${pkg.contractName}`,
+        label: `${pkg.customerName} | ${pkg.contractName}`,
         value: formatCurrency(pkg.estimatedTotal),
         detail: [
           pkg.alreadyInvoiced ? "Monthly fee already invoiced" : `Monthly fee ${formatCurrency(pkg.monthlyFee)}`,
@@ -1192,10 +1192,10 @@ async function BillingDashboard({
           pkg.equipmentSoftwareCharges.length > 0 ? `${pkg.equipmentSoftwareCharges.length} equipment/software item(s)` : null,
         ]
           .filter(Boolean)
-          .join(" ┬╖ "),
+          .join(" | "),
       })),
       ...readyItems.map((item) => ({
-        label: `${item.customerName} ┬╖ ${item.description}`,
+        label: `${item.customerName} | ${item.description}`,
         value: formatCurrency(item.amount),
         detail: item.categoryLabel,
       })),
@@ -1217,20 +1217,20 @@ async function BillingDashboard({
     formula: "Count of unapproved time entries, direct costs, and additional work requests that block billing",
     description: "These items appear on Overview until a manager or billing reviewer approves or rejects them.",
     lines: review.exceptions.map((exception) => ({
-      label: `${exception.customerName} ┬╖ ${exception.reason}`,
+      label: `${exception.customerName} | ${exception.reason}`,
       value: exception.kind.replace(/_/g, " "),
       detail: exception.detail,
     })),
   };
   const overdueExplanation = {
     title: "Overdue Invoices",
-    result: `${overdueInvoices.length} ┬╖ ${formatCurrency(overdueBalance)}`,
+    result: `${overdueInvoices.length} | ${formatCurrency(overdueBalance)}`,
     formula: `Count and remaining balance of unpaid invoices from ${period.label} with no payment yet, past due date, and not disputed`,
     description: "Invoices with a partial payment are shown under Partially Paid instead of Overdue.",
     lines: overdueInvoices.map((invoice) => ({
       label: invoice.invoice_number,
       value: formatCurrency(invoice.remaining_balance),
-      detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} ┬╖ due ${invoice.due_date} ┬╖ ${invoiceDaysPastDue(invoice.due_date)} days past due`,
+      detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} | due ${invoice.due_date} | ${invoiceDaysPastDue(invoice.due_date)} days past due`,
     })),
   };
   const disputeExplanation = {
@@ -1251,7 +1251,7 @@ async function BillingDashboard({
     lines: issuedInvoices.map((invoice) => ({
       label: invoice.invoice_number,
       value: formatCurrency(Number(invoice.total_amount ?? 0)),
-      detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} ┬╖ ${invoice.status.replace(/_/g, " ")}`,
+      detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} | ${invoice.status.replace(/_/g, " ")}`,
     })),
   };
   const paymentsExplanation = {
@@ -1261,7 +1261,7 @@ async function BillingDashboard({
     lines: payments.map((payment) => ({
       label: payment.payment_number,
       value: formatCurrency(Number(payment.payment_amount)),
-      detail: `${customerName.get(payment.customer_id) ?? "Unknown customer"} ┬╖ ${payment.payment_date}`,
+      detail: `${customerName.get(payment.customer_id) ?? "Unknown customer"} | ${payment.payment_date}`,
     })),
   };
   const arExplanation = {
@@ -1272,7 +1272,7 @@ async function BillingDashboard({
     lines: openReceivables.map((invoice) => ({
       label: invoice.invoice_number,
       value: formatCurrency(invoice.remaining_balance),
-      detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} ┬╖ ${invoice.status.replace(/_/g, " ")}`,
+      detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} | ${invoice.status.replace(/_/g, " ")}`,
     })),
   };
   const partialExplanation = {
@@ -1283,7 +1283,7 @@ async function BillingDashboard({
     lines: partialInvoices.map((invoice) => ({
       label: invoice.invoice_number,
       value: formatCurrency(invoice.remaining_balance),
-      detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} ┬╖ paid ${formatCurrency(invoice.amount_paid)}`,
+      detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} | paid ${formatCurrency(invoice.amount_paid)}`,
     })),
   };
   const deferredExplanation = {
@@ -1332,16 +1332,27 @@ async function BillingDashboard({
         actions={<PeriodViewControls {...periodViewControlProps(period)} />}
       />
 
-      <p className="rounded-box border border-base-300 bg-base-100 px-4 py-3 text-sm">
-        {statusBits.length > 0 ? statusBits.join(" ┬╖ ") : `No billing exceptions in ${period.label}.`}
-      </p>
+      {statusBits.length > 0 ? (
+        <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-box border border-base-300 bg-base-100 px-4 py-2.5 text-sm">
+          {statusBits.map((bit) => (
+            <li key={bit} className="flex items-center gap-1.5">
+              <span className="size-1.5 shrink-0 rounded-full bg-base-content/45" aria-hidden />
+              <span>{bit}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="rounded-box border border-base-300 bg-base-100 px-4 py-2.5 text-sm">
+          No billing exceptions in {period.label}.
+        </p>
+      )}
 
       <DashboardSection title="Needs attention" description="Work that should be invoiced, reviewed, approved, or collected first.">
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <DashboardMetricAccordion
             label="Ready to Bill"
             value={String(readyToBill)}
-            hint={`${formatCurrency(readyToBillAmount)} ┬╖ ${period.label}`}
+            hint={`${formatCurrency(readyToBillAmount)} | ${period.label}`}
             tone={readyToBill > 0 ? "warning" : "default"}
             explanation={readyExplanation}
             href="/billing-review"
@@ -1399,7 +1410,7 @@ async function BillingDashboard({
                         {invoice.invoice_number}
                       </Link>
                     </td>
-                    <td>{customerName.get(invoice.customer_id) ?? "ΓÇö"}</td>
+                    <td>{customerName.get(invoice.customer_id) ?? "-"}</td>
                     <td>
                       <Money value={Number(invoice.total_amount ?? 0)} />
                     </td>
@@ -1464,7 +1475,7 @@ async function BillingDashboard({
                           {invoice.invoice_number}
                         </Link>
                       </td>
-                      <td>{customerName.get(invoice.customer_id) ?? "ΓÇö"}</td>
+                      <td>{customerName.get(invoice.customer_id) ?? "-"}</td>
                       <td>{invoiceDaysPastDue(invoice.due_date)}</td>
                       <td>
                         <Money value={Number(invoice.remaining_balance)} />
@@ -1499,7 +1510,7 @@ async function BillingDashboard({
                         {invoice.invoice_number}
                       </Link>
                     </td>
-                    <td>{customerName.get(invoice.customer_id) ?? "ΓÇö"}</td>
+                    <td>{customerName.get(invoice.customer_id) ?? "-"}</td>
                     <td>
                       <Money value={Number(invoice.remaining_balance)} />
                     </td>
@@ -1512,7 +1523,7 @@ async function BillingDashboard({
       </DashboardSection>
 
       <DashboardSection title="This period" description={`Snapshot of billing, cash, and open balances for ${period.label}.`}>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <DashboardMetricAccordion
             label="Accounts Receivable"
             value={formatCurrency(totalAr)}
@@ -1533,7 +1544,7 @@ async function BillingDashboard({
                           {invoice.invoice_number}
                         </Link>
                       </td>
-                      <td>{customerName.get(invoice.customer_id) ?? "ΓÇö"}</td>
+                      <td>{customerName.get(invoice.customer_id) ?? "-"}</td>
                       <td>
                         <StatusBadge status={invoice.status} />
                       </td>
@@ -1564,7 +1575,7 @@ async function BillingDashboard({
                   {payments.map((payment) => (
                     <tr key={payment.payment_number}>
                       <td>{payment.payment_number}</td>
-                      <td>{customerName.get(payment.customer_id) ?? "ΓÇö"}</td>
+                      <td>{customerName.get(payment.customer_id) ?? "-"}</td>
                       <td>
                         <DateText value={payment.payment_date} />
                       </td>
@@ -1598,7 +1609,7 @@ async function BillingDashboard({
                           {invoice.invoice_number}
                         </Link>
                       </td>
-                      <td>{customerName.get(invoice.customer_id) ?? "ΓÇö"}</td>
+                      <td>{customerName.get(invoice.customer_id) ?? "-"}</td>
                       <td>
                         <StatusBadge status={invoice.status} />
                       </td>
@@ -1632,7 +1643,7 @@ async function BillingDashboard({
                         {invoice.invoice_number}
                       </Link>
                     </td>
-                    <td>{customerName.get(invoice.customer_id) ?? "ΓÇö"}</td>
+                    <td>{customerName.get(invoice.customer_id) ?? "-"}</td>
                     <td>
                       <Money value={Number(invoice.amount_paid)} />
                     </td>
@@ -1667,7 +1678,7 @@ async function BillingDashboard({
         </div>
 
         <DashboardCollapse
-          title={`Accounts Receivable Aging ┬╖ ${period.label}`}
+          title={`Accounts Receivable Aging | ${period.label}`}
           defaultOpen
           actions={<ExplainNumber explanation={agingExplanation} />}
         >
@@ -1684,7 +1695,7 @@ async function BillingDashboard({
           </DataTable>
         </DashboardCollapse>
 
-        <DashboardCollapse title={`Oldest overdue invoices ┬╖ ${period.label}`} defaultOpen>
+        <DashboardCollapse title={`Oldest overdue invoices | ${period.label}`} defaultOpen>
           {sortedOverdue.length === 0 ? (
             <EmptyState title="Nothing overdue" description="All invoices are within terms." />
           ) : (
@@ -1697,7 +1708,7 @@ async function BillingDashboard({
                         {invoice.invoice_number}
                       </Link>
                     </td>
-                    <td>{customerName.get(invoice.customer_id) ?? "ΓÇö"}</td>
+                    <td>{customerName.get(invoice.customer_id) ?? "-"}</td>
                     <td>{invoiceDaysPastDue(invoice.due_date)}</td>
                     <td>
                       <Money value={Number(invoice.remaining_balance)} />
@@ -1721,7 +1732,7 @@ async function BillingDashboard({
       </DashboardSection>
 
       <DashboardSection title="Accounting" description="Recognition categories for the selected period.">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid items-start gap-4 sm:grid-cols-2">
           <DashboardMetricAccordion
             label="Deferred Revenue"
             value={formatCurrency(deferred)}
@@ -1995,7 +2006,7 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
                 <tr key={t.id}>
                   <td>
                     <Link className="link link-hover" href={`/tickets/${t.id}`}>
-                      {t.ticket_number} ┬╖ {t.title}
+                      {t.ticket_number} | {t.title}
                     </Link>
                   </td>
                   <td>

@@ -6,15 +6,21 @@ import { CONTRACTS_NAV_COPY } from "@/lib/constants";
 import { ContractsListClient } from "@/components/ContractsListClient";
 import { ContractMetricsWidgets } from "@/components/ContractMetricsWidgets";
 import { ContractPermissionActions } from "@/components/ContractPermissionActions";
+import {
+  MissingSignedDocumentsTable,
+  type MissingSignedDocumentRow,
+} from "@/components/MissingSignedDocumentsTable";
 import { EmptyState, ErrorState, PageHeader, StatCard } from "@/components/ui";
 import type { ContractStatus } from "@/lib/types";
 import {
   canCreateContracts,
   canEditContracts,
+  canViewContractDocumentChecklist,
   canViewContractReports,
   canViewContractsModule,
   describeContractPermissions,
   fetchContractReportMetrics,
+  listActiveContractsMissingSignedDocument,
   listContracts,
   summarizeContractsByStatus,
   syncRemindersForContracts,
@@ -35,6 +41,7 @@ export default async function ContractsPage({ searchParams }: { searchParams: Se
   const canCreate = canCreateContracts(profile.role);
   const canEdit = canEditContracts(profile.role);
   const canReport = canViewContractReports(profile.role);
+  const showDocumentChecklist = canViewContractDocumentChecklist(profile.role);
   const supabase = await createClient();
   const { data, error } = await listContracts(supabase);
   const contracts = (data ?? []) as ContractListRow[];
@@ -55,6 +62,10 @@ export default async function ContractsPage({ searchParams }: { searchParams: Se
   const statusCounts = summarizeContractsByStatus(contracts);
   const reportBundle = canReport ? await fetchContractReportMetrics(supabase) : null;
   const permissionItems = describeContractPermissions(profile.role);
+  const missingDocsRes = showDocumentChecklist
+    ? await listActiveContractsMissingSignedDocument(supabase)
+    : null;
+  const missingDocs = (missingDocsRes?.data ?? []) as MissingSignedDocumentRow[];
 
   return (
     <div className="space-y-6">
@@ -83,6 +94,7 @@ export default async function ContractsPage({ searchParams }: { searchParams: Se
       <ContractPermissionActions items={permissionItems} />
 
       {error ? <ErrorState message={error.message} /> : null}
+      {missingDocsRes?.error ? <ErrorState message={missingDocsRes.error.message} /> : null}
 
       {!error && reportBundle && !reportBundle.error ? (
         <ContractMetricsWidgets
@@ -114,7 +126,12 @@ export default async function ContractsPage({ searchParams }: { searchParams: Se
           contracts={contracts}
           initialStatus={statusFilter}
           canEdit={canEdit}
+          role={profile.role}
         />
+      ) : null}
+
+      {!error && showDocumentChecklist && !missingDocsRes?.error ? (
+        <MissingSignedDocumentsTable rows={missingDocs} />
       ) : null}
     </div>
   );

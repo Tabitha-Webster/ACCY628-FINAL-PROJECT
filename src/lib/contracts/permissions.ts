@@ -15,25 +15,26 @@ export type ContractPermission =
   | "cancel"
   | "report";
 
-const ALL_INTERNAL: UserRole[] = ["manager", "billing", "technician"];
+const ALL_INTERNAL: UserRole[] = ["manager", "admin", "billing", "technician"];
+const MANAGER_ADMIN: UserRole[] = ["manager", "admin"];
 
 /**
  * Role → allowed contract actions.
  *
- * Manager: full lifecycle + reporting
+ * Manager / Admin: full lifecycle + reporting
  * Billing: view + reporting (billing terms / cash)
  * Technician: view operational agreements
  * Customer: own agreements via /my-contracts (view only)
  */
 export const CONTRACT_PERMISSIONS: Record<ContractPermission, readonly UserRole[]> = {
   view: [...ALL_INTERNAL, "customer"],
-  create: ["manager"],
-  edit: ["manager"],
-  delete: ["manager"],
-  approve: ["manager"],
-  renew: ["manager"],
-  cancel: ["manager"],
-  report: ["manager", "billing"],
+  create: MANAGER_ADMIN,
+  edit: MANAGER_ADMIN,
+  delete: MANAGER_ADMIN,
+  approve: MANAGER_ADMIN,
+  renew: MANAGER_ADMIN,
+  cancel: MANAGER_ADMIN,
+  report: [...MANAGER_ADMIN, "billing"],
 };
 
 export function hasContractPermission(role: UserRole, permission: ContractPermission): boolean {
@@ -55,7 +56,7 @@ export function getContractPermissions(role: UserRole): Record<ContractPermissio
 
 /** Internal Contracts & Agreements list/detail (not customer portal). */
 export function canViewContractsModule(role: UserRole): boolean {
-  return role === "manager" || role === "billing" || role === "technician";
+  return role === "manager" || role === "admin" || role === "billing" || role === "technician";
 }
 
 export function canCreateContracts(role: UserRole): boolean {
@@ -86,6 +87,21 @@ export function canViewContractReports(role: UserRole): boolean {
   return hasContractPermission(role, "report");
 }
 
+/** Customer Contract Data tab — managers and admins only. */
+export function canViewCustomerContractData(role: UserRole): boolean {
+  return role === "manager" || role === "admin";
+}
+
+/** Export filtered contracts list to Excel. */
+export function canExportContracts(role: UserRole): boolean {
+  return role === "manager" || role === "admin" || role === "billing";
+}
+
+/** Document checklist — managers and admins. */
+export function canViewContractDocumentChecklist(role: UserRole): boolean {
+  return role === "manager" || role === "admin";
+}
+
 /** Any write/lifecycle capability (create/edit/delete/approve/renew/cancel). */
 export function canManageContracts(role: UserRole): boolean {
   return (
@@ -99,7 +115,7 @@ export function canManageContracts(role: UserRole): boolean {
 }
 
 export function canUseContractsForBilling(role: UserRole): boolean {
-  return role === "manager" || role === "billing";
+  return role === "manager" || role === "admin" || role === "billing";
 }
 
 /** Map a target status change to the permission required. */

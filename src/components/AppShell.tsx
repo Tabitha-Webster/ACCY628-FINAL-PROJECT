@@ -1,20 +1,28 @@
 ﻿"use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, PanelLeft, PanelLeftClose } from "lucide-react";
 import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
 import { BillingStaffNavTree } from "@/components/BillingStaffNavTree";
+import { CompanyDirectoryNavTree } from "@/components/CompanyDirectoryNavTree";
 import { ContractsAgreementsNavTree } from "@/components/ContractsAgreementsNavTree";
 import { CustomerBillingNavTree } from "@/components/CustomerBillingNavTree";
+import { SystemNavTree } from "@/components/SystemNavTree";
+import { UserAccessNavTree } from "@/components/UserAccessNavTree";
+import { HeaderPageSearch } from "@/components/HeaderPageSearch";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { UserSettingsPanel } from "@/components/UserSettingsPanel";
-import { ROLE_NAV, type Profile, type UserRole } from "@/lib/constants";
+import { isManagerRole, ROLE_NAV, roleHomePath, type Profile, type UserRole } from "@/lib/constants";
+import { hrefAllowedByPageKeys } from "@/lib/role-permissions";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
 import { applyPreferencesToDom, loadPreferences } from "@/lib/user-preferences";
 import type { CustomerStatus } from "@/lib/types";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useId, useState } from "react";
+
+const SIDEBAR_COLLAPSED_KEY = "servicesync-sidebar-collapsed-v2";
 
 function SideNav({
   profile,
@@ -23,6 +31,7 @@ function SideNav({
   showSettings,
   onOpenSettings,
   restrictedCustomer = false,
+  allowedPageKeys = null,
 }: {
   profile: Profile;
   pathname: string;
@@ -30,26 +39,51 @@ function SideNav({
   showSettings?: boolean;
   onOpenSettings?: () => void;
   restrictedCustomer?: boolean;
+  allowedPageKeys?: Set<string> | null;
 }) {
   const nav = restrictedCustomer
     ? [{ href: "/pending-approval", label: "Pending Approval" }]
     : (ROLE_NAV[profile.role as UserRole] ?? []);
   const isCustomer = profile.role === "customer";
   const isBilling = profile.role === "billing";
-  const isManager = profile.role === "manager";
+  const isManager = isManagerRole(profile.role);
   const isTechnician = profile.role === "technician";
+  const isAdmin = profile.role === "admin";
+  const homeHref = restrictedCustomer ? "/pending-approval" : roleHomePath(profile.role as UserRole);
+
+  function canShowHref(href: string) {
+    if (isAdmin) return true;
+    return hrefAllowedByPageKeys(href, allowedPageKeys);
+  }
 
   return (
     <>
       <div className="border-b border-base-300 p-4">
-        <p className="text-lg font-semibold">ServiceSync MSP</p>
-        <p className="text-xs opacity-60">Contract-to-cash workspace</p>
+        <Link
+          href={homeHref}
+          className="block outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+          onClick={onNavigate}
+          aria-label="ServiceSync MSP home"
+        >
+          <Image
+            src="/images/servicesync-msp-logo.png?v=5"
+            alt="ServiceSync MSP"
+            width={1160}
+            height={700}
+            className="sidebar-brand-logo h-auto w-full max-w-[11.5rem] object-contain object-left"
+            sizes="184px"
+            priority
+            unoptimized
+          />
+        </Link>
+        <p className="mt-2 text-xs opacity-60">Contract-to-cash workspace</p>
         <div className="mt-3">
           <span className="badge badge-primary badge-outline">{statusLabel(profile.role)}</span>
         </div>
       </div>
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3" aria-label="Main">
         {nav.map((item) => {
+          if (!canShowHref(item.href)) return null;
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Fragment key={item.href}>
@@ -62,19 +96,43 @@ function SideNav({
               >
                 {item.label}
               </Link>
-              {isCustomer && item.href === "/my-contracts" ? (
-                <CustomerBillingNavTree onNavigate={onNavigate} />
+              {isAdmin && item.href === "/admin" ? (
+                <>
+                  <UserAccessNavTree onNavigate={onNavigate} />
+                  <CompanyDirectoryNavTree
+                    onNavigate={onNavigate}
+                    allowedPageKeys={allowedPageKeys}
+                  />
+                  <SystemNavTree onNavigate={onNavigate} />
+                </>
               ) : null}
-              {isManager && item.href === "/customers" ? (
-                <ContractsAgreementsNavTree showReports showNewContract onNavigate={onNavigate} />
+              {isCustomer && item.href === "/my-contracts" ? (
+                <CustomerBillingNavTree onNavigate={onNavigate} allowedPageKeys={allowedPageKeys} />
+              ) : null}
+              {isManager && !isAdmin && item.href === "/customers" ? (
+                <ContractsAgreementsNavTree
+                  showReports
+                  showNewContract
+                  showCustomerContractData
+                  onNavigate={onNavigate}
+                  allowedPageKeys={allowedPageKeys}
+                />
               ) : null}
               {isTechnician && item.href === "/dashboard" ? (
-                <ContractsAgreementsNavTree showReports={false} onNavigate={onNavigate} />
+                <ContractsAgreementsNavTree
+                  showReports={false}
+                  onNavigate={onNavigate}
+                  allowedPageKeys={allowedPageKeys}
+                />
               ) : null}
               {isBilling && item.href === "/dashboard" ? (
                 <>
-                  <ContractsAgreementsNavTree showReports onNavigate={onNavigate} />
-                  <BillingStaffNavTree onNavigate={onNavigate} />
+                  <ContractsAgreementsNavTree
+                    showReports
+                    onNavigate={onNavigate}
+                    allowedPageKeys={allowedPageKeys}
+                  />
+                  <BillingStaffNavTree onNavigate={onNavigate} allowedPageKeys={allowedPageKeys} />
                 </>
               ) : null}
             </Fragment>
@@ -105,18 +163,23 @@ function SideNav({
 export function AppShell({
   profile,
   customerStatus = null,
+  allowedPageKeys = null,
   children,
 }: {
   profile: Profile;
   customerStatus?: CustomerStatus | null;
+  allowedPageKeys?: string[] | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const sidebarId = useId();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsPathname, setSettingsPathname] = useState(pathname);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const allowedSet = allowedPageKeys == null ? null : new Set(allowedPageKeys);
 
-  // Dismiss the settings panel when the route changes.
   if (settingsPathname !== pathname) {
     setSettingsPathname(pathname);
     setSettingsOpen(false);
@@ -138,6 +201,15 @@ export function AppShell({
   }, []);
 
   useEffect(() => {
+    try {
+      setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
+    } catch {
+      setSidebarCollapsed(false);
+    }
+    setPrefsLoaded(true);
+  }, []);
+
+  useEffect(() => {
     if (!settingsOpen) return;
 
     function onKeyDown(event: KeyboardEvent) {
@@ -152,6 +224,40 @@ export function AppShell({
     };
   }, [settingsOpen]);
 
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "b") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+      event.preventDefault();
+      setSidebarCollapsed((current) => {
+        const next = !current;
+        try {
+          window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
+        } catch {
+          // Ignore storage failures in private browsing.
+        }
+        return next;
+      });
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  function persistCollapsed(next: boolean) {
+    setSidebarCollapsed(next);
+    try {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
+    } catch {
+      // Ignore storage failures in private browsing.
+    }
+  }
+
+  const collapsed = prefsLoaded && sidebarCollapsed;
+
   async function logout() {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -161,31 +267,64 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen bg-base-100">
-      {/* Docked sidebar — always visible in the layout flow. */}
-      <aside className="app-sidebar sticky top-0 flex h-screen w-72 shrink-0 flex-col border-r border-base-300">
-        <SideNav
-          profile={profile}
-          pathname={pathname}
-          restrictedCustomer={restrictedCustomer}
-          showSettings
-          onOpenSettings={() => setSettingsOpen(true)}
-        />
-      </aside>
+      <div
+        className={`relative sticky top-0 z-30 h-screen shrink-0 transition-[width] duration-200 ease-out ${
+          collapsed ? "w-0" : "w-72"
+        } ${prefsLoaded ? "" : "transition-none"}`}
+      >
+        {!collapsed ? (
+          <aside
+            id={sidebarId}
+            className="app-sidebar flex h-full w-72 flex-col border-r border-base-300"
+            aria-label="Side menu"
+          >
+            <SideNav
+              profile={profile}
+              pathname={pathname}
+              restrictedCustomer={restrictedCustomer}
+              allowedPageKeys={allowedSet}
+              showSettings
+              onOpenSettings={() => setSettingsOpen(true)}
+            />
+          </aside>
+        ) : null}
+
+        <button
+          type="button"
+          className={`app-sidebar-toggle absolute top-4 z-40 flex size-7 items-center justify-center rounded-full border border-base-300 bg-base-100 text-base-content shadow-sm transition hover:border-primary/50 hover:bg-base-200 ${
+            collapsed ? "left-3" : "-right-3"
+          }`}
+          onClick={() => persistCollapsed(!collapsed)}
+          aria-controls={collapsed ? undefined : sidebarId}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "Expand side menu" : "Collapse side menu"}
+          title={collapsed ? "Expand side menu (Ctrl+B)" : "Collapse side menu (Ctrl+B)"}
+        >
+          {collapsed ? <PanelLeft className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+        </button>
+      </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex flex-wrap items-center gap-3 border-b border-base-300 bg-base-100 px-4 py-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <div>
-              <p className="text-sm font-semibold leading-tight">ServiceSync MSP</p>
-              <p className="hidden text-xs opacity-60 sm:block">
-                From service agreement to support, billing, and collection.
-              </p>
-            </div>
+          <div className={`flex min-w-0 items-center gap-2 ${collapsed ? "pl-10" : "pl-3"}`}>
+            {collapsed ? (
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold leading-tight">ServiceSync MSP</p>
+                <p className="hidden truncate text-xs opacity-60 sm:block">
+                  From service agreement to support, billing, and collection.
+                </p>
+              </div>
+            ) : null}
           </div>
           <div className="order-3 flex w-full justify-center md:order-none md:w-auto md:flex-1">
             <DemoRoleSwitcher currentRole={profile.role as UserRole} />
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <HeaderPageSearch
+              role={profile.role as UserRole}
+              allowedPageKeys={allowedSet}
+              restrictedCustomer={restrictedCustomer}
+            />
             <button
               type="button"
               className="flex items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-base-200"

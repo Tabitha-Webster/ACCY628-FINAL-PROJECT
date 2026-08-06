@@ -9,6 +9,7 @@ import {
   canCreateContracts,
   canViewContractReports,
   describeContractPermissions,
+  fetchContractCalendarEvents,
   fetchContractReportMetrics,
 } from "@/lib/contracts";
 
@@ -18,7 +19,10 @@ export default async function ContractReportsPage() {
   if (!canViewContractReports(profile.role)) redirect("/contracts/renewals");
 
   const supabase = await createClient();
-  const { metrics, error } = await fetchContractReportMetrics(supabase);
+  const [{ metrics, error }, calendarBundle] = await Promise.all([
+    fetchContractReportMetrics(supabase),
+    fetchContractCalendarEvents(supabase),
+  ]);
   const permissions = describeContractPermissions(profile.role);
   const canCreate = canCreateContracts(profile.role);
 
@@ -46,9 +50,15 @@ export default async function ContractReportsPage() {
       <ContractPermissionActions items={permissions} showDenied />
 
       {error ? <ErrorState message={error.message} /> : null}
+      {calendarBundle.error ? <ErrorState message={calendarBundle.error.message} /> : null}
 
       {!error ? (
-        <ContractMetricsWidgets metrics={metrics} title={null} linkToFullReport={false} />
+        <ContractMetricsWidgets
+          metrics={metrics}
+          calendarEvents={calendarBundle.events}
+          title={null}
+          linkToFullReport={false}
+        />
       ) : null}
 
       {!error ? (

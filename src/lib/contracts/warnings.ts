@@ -72,7 +72,7 @@ export function getContractWarnings(
           threshold === 90 ? "renewal_90" : threshold === 60 ? "renewal_60" : "renewal_30";
         warnings.push({
           code,
-          label: `${threshold}-day renewal reminder (${renewalDays}d)`,
+          label: `${threshold}-day renewal · ${renewalDays} day${renewalDays === 1 ? "" : "s"} left`,
         });
         warnings.push({
           code: "renewal_soon",

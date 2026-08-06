@@ -5,6 +5,7 @@ import { ButtonLink } from "@/components/Button";
 import { CustomerApprovalActions } from "@/components/CustomerApprovalActions";
 import { PageLayout } from "@/components/PageLayout";
 import { DataTable, EmptyState, ErrorState, StatusBadge } from "@/components/ui";
+import { canEditCustomers } from "@/lib/customers/queries";
 import { formatDate } from "@/lib/format";
 
 type ApprovalRow = {
@@ -20,7 +21,8 @@ type ApprovalRow = {
 export default async function CustomerApprovalsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!["manager", "hr"].includes(profile.role)) redirect("/dashboard");
+  // Admin/Manager/HR — same manage roles used for add/edit customers.
+  if (!canEditCustomers(profile.role)) redirect("/dashboard");
 
   const supabase = await createClient();
   const { data, error } = await supabase

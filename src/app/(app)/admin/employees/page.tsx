@@ -1,42 +1,58 @@
 import Link from "next/link";
-import { requireAdmin } from "@/lib/admin";
-import { COMPANY_EMPLOYEES } from "@/lib/constants";
-import { PageHeader, DataTable, StatusBadge } from "@/components/ui";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/auth";
+import { isAdminRole } from "@/lib/constants";
+import { PageHeader, ErrorState } from "@/components/ui";
+import { AdminEmployeesManager, type EmployeeRow } from "@/components/AdminEmployeesManager";
 
 export default async function AdminEmployeesPage() {
-  await requireAdmin();
+  const profile = await getCurrentProfile();
+  if (!profile) redirect("/login");
+  if (!isAdminRole(profile.role) && profile.role !== "manager" && profile.role !== "hr") {
+    redirect("/dashboard");
+  }
+
+  const canEdit = isAdminRole(profile.role);
+  const supabase = await createClient();
+  const employeesRes = await supabase
+    .from("employees")
+    .select("id, full_name, title, department, role, email, notes, is_active")
+    .order("full_name");
+
+  if (employeesRes.error) {
+    return (
+      <div>
+        <PageHeader title="Employees" />
+        <ErrorState message={employeesRes.error.message} />
+        <p className="mt-3 text-sm opacity-70">
+          If this is a missing-table or permission error, apply the employees migrations and confirm
+          select access for admin, manager, and HR.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div>
       <PageHeader
         title="Employees"
-        description="ServiceSync staff directory. Mark, Carson, and Evan share the technician, billing, and manager demo logins."
+        description={
+          canEdit
+            ? "Add, edit, or remove ServiceSync staff directory records. Login accounts are managed separately under User Access."
+            : "View the ServiceSync staff directory. Only administrators can add, edit, or remove employees."
+        }
         actions={
           <Link href="/admin" className="btn btn-sm btn-outline">
-            Back to Admin Console
+            Back to Admin Home
           </Link>
         }
       />
 
-      <DataTable headers={["Name", "Title", "Department", "App role", "Demo login"]}>
-        {COMPANY_EMPLOYEES.map((employee) => (
-          <tr key={employee.name}>
-            <td className="font-medium">{employee.name}</td>
-            <td>{employee.title}</td>
-            <td>{employee.department}</td>
-            <td>
-              <StatusBadge status={employee.role} />
-            </td>
-            <td>
-              {!employee.hasLogin || !employee.email
-                ? "No demo login"
-                : employee.sharesRoleLogin
-                  ? `Shares ${employee.email}`
-                  : employee.email}
-            </td>
-          </tr>
-        ))}
-      </DataTable>
+      <AdminEmployeesManager
+        initialEmployees={(employeesRes.data ?? []) as EmployeeRow[]}
+        canEdit={canEdit}
+      />
     </div>
   );
 }

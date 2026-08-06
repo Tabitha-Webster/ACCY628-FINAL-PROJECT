@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Minus, Plus } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { hrefAllowedByPageKeys } from "@/lib/role-permissions";
 
 type NavLink = { href: string; label: string };
 
@@ -41,6 +42,8 @@ function NavSection({
   const pathname = usePathname();
   const [open, setOpen] = useState(() => sectionActive(pathname, links));
 
+  if (links.length === 0) return null;
+
   return (
     <div className="space-y-1">
       <button
@@ -50,7 +53,11 @@ function NavSection({
         onClick={() => setOpen((value) => !value)}
       >
         <span>{title}</span>
-        {open ? <Minus className="h-4 w-4 shrink-0 opacity-70" aria-hidden /> : <Plus className="h-4 w-4 shrink-0 opacity-70" aria-hidden />}
+        {open ? (
+          <Minus className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
+        ) : (
+          <Plus className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
+        )}
       </button>
 
       {open ? (
@@ -76,12 +83,33 @@ function NavSection({
   );
 }
 
-export function BillingStaffNavTree({ onNavigate }: { onNavigate?: () => void }) {
+export function BillingStaffNavTree({
+  onNavigate,
+  allowedPageKeys = null,
+}: {
+  onNavigate?: () => void;
+  allowedPageKeys?: Set<string> | null;
+}) {
+  const billing = useMemo(
+    () => BILLING_LINKS.filter((link) => hrefAllowedByPageKeys(link.href, allowedPageKeys)),
+    [allowedPageKeys]
+  );
+  const collections = useMemo(
+    () => COLLECTIONS_LINKS.filter((link) => hrefAllowedByPageKeys(link.href, allowedPageKeys)),
+    [allowedPageKeys]
+  );
+  const accounting = useMemo(
+    () => ACCOUNTING_LINKS.filter((link) => hrefAllowedByPageKeys(link.href, allowedPageKeys)),
+    [allowedPageKeys]
+  );
+
+  if (billing.length + collections.length + accounting.length === 0) return null;
+
   return (
     <div className="space-y-1">
-      <NavSection title="Billing" links={BILLING_LINKS} onNavigate={onNavigate} />
-      <NavSection title="Collections" links={COLLECTIONS_LINKS} onNavigate={onNavigate} />
-      <NavSection title="Accounting" links={ACCOUNTING_LINKS} onNavigate={onNavigate} />
+      <NavSection title="Billing" links={billing} onNavigate={onNavigate} />
+      <NavSection title="Collections" links={collections} onNavigate={onNavigate} />
+      <NavSection title="Accounting" links={accounting} onNavigate={onNavigate} />
     </div>
   );
 }

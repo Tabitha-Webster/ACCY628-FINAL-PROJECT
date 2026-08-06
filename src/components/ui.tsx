@@ -82,8 +82,20 @@ export function ErrorState({ message }: { message: string }) {
   );
 }
 
-export function StatusBadge({ status, label }: { status: string; label?: string }) {
-  return <span className={`badge ${statusBadgeClass(status)}`}>{label ?? statusLabel(status)}</span>;
+export function StatusBadge({
+  status,
+  label,
+  className = "",
+}: {
+  status: string;
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <span className={`badge ${statusBadgeClass(status)} ${className}`.trim()}>
+      {label ?? statusLabel(status)}
+    </span>
+  );
 }
 
 export type PageHeaderProps = {
