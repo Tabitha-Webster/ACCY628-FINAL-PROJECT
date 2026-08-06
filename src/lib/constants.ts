@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "manager" | "technician" | "billing" | "customer" | "hr";
+export type UserRole = "admin" | "manager" | "technician" | "billing" | "customer" | "hr" | "executive";
 
 export type Profile = {
   id: string;
@@ -15,6 +15,7 @@ export type Profile = {
 export const ASSIGNABLE_ROLES: UserRole[] = [
   "admin",
   "manager",
+  "executive",
   "technician",
   "billing",
   "customer",
@@ -25,6 +26,7 @@ export const ASSIGNABLE_ROLES: UserRole[] = [
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Admin",
   manager: "Manager",
+  executive: "Executive",
   technician: "Technician",
   billing: "Billing",
   customer: "Customer",
@@ -63,16 +65,16 @@ export const ROLE_ACCESS_MATRIX: {
   customerData: boolean;
 }[] = [
   {
-    area: "Executive Dashboard",
+    area: "Manager & Executive Dashboards",
     description: "Company-wide KPIs and exception highlights",
-    roles: ["admin", "manager"],
+    roles: ["admin", "manager", "executive"],
     financial: true,
     customerData: true,
   },
   {
     area: "Customers & Contracts",
     description: "Customer master data and contract terms",
-    roles: ["admin", "manager", "billing", "technician"],
+    roles: ["admin", "manager", "executive", "billing", "technician"],
     financial: true,
     customerData: true,
   },
@@ -99,7 +101,7 @@ export const ROLE_ACCESS_MATRIX: {
   },
   {
     area: "Accounting / Profitability",
-    description: "Revenue recognition and margin analysis",
+    description: "Revenue recognition overview and margin analysis",
     roles: ["admin", "manager", "billing"],
     financial: true,
     customerData: true,
@@ -134,6 +136,13 @@ export const DEMO_ACCOUNTS = [
     name: "Emilie Pierson",
   },
   {
+    role: "executive" as UserRole,
+    label: "Executive",
+    email: "executive@servicesync.demo",
+    password: "1234",
+    name: "Evan Bean",
+  },
+  {
     role: "technician" as UserRole,
     label: "Technician",
     email: "tech@servicesync.demo",
@@ -153,7 +162,7 @@ export const DEMO_ACCOUNTS = [
   },
   {
     role: "customer" as UserRole,
-    label: "Customer (Chad Corporation)",
+    label: "Customer",
     email: "casey.ortiz@chadcorporation.demo",
     name: "Casey Ortiz",
   },
@@ -188,6 +197,15 @@ export const COMPANY_EMPLOYEES: CompanyEmployee[] = [
     sharesRoleLogin: false,
     email: "manager@servicesync.demo",
     role: "manager",
+  },
+  {
+    name: "Evan Bean",
+    title: "Chief Executive Officer",
+    department: "Executive Office",
+    hasLogin: true,
+    sharesRoleLogin: false,
+    email: "executive@servicesync.demo",
+    role: "executive",
   },
   {
     name: "Jackson Pecunia",
@@ -234,15 +252,6 @@ export const COMPANY_EMPLOYEES: CompanyEmployee[] = [
     email: "billing@servicesync.demo",
     role: "billing",
   },
-  {
-    name: "Evan Bean",
-    title: "Account Manager",
-    department: "Project Delivery",
-    hasLogin: true,
-    sharesRoleLogin: true,
-    email: "manager@servicesync.demo",
-    role: "manager",
-  },
 ];
 
 export type NavItem = {
@@ -253,7 +262,7 @@ export type NavItem = {
 };
 
 const MANAGER_NAV: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard", label: "Manager Dashboard" },
   { href: "/customers", label: "Customers" },
   { href: "/customer-approvals", label: "Approvals" },
   { href: "/admin/employees", label: "Employees" },
@@ -274,11 +283,18 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     // User Access dropdown renders via UserAccessNavTree in AppShell
     // Company Directory dropdown renders via CompanyDirectoryNavTree in AppShell
     // System dropdown renders via SystemNavTree in AppShell
-    { href: "/admin/audit", label: "Audit Trail" },
+    { href: "/admin/audit", label: "Change Log" },
     { href: "/admin/configurations", label: "Configurations" },
     { href: "/controls", label: "Controls and Exceptions" },
   ],
   manager: MANAGER_NAV,
+  executive: [
+    { href: "/dashboard", label: "Executive Dashboard" },
+    { href: "/customers", label: "Customers" },
+    { href: "/admin/employees", label: "Employees" },
+    { href: "/accounts-receivable", label: "Accounts Receivable" },
+    // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
+  ],
   technician: [
     { href: "/dashboard", label: "My Assignments" },
     { href: "/assignments", label: "Assignments Workbench" },
@@ -295,7 +311,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     // Contracts & Agreements + Billing/Collections/Accounting trees render in AppShell
   ],
   hr: [
-    { href: "/dashboard", label: "HR Home" },
+    { href: "/dashboard", label: "HR Dashboard" },
     { href: "/hr-applicants", label: "Applicants" },
     { href: "/admin/employees", label: "Employees" },
     { href: "/hr-analytics", label: "HR Analytics" },
@@ -329,6 +345,12 @@ export const CONTRACTS_NAV_COPY: Record<
     description:
       "Manage the full agreement lifecycle — draft, approval, active service, holds, renewals, and cancellations.",
   },
+  executive: {
+    href: "/contracts/awaiting-signature",
+    title: "Contracts for Signature",
+    description:
+      "Review contracts awaiting executive signature, add your signature, and release them to the customer.",
+  },
   technician: {
     href: "/contracts",
     title: "Contracts & Agreements",
@@ -350,7 +372,7 @@ export const CONTRACTS_NAV_COPY: Record<
     href: "/my-contracts",
     title: "My Contracts",
     description:
-      "Your service agreements — terms, included hours, and covered services. Open Service Usage to see this month's hour breakdown.",
+      "View your service agreements, download or print PDFs, and sign when ready. Open Service Usage for this month's hour breakdown.",
   },
 };
 
@@ -399,6 +421,15 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/billing-collections",
     ],
     manager: managerShared,
+    executive: [
+      "/contracts",
+      "/customers",
+      "/contracts/reports",
+      "/contracts/renewals",
+      "/contracts/awaiting-signature",
+      "/accounts-receivable",
+      "/admin/employees",
+    ],
     technician: ["/contracts", "/customers", "/assignments"],
     billing: [
       "/customers",

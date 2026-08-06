@@ -4,7 +4,7 @@ import type { UserRole } from "@/lib/constants";
 import type { CustomerStatus } from "@/lib/types";
 
 /** Internal roles that share one live customer list / profile. */
-export const CUSTOMER_VIEW_ROLES: UserRole[] = ["admin", "manager", "billing", "technician"];
+export const CUSTOMER_VIEW_ROLES: UserRole[] = ["admin", "manager", "billing", "technician", "executive"];
 
 /** Roles that can add and edit customer master data (Admin matches Manager). */
 export const CUSTOMER_MANAGE_ROLES: UserRole[] = ["admin", "manager"];

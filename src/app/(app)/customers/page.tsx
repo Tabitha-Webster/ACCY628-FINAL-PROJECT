@@ -23,22 +23,15 @@ function CustomerListSkeleton() {
   return (
     <div className="space-y-3" aria-busy="true" aria-live="polite">
       <p className="text-sm opacity-70">Retrieving customer records…</p>
-      <div className="overflow-hidden rounded-box border border-base-300 bg-base-100">
-        <div className="border-b border-base-300 bg-base-200/60 px-4 py-3">
-          <div className="skeleton h-3 w-full max-w-3xl" />
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="skeleton h-20 rounded-2xl" />
+        ))}
+      </div>
+      <div className="skeleton h-28 rounded-2xl" />
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 6 }).map((_, index) => (
-          <div
-            key={index}
-            className="flex items-center gap-4 border-b border-base-200 px-4 py-3 last:border-b-0"
-          >
-            <div className="skeleton h-3 w-20 shrink-0" />
-            <div className="skeleton h-3 w-40 shrink-0" />
-            <div className="skeleton h-5 w-24 shrink-0" />
-            <div className="skeleton h-3 w-28 shrink-0" />
-            <div className="skeleton h-3 w-32 shrink-0" />
-            <div className="skeleton h-3 min-w-0 flex-1" />
-          </div>
+          <div key={index} className="skeleton h-28 rounded-xl" />
         ))}
       </div>
     </div>
@@ -112,9 +105,12 @@ export default async function CustomersPage() {
 
   const canManage = canEditCustomers(profile.role);
   const canApprove = canApproveCustomers(profile.role);
-  const description = canManage
-    ? "Shared live customer list from public.customers. Visibility depends on role; Admin and Manager can also review Pending Approval signups."
-    : "Shared live customer list — filtered for your role. Open a row to view the latest profile.";
+  const isTechnician = profile.role === "technician";
+  const description = isTechnician
+    ? "Customers linked to your assigned tickets — search, filter, and open a profile for contact details."
+    : canManage
+      ? "Shared live customer list from public.customers. Visibility depends on role; Admin and Manager can also review Pending Approval signups."
+      : "Shared live customer list — filtered for your role. Open a card to view the latest profile.";
 
   return (
     <PageLayout

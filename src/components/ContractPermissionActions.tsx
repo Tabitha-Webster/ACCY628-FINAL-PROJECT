@@ -32,8 +32,8 @@ export function ContractPermissionActions({
   if (visible.length === 0) return null;
 
   return (
-    <div className="rounded-box border border-base-300 bg-base-100 p-4">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide opacity-60">
+    <div className="rounded-2xl border border-emerald-200/80 bg-gradient-to-b from-emerald-50/70 to-base-100 p-3 shadow-sm">
+      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-900/80">
         Contract actions
       </h2>
       <div className="flex flex-wrap gap-2">
@@ -42,7 +42,7 @@ export function ContractPermissionActions({
             <Link
               key={item.permission}
               href={item.href}
-              className="btn btn-sm btn-outline"
+              className="btn btn-sm border-emerald-200 bg-white/80 hover:bg-emerald-50"
               title={HINTS[item.permission]}
             >
               {item.label}

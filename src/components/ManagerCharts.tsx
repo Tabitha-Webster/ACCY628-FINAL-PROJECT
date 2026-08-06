@@ -39,7 +39,7 @@ export function ManagerCharts({
     <div className="grid gap-4 lg:grid-cols-2">
       <div className="rounded-box border border-base-300 bg-base-100 p-4">
         <p className="mb-2 text-sm font-semibold">Revenue, Cost &amp; Profit (last 6 months)</p>
-        <div className="h-64">
+        <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={monthlyFinancials} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
@@ -57,7 +57,7 @@ export function ManagerCharts({
 
       <div className="rounded-box border border-base-300 bg-base-100 p-4">
         <p className="mb-2 text-sm font-semibold">Open Tickets by Status</p>
-        <div className="h-64">
+        <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={ticketsByStatus} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.2} />

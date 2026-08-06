@@ -15,6 +15,8 @@ import {
 import { type MonthlyFinancials } from "@/components/ManagerCharts";
 import { CustomerHomeVisuals } from "@/components/CustomerHomeVisuals";
 import { ExecutiveDashboardVisuals } from "@/components/ExecutiveDashboardVisuals";
+import { HrHomeVisuals } from "@/components/HrHomeVisuals";
+import { BillingHomeVisuals } from "@/components/BillingHomeVisuals";
 import { ContractMetricsWidgets } from "@/components/ContractMetricsWidgets";
 import {
   TechnicianWorkspaceClient,
@@ -30,7 +32,7 @@ import {
   localDateKeyFromIso,
 } from "@/lib/sla";
 import { formatCurrency } from "@/lib/format";
-import { fetchContractReportMetrics } from "@/lib/contracts";
+import { fetchContractReportMetrics, listAwaitingExecutiveSignatures } from "@/lib/contracts";
 import { round2, withDerivedInvoiceStatus } from "@/lib/billing";
 import { loadBillingReviewData } from "@/lib/billing-review-data";
 import {
@@ -43,6 +45,7 @@ import {
 import { PeriodViewControls } from "@/components/PeriodViewControls";
 import { ExplainNumber } from "@/components/ExplainNumber";
 import { DashboardCollapse, DashboardMetricAccordion, DashboardSection } from "@/components/DashboardAccordion";
+import { loadContractHoursForMatch, rankDemoApplicants } from "@/lib/hr-applicants";
 import type {
   AdditionalWorkRequest,
   Contract,
@@ -107,6 +110,7 @@ export default async function DashboardPage({
 
   if (profile.role === "admin") redirect("/admin");
   if (profile.role === "manager") return <ManagerDashboard profile={profile} />;
+  if (profile.role === "executive") return <ExecutiveDashboard profile={profile} />;
   if (profile.role === "technician") return <TechnicianDashboard profile={profile} />;
   if (profile.role === "billing") {
     const params = await searchParams;
@@ -118,49 +122,347 @@ export default async function DashboardPage({
 }
 
 // ---------------------------------------------------------------------------
+// Executive
+// ---------------------------------------------------------------------------
+
+async function ExecutiveDashboard({ profile }: { profile: Profile }) {
+  const supabase = await createClient();
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const [
+    { data: pending },
+    { count: activeContractsCount },
+    { data: activeContractRows },
+    { count: activeCustomersCount },
+    { data: activeCustomerRows },
+    { data: invoiceRows },
+    { count: awaitingCustomerCount },
+  ] = await Promise.all([
+    listAwaitingExecutiveSignatures(supabase).then((res) => ({ data: res.data })),
+    supabase
+      .from("contracts")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active"),
+    supabase
+      .from("contracts")
+      .select("id, contract_number, name, monthly_recurring_fee, end_date, customer_id")
+      .eq("status", "active")
+      .order("name"),
+    supabase
+      .from("customers")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active"),
+    supabase.from("customers").select("id, name").eq("status", "active").order("name"),
+    supabase
+      .from("invoices")
+      .select("id, invoice_number, status, remaining_balance, due_date, customers(name)"),
+    supabase
+      .from("contract_signature_packets")
+      .select("id", { count: "exact", head: true })
+      .eq("is_current", true)
+      .eq("status", "awaiting_customer"),
+  ]);
+
+  const openInvoices = (invoiceRows ?? []).filter(
+    (invoice) =>
+      !["draft", "canceled", "paid"].includes(invoice.status) &&
+      Number(invoice.remaining_balance) > 0.01
+  );
+  const totalAr = openInvoices.reduce((sum, invoice) => sum + Number(invoice.remaining_balance), 0);
+  const overdueAr = openInvoices
+    .filter((invoice) => invoice.due_date != null && invoice.due_date < todayStr)
+    .reduce((sum, invoice) => sum + Number(invoice.remaining_balance), 0);
+
+  const mrr = (activeContractRows ?? []).reduce(
+    (sum, contract) => sum + Number(contract.monthly_recurring_fee ?? 0),
+    0
+  );
+
+  const in90 = new Date();
+  in90.setDate(in90.getDate() + 90);
+  const in90Key = in90.toISOString().slice(0, 10);
+  const expiringSoon = (activeContractRows ?? []).filter(
+    (contract) => contract.end_date && contract.end_date >= todayStr && contract.end_date <= in90Key
+  );
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Executive Dashboard"
+        description={`Welcome, ${profile.full_name}. Review agreements that need your signature, then scan company health across contracts, customers, and receivables.`}
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Awaiting your signature"
+          value={String(pending.length)}
+          tone={pending.length ? "warning" : "success"}
+          explanation={{
+            title: "Awaiting your signature",
+            result: String(pending.length),
+            formula: "Current signature packets in awaiting_executive (plus pending contracts not yet released to the customer)",
+            lines: pending.slice(0, 20).map((item) => ({
+              label: `${item.contractNumber} · ${item.contractName}`,
+              value: item.readyToSign ? "Ready to sign" : "Needs manager sign",
+              detail: item.customerName,
+            })),
+          }}
+        />
+        <StatCard
+          label="Awaiting customer signature"
+          value={String(awaitingCustomerCount ?? 0)}
+          tone={(awaitingCustomerCount ?? 0) > 0 ? "info" : "default"}
+          explanation={{
+            title: "Awaiting customer signature",
+            result: String(awaitingCustomerCount ?? 0),
+            formula: "Current signature packets where status = awaiting_customer",
+            lines: [],
+          }}
+        />
+        <StatCard
+          label="Active contracts"
+          value={String(activeContractsCount ?? 0)}
+          explanation={{
+            title: "Active contracts",
+            result: String(activeContractsCount ?? 0),
+            formula: "Count of contracts where status = active",
+            lines: (activeContractRows ?? []).slice(0, 20).map((contract) => ({
+              label: contract.name,
+              value: contract.contract_number,
+              detail: formatCurrency(Number(contract.monthly_recurring_fee ?? 0)) + " MRR",
+            })),
+          }}
+        />
+        <StatCard
+          label="Active customers"
+          value={String(activeCustomersCount ?? 0)}
+          explanation={{
+            title: "Active customers",
+            result: String(activeCustomersCount ?? 0),
+            formula: "Count of customers where status = active",
+            lines: (activeCustomerRows ?? []).slice(0, 20).map((customer) => ({
+              label: customer.name ?? "Customer",
+              value: "Active",
+            })),
+          }}
+        />
+        <StatCard
+          label="Total accounts receivable"
+          value={formatCurrency(totalAr)}
+          tone={totalAr > 0 ? "warning" : "success"}
+          explanation={{
+            title: "Total accounts receivable",
+            result: formatCurrency(totalAr),
+            formula: "Sum of remaining_balance on invoices that are not draft, canceled, or paid and still have a balance",
+            lines: openInvoices.slice(0, 20).map((invoice) => {
+              const customer = Array.isArray(invoice.customers)
+                ? invoice.customers[0]
+                : invoice.customers;
+              return {
+                label: invoice.invoice_number,
+                value: formatCurrency(Number(invoice.remaining_balance)),
+                detail: customer?.name ?? "Customer",
+              };
+            }),
+          }}
+        />
+        <StatCard
+          label="Overdue AR"
+          value={formatCurrency(overdueAr)}
+          tone={overdueAr > 0 ? "error" : "success"}
+          explanation={{
+            title: "Overdue AR",
+            result: formatCurrency(overdueAr),
+            formula: "Sum of remaining_balance on open invoices with due_date before today",
+            lines: openInvoices
+              .filter((invoice) => invoice.due_date != null && invoice.due_date < todayStr)
+              .slice(0, 20)
+              .map((invoice) => {
+                const customer = Array.isArray(invoice.customers)
+                  ? invoice.customers[0]
+                  : invoice.customers;
+                return {
+                  label: invoice.invoice_number,
+                  value: formatCurrency(Number(invoice.remaining_balance)),
+                  detail: `${customer?.name ?? "Customer"} · due ${invoice.due_date}`,
+                };
+              }),
+          }}
+        />
+        <StatCard
+          label="Active contract MRR"
+          value={formatCurrency(mrr)}
+          explanation={{
+            title: "Active contract MRR",
+            result: formatCurrency(mrr),
+            formula: "Sum of monthly_recurring_fee on contracts where status = active",
+            lines: (activeContractRows ?? [])
+              .filter((contract) => Number(contract.monthly_recurring_fee ?? 0) > 0)
+              .slice(0, 20)
+              .map((contract) => ({
+                label: contract.name,
+                value: formatCurrency(Number(contract.monthly_recurring_fee ?? 0)),
+                detail: contract.contract_number,
+              })),
+          }}
+        />
+        <StatCard
+          label="Expiring in 90 days"
+          value={String(expiringSoon.length)}
+          tone={expiringSoon.length ? "warning" : "success"}
+          explanation={{
+            title: "Expiring in 90 days",
+            result: String(expiringSoon.length),
+            formula: "Active contracts with end_date between today and 90 days from now",
+            lines: expiringSoon.slice(0, 20).map((contract) => ({
+              label: contract.name,
+              value: contract.end_date ?? "—",
+              detail: contract.contract_number,
+            })),
+          }}
+        />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Link href="/contracts/awaiting-signature" className="btn btn-primary btn-sm">
+          Awaiting your signature
+        </Link>
+        <Link href="/contracts?status=pending_approval" className="btn btn-outline btn-sm">
+          View pending contracts
+        </Link>
+        <Link href="/contracts?status=active" className="btn btn-ghost btn-sm border border-base-300">
+          Active contracts
+        </Link>
+        <Link href="/customers" className="btn btn-ghost btn-sm border border-base-300">
+          Customers
+        </Link>
+        <Link href="/accounts-receivable" className="btn btn-ghost btn-sm border border-base-300">
+          Accounts receivable
+        </Link>
+      </div>
+
+      <section>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">
+            Awaiting executive signature
+          </h2>
+          {pending.length > 0 ? (
+            <Link href="/contracts/awaiting-signature" className="link link-hover text-sm">
+              View all
+            </Link>
+          ) : null}
+        </div>
+        {pending.length === 0 ? (
+          <p className="text-sm opacity-60">No contracts are waiting for your signature right now.</p>
+        ) : (
+          <div className="space-y-3">
+            {pending.slice(0, 5).map((item) => (
+              <div key={item.id} className="rounded-box border border-base-300 bg-base-100 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium">
+                      {item.contractNumber} · {item.contractName}
+                    </p>
+                    <p className="text-xs opacity-60">
+                      {item.customerName} ·{" "}
+                      {item.readyToSign ? `signed by ${item.managerName}` : `manager: ${item.managerName}`}
+                      {item.signedAt ? ` · ${new Date(item.signedAt).toLocaleString()}` : ""}
+                      {!item.readyToSign ? " · manager signature may still be needed" : ""}
+                    </p>
+                  </div>
+                  <Link href={`/contracts/${item.contractId}#pdf-signatures`} className="btn btn-primary btn-sm">
+                    {item.readyToSign ? "Review & sign" : "Open contract"}
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // HR
 // ---------------------------------------------------------------------------
 
 async function HrDashboard({ profile }: { profile: Profile }) {
   const supabase = await createClient();
-  const [{ data: contractors }, { data: positions }] = await Promise.all([
+  const [
+    { data: contractors },
+    { data: positions },
+    { data: departments },
+    contractHours,
+  ] = await Promise.all([
     supabase.from("hr_contractors").select("id, status"),
-    supabase.from("hr_positions").select("id, status"),
+    supabase.from("hr_positions").select("id, title, status, department_id"),
+    supabase.from("hr_departments").select("id, name"),
+    loadContractHoursForMatch(supabase),
   ]);
 
   const activeCount = (contractors ?? []).filter((c) => c.status === "active").length;
-  const openCount = (positions ?? []).filter((p) => p.status === "open").length;
-  const filledCount = (positions ?? []).filter((p) => p.status === "filled").length;
+  const openPositions = (positions ?? []).filter((p) => p.status === "open");
+  const openCount = openPositions.length;
+  const deptName = new Map((departments ?? []).map((d) => [d.id, d.name]));
+  const openTitles = openPositions.map((p) => p.title);
+
+  const rankedApplicants = rankDemoApplicants({
+    contractHours,
+    openPositionTitles: openTitles,
+  });
+  const topApplicants = rankedApplicants.slice(0, 5);
+  const topMatch = rankedApplicants[0]?.matchPercent ?? 0;
+  const strongMatches = rankedApplicants.filter((a) => a.matchPercent >= 72).length;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="HR Home"
-        description={`Welcome, ${profile.full_name}. Review applicants, open roles, and workforce analytics.`}
-      />
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Active contractors" value={String(activeCount)} />
-        <StatCard
-          label="Open positions"
-          value={String(openCount)}
-          tone={openCount > 0 ? "warning" : "default"}
-        />
-        <StatCard label="Filled positions" value={String(filledCount)} />
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        <Link href="/hr-applicants" className="btn btn-primary">
-          Applicants
-        </Link>
-        <Link href="/hr-analytics" className="btn btn-outline">
-          HR Analytics
-        </Link>
-        <Link href="/hr-positions" className="btn btn-outline">
-          Positions
-        </Link>
-      </div>
-    </div>
+    <HrHomeVisuals
+      fullName={profile.full_name}
+      pipeline={{
+        openRoles: openCount,
+        applicants: rankedApplicants.length,
+        strongMatches,
+        activeContractors: activeCount,
+      }}
+      metrics={[
+        {
+          label: "Active contractors",
+          value: String(activeCount),
+          tone: "sky",
+          href: "/admin/hr",
+        },
+        {
+          label: "Open positions",
+          value: String(openCount),
+          tone: openCount > 0 ? "amber" : "emerald",
+          href: "/hr-positions",
+        },
+        {
+          label: "Applicants",
+          value: String(rankedApplicants.length),
+          tone: "violet",
+          href: "/hr-applicants",
+        },
+        {
+          label: "Top match",
+          value: `${topMatch}%`,
+          tone: topMatch >= 72 ? "emerald" : "rose",
+          href: "/hr-applicants",
+        },
+      ]}
+      applicants={topApplicants.map((a) => ({
+        id: a.id,
+        fullName: a.fullName,
+        appliedFor: a.appliedFor,
+        matchPercent: a.matchPercent,
+        stars: a.stars,
+      }))}
+      openRoles={openPositions.map((p) => ({
+        id: p.id,
+        title: p.title,
+        department: deptName.get(p.department_id) ?? "—",
+      }))}
+    />
   );
 }
 
@@ -429,6 +731,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
       approvals={approvalChips}
       pendingApprovalsTotal={pendingApprovalsTotal}
     />
+
   );
 }
 
@@ -726,22 +1029,19 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
   };
 
   return (
-    <div>
-      <PageHeader title="My Assignments" />
-      <TechnicianWorkspaceClient
-        technicianId={profile.id}
-        technicianName={profile.full_name}
-        internalCostRate={Number(profile.internal_cost_rate ?? 65)}
-        tickets={workspaceTickets}
-        pendingTimeEntries={pendingTimeEntries}
-        pendingAdditionalWork={pendingAdditionalWork}
-        allAdditionalWork={allAdditionalWork}
-        contractWarnings={contractWarnings}
-        summary={summary}
-        completedTodayIds={completedTodayTickets.map((t) => t.id)}
-        timezoneLabel={Intl.DateTimeFormat().resolvedOptions().timeZone || "local time"}
-      />
-    </div>
+    <TechnicianWorkspaceClient
+      technicianId={profile.id}
+      technicianName={profile.full_name}
+      internalCostRate={Number(profile.internal_cost_rate ?? 65)}
+      tickets={workspaceTickets}
+      pendingTimeEntries={pendingTimeEntries}
+      pendingAdditionalWork={pendingAdditionalWork}
+      allAdditionalWork={allAdditionalWork}
+      contractWarnings={contractWarnings}
+      summary={summary}
+      completedTodayIds={completedTodayTickets.map((t) => t.id)}
+      timezoneLabel={Intl.DateTimeFormat().resolvedOptions().timeZone || "local time"}
+    />
   );
 }
 
@@ -765,7 +1065,7 @@ async function BillingDashboard({
   const includeOpenOneTime = periodOverlapsToday(period);
   const supabase = await createClient();
 
-  const [review, invoicesRes, paymentsRes, revenueRes, customersRes, contractReportRes] = await Promise.all([
+  const [review, invoicesRes, paymentsRes, customersRes] = await Promise.all([
     loadBillingReviewData(
       supabase,
       { start: period.start, end: period.end, label: period.label, unbounded: period.unbounded },
@@ -777,21 +1077,15 @@ async function BillingDashboard({
         "id, customer_id, invoice_number, status, remaining_balance, due_date, total_amount, amount_paid, dispute_status, invoice_date, billing_period_start"
       ),
     supabase.from("payments").select("payment_number, payment_amount, payment_date, customer_id"),
-    supabase.from("revenue_records").select("recognition, amount, period_month, revenue_type, description"),
     supabase.from("customers").select("id, name"),
-    fetchContractReportMetrics(supabase),
   ]);
 
   const customerName = new Map((customersRes.data ?? []).map((c) => [c.id, c.name as string]));
-  const contractMetrics = contractReportRes.metrics;
   const invoices = (invoicesRes.data ?? [])
     .map((invoice) => withDerivedInvoiceStatus(invoice))
     .filter((invoice) => dateInDashboardPeriod(invoice.billing_period_start || invoice.invoice_date, period));
   const payments = ((paymentsRes.data ?? []) as Pick<Payment, "payment_number" | "payment_amount" | "payment_date" | "customer_id">[]).filter(
     (payment) => dateInDashboardPeriod(payment.payment_date, period)
-  );
-  const revenue = ((revenueRes.data ?? []) as Pick<RevenueRecord, "recognition" | "amount" | "period_month" | "revenue_type" | "description">[]).filter(
-    (row) => monthKeyInDashboardPeriod(row.period_month, period)
   );
 
   const packagesReady = review.packages.filter((pkg) => pkg.estimatedTotal > 0);
@@ -804,7 +1098,6 @@ async function BillingDashboard({
   const issuedTotal = issuedInvoices.reduce((sum, invoice) => sum + Number(invoice.total_amount ?? 0), 0);
   const draftInvoices = invoices.filter((i) => i.status === "draft");
   const overdueInvoices = invoices.filter((i) => i.status === "overdue");
-  const partialInvoices = invoices.filter((i) => i.status === "partially_paid");
   const disputedInvoices = invoices.filter((i) => i.status === "disputed");
   const openReceivables = invoices.filter((i) => !["draft", "canceled", "paid"].includes(i.status) && i.remaining_balance > 0.01);
   const totalAr = openReceivables.reduce((sum, invoice) => sum + invoice.remaining_balance, 0);
@@ -821,12 +1114,6 @@ async function BillingDashboard({
     };
   });
 
-  const deferredRows = revenue.filter((r) => r.recognition === "deferred");
-  const unbilledRows = revenue.filter((r) => r.recognition === "unbilled");
-  const deferred = deferredRows.reduce((sum, r) => sum + Number(r.amount), 0);
-  const unbilled = unbilledRows.reduce((sum, r) => sum + Number(r.amount), 0);
-  const partialPaidTotal = partialInvoices.reduce((sum, invoice) => sum + invoice.amount_paid, 0);
-  const partialBalanceTotal = partialInvoices.reduce((sum, invoice) => sum + invoice.remaining_balance, 0);
   const exceptionCount = review.exceptions.length;
   const overdueBalance = round2(overdueInvoices.reduce((sum, invoice) => sum + Number(invoice.remaining_balance ?? 0), 0));
   const pastDueAr = round2(
@@ -884,17 +1171,6 @@ async function BillingDashboard({
       detail: customerName.get(invoice.customer_id) ?? "Unknown customer",
     })),
   };
-  const exceptionExplanation = {
-    title: "Pending Approvals",
-    result: String(exceptionCount),
-    formula: "Count of unapproved time entries, direct costs, and additional work requests that block billing",
-    description: "These items appear on Overview until a manager or billing reviewer approves or rejects them.",
-    lines: review.exceptions.map((exception) => ({
-      label: `${exception.customerName} | ${exception.reason}`,
-      value: exception.kind.replace(/_/g, " "),
-      detail: exception.detail,
-    })),
-  };
   const overdueExplanation = {
     title: "Overdue Invoices",
     result: `${overdueInvoices.length} | ${formatCurrency(overdueBalance)}`,
@@ -904,27 +1180,6 @@ async function BillingDashboard({
       label: invoice.invoice_number,
       value: formatCurrency(invoice.remaining_balance),
       detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} | due ${invoice.due_date} | ${invoiceDaysPastDue(invoice.due_date)} days past due`,
-    })),
-  };
-  const disputeExplanation = {
-    title: "Disputed Invoices",
-    result: String(disputedInvoices.length),
-    formula: `Count of invoices from ${period.label} marked disputed or with an open dispute flag`,
-    lines: disputedInvoices.map((invoice) => ({
-      label: invoice.invoice_number,
-      value: formatCurrency(invoice.remaining_balance),
-      detail: customerName.get(invoice.customer_id) ?? "Unknown customer",
-    })),
-  };
-  const issuedExplanation = {
-    title: "Invoices Issued",
-    result: String(issuedInvoices.length),
-    formula: `Count of invoices whose billing period or invoice date falls in ${period.label}, excluding drafts and canceled invoices`,
-    description: `Total billed in this period: ${formatCurrency(issuedTotal)}.`,
-    lines: issuedInvoices.map((invoice) => ({
-      label: invoice.invoice_number,
-      value: formatCurrency(Number(invoice.total_amount ?? 0)),
-      detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} | ${invoice.status.replace(/_/g, " ")}`,
     })),
   };
   const paymentsExplanation = {
@@ -948,522 +1203,99 @@ async function BillingDashboard({
       detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} | ${invoice.status.replace(/_/g, " ")}`,
     })),
   };
-  const partialExplanation = {
-    title: "Partially Paid Invoices",
-    result: String(partialInvoices.length),
-    formula: `Count of invoices from ${period.label} where amount paid > 0 and remaining balance > 0`,
-    description: `Total paid on these invoices: ${formatCurrency(partialPaidTotal)}. Remaining balance: ${formatCurrency(partialBalanceTotal)}.`,
-    lines: partialInvoices.map((invoice) => ({
-      label: invoice.invoice_number,
-      value: formatCurrency(invoice.remaining_balance),
-      detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} | paid ${formatCurrency(invoice.amount_paid)}`,
-    })),
-  };
-  const deferredExplanation = {
-    title: "Deferred Revenue",
-    result: formatCurrency(deferred),
-    formula: `Sum of deferred revenue_records in ${period.label}`,
-    description: "Money billed or collected before the service period is fully earned.",
-    lines: deferredRows.map((row) => ({
-      label: row.description || row.revenue_type.replace(/_/g, " "),
-      value: formatCurrency(Number(row.amount)),
-      detail: row.period_month,
-    })),
-  };
-  const unbilledExplanation = {
-    title: "Unbilled Revenue",
-    result: formatCurrency(unbilled),
-    formula: `Sum of unbilled revenue_records in ${period.label}`,
-    description: "Earned work that has not yet been placed on an invoice.",
-    lines: unbilledRows.map((row) => ({
-      label: row.description || row.revenue_type.replace(/_/g, " "),
-      value: formatCurrency(Number(row.amount)),
-      detail: row.period_month,
-    })),
-  };
-  const agingExplanation = {
-    title: "Accounts Receivable Aging",
-    result: formatCurrency(totalAr),
-    formula: `For each bucket, sum remaining_balance of open invoices from ${period.label} whose due date falls in that aging range`,
-    description: "Current means not yet due. Past-due buckets are based on days after the due date.",
-    lines: agingSummary.map((row) => ({
-      label: row.bucket,
-      value: formatCurrency(row.total),
-      detail: `${row.invoices.length} invoice${row.invoices.length === 1 ? "" : "s"}`,
-    })),
-  };
 
   return (
-    <div className="space-y-8">
-      <PageHeader
-        title="Billing Dashboard"
-        description={
-          period.view === "all"
-            ? `Welcome back, ${profile.full_name}.`
-            : `Welcome back, ${profile.full_name}. Showing ${period.label} in ${period.view} view.`
-        }
-        actions={<PeriodViewControls {...periodViewControlProps(period)} />}
-      />
-
-      {statusBits.length > 0 ? (
-        <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-box border border-base-300 bg-base-100 px-4 py-2.5 text-sm">
-          {statusBits.map((bit) => (
-            <li key={bit} className="flex items-center gap-1.5">
-              <span className="size-1.5 shrink-0 rounded-full bg-base-content/45" aria-hidden />
-              <span>{bit}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="rounded-box border border-base-300 bg-base-100 px-4 py-2.5 text-sm">
-          No billing exceptions in {period.label}.
-        </p>
-      )}
-
-      <DashboardSection title="Needs attention" description="Work that should be invoiced, reviewed, approved, or collected first.">
-        <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <DashboardMetricAccordion
-            label="Ready to Bill"
-            value={String(readyToBill)}
-            hint={`${formatCurrency(readyToBillAmount)} | ${period.label}`}
-            tone={readyToBill > 0 ? "warning" : "default"}
-            explanation={readyExplanation}
-            href="/billing-review"
-            hrefLabel="Open Overview"
-          >
-            {packagesReady.length + readyItems.length === 0 ? (
-              <EmptyState title="Nothing waiting to invoice" description="Monthly packages and approved one-time items for this period are clear." />
-            ) : (
-              <DataTable headers={["Customer / item", "Detail", "Amount"]}>
-                {packagesReady.map((pkg) => (
-                  <tr key={`${pkg.contractId}:${pkg.periodStart ?? "current"}`}>
-                    <td>
-                      {pkg.customerName}
-                      <div className="text-xs opacity-60">{pkg.contractName}</div>
-                    </td>
-                    <td className="text-xs opacity-70">Monthly package</td>
-                    <td>
-                      <Money value={pkg.estimatedTotal} />
-                    </td>
-                  </tr>
-                ))}
-                {readyItems.map((item) => (
-                  <tr key={`${item.type}:${item.id}`}>
-                    <td>
-                      {item.customerName}
-                      <div className="text-xs opacity-60">{item.description}</div>
-                    </td>
-                    <td className="text-xs opacity-70">{item.categoryLabel}</td>
-                    <td>
-                      <Money value={item.amount} />
-                    </td>
-                  </tr>
-                ))}
-              </DataTable>
-            )}
-          </DashboardMetricAccordion>
-
-          <DashboardMetricAccordion
-            label="Draft Invoices"
-            value={String(draftInvoices.length)}
-            hint="Must be reviewed before sending"
-            tone={draftInvoices.length > 0 ? "warning" : "default"}
-            explanation={draftExplanation}
-            href="/invoices"
-            hrefLabel="Open Invoices"
-          >
-            {draftInvoices.length === 0 ? (
-              <EmptyState title="No drafts" description="Every generated invoice in this period has been reviewed or canceled." />
-            ) : (
-              <DataTable headers={["Invoice", "Customer", "Total"]}>
-                {draftInvoices.map((invoice) => (
-                  <tr key={invoice.id}>
-                    <td>
-                      <Link className="link link-hover" href={`/invoices/${invoice.id}`}>
-                        {invoice.invoice_number}
-                      </Link>
-                    </td>
-                    <td>{customerName.get(invoice.customer_id) ?? "-"}</td>
-                    <td>
-                      <Money value={Number(invoice.total_amount ?? 0)} />
-                    </td>
-                  </tr>
-                ))}
-              </DataTable>
-            )}
-          </DashboardMetricAccordion>
-
-          <DashboardMetricAccordion
-            label="Pending Approvals"
-            value={String(exceptionCount)}
-            hint="Unapproved time, costs, or additional work"
-            tone={exceptionCount > 0 ? "warning" : "success"}
-            explanation={exceptionExplanation}
-            href="/billing-review"
-            hrefLabel="Review exceptions"
-          >
-            {exceptionCount === 0 ? (
-              <EmptyState title="No pending approvals" description="Nothing is blocking billing for lack of approval." />
-            ) : (
-              <div className="space-y-3">
-                <DataTable headers={["Customer", "Reason", "Detail"]}>
-                  {review.exceptions.map((exception) => (
-                    <tr key={exception.id}>
-                      <td>{exception.customerName}</td>
-                      <td>{exception.reason}</td>
-                      <td className="text-xs opacity-70">{exception.detail}</td>
-                    </tr>
-                  ))}
-                </DataTable>
-                <div className="flex flex-wrap gap-3 text-sm">
-                  <Link href="/time-cost-approvals" className="link link-hover">
-                    Time approvals
-                  </Link>
-                  <Link href="/billing-cost-approvals" className="link link-hover">
-                    Cost approvals
-                  </Link>
-                </div>
-              </div>
-            )}
-          </DashboardMetricAccordion>
-
-          <DashboardMetricAccordion
-            label="Overdue"
-            value={formatCurrency(overdueBalance)}
-            hint={`${overdueInvoices.length} invoice${overdueInvoices.length === 1 ? "" : "s"}`}
-            tone={overdueInvoices.length > 0 ? "error" : "success"}
-            explanation={overdueExplanation}
-            href="/accounts-receivable"
-            hrefLabel="Open Accounts Receivable"
-          >
-            {sortedOverdue.length === 0 ? (
-              <EmptyState title="Nothing overdue" description="All invoices are within terms." />
-            ) : (
-              <div className="max-h-72 overflow-auto">
-                <DataTable headers={["Invoice", "Customer", "Days past due", "Balance", "Due"]}>
-                  {sortedOverdue.map((invoice) => (
-                    <tr key={invoice.id}>
-                      <td>
-                        <Link className="link link-hover" href={`/invoices/${invoice.id}`}>
-                          {invoice.invoice_number}
-                        </Link>
-                      </td>
-                      <td>{customerName.get(invoice.customer_id) ?? "-"}</td>
-                      <td>{invoiceDaysPastDue(invoice.due_date)}</td>
-                      <td>
-                        <Money value={Number(invoice.remaining_balance)} />
-                      </td>
-                      <td>
-                        <DateText value={invoice.due_date} />
-                      </td>
-                    </tr>
-                  ))}
-                </DataTable>
-              </div>
-            )}
-          </DashboardMetricAccordion>
-
-          <DashboardMetricAccordion
-            label="Disputed Invoices"
-            value={String(disputedInvoices.length)}
-            hint={disputedInvoices.length > 0 ? "Collection paused until resolved" : "No open disputes"}
-            tone={disputedInvoices.length > 0 ? "error" : "default"}
-            explanation={disputeExplanation}
-            href="/invoices"
-            hrefLabel="Open Invoices"
-          >
-            {disputedInvoices.length === 0 ? (
-              <EmptyState title="No open disputes" />
-            ) : (
-              <DataTable headers={["Invoice", "Customer", "Balance"]}>
-                {disputedInvoices.map((invoice) => (
-                  <tr key={invoice.id}>
-                    <td>
-                      <Link className="link link-hover" href={`/invoices/${invoice.id}`}>
-                        {invoice.invoice_number}
-                      </Link>
-                    </td>
-                    <td>{customerName.get(invoice.customer_id) ?? "-"}</td>
-                    <td>
-                      <Money value={Number(invoice.remaining_balance)} />
-                    </td>
-                  </tr>
-                ))}
-              </DataTable>
-            )}
-          </DashboardMetricAccordion>
-        </div>
-      </DashboardSection>
-
-      <DashboardSection title="This period" description={`Snapshot of billing, cash, and open balances for ${period.label}.`}>
-        <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <DashboardMetricAccordion
-            label="Accounts Receivable"
-            value={formatCurrency(totalAr)}
-            hint={`Past due ${formatCurrency(pastDueAr)}`}
-            explanation={arExplanation}
-            href="/accounts-receivable"
-            hrefLabel="Open Accounts Receivable"
-          >
-            {openReceivables.length === 0 ? (
-              <EmptyState title="No open receivables" />
-            ) : (
-              <div className="max-h-72 overflow-auto">
-                <DataTable headers={["Invoice", "Customer", "Status", "Balance"]}>
-                  {openReceivables.map((invoice) => (
-                    <tr key={invoice.id}>
-                      <td>
-                        <Link className="link link-hover" href={`/invoices/${invoice.id}`}>
-                          {invoice.invoice_number}
-                        </Link>
-                      </td>
-                      <td>{customerName.get(invoice.customer_id) ?? "-"}</td>
-                      <td>
-                        <StatusBadge status={invoice.status} />
-                      </td>
-                      <td>
-                        <Money value={invoice.remaining_balance} />
-                      </td>
-                    </tr>
-                  ))}
-                </DataTable>
-              </div>
-            )}
-          </DashboardMetricAccordion>
-
-          <DashboardMetricAccordion
-            label="Payments"
-            value={formatCurrency(paymentsInPeriod)}
-            hint={period.label}
-            tone="success"
-            explanation={paymentsExplanation}
-            href="/payments"
-            hrefLabel="Open Payment History"
-          >
-            {payments.length === 0 ? (
-              <EmptyState title="No payments in this period" />
-            ) : (
-              <div className="max-h-72 overflow-auto">
-                <DataTable headers={["Payment", "Customer", "Date", "Amount"]}>
-                  {payments.map((payment) => (
-                    <tr key={payment.payment_number}>
-                      <td>{payment.payment_number}</td>
-                      <td>{customerName.get(payment.customer_id) ?? "-"}</td>
-                      <td>
-                        <DateText value={payment.payment_date} />
-                      </td>
-                      <td>
-                        <Money value={Number(payment.payment_amount)} />
-                      </td>
-                    </tr>
-                  ))}
-                </DataTable>
-              </div>
-            )}
-          </DashboardMetricAccordion>
-
-          <DashboardMetricAccordion
-            label="Invoices Issued"
-            value={String(issuedInvoices.length)}
-            hint={formatCurrency(issuedTotal)}
-            explanation={issuedExplanation}
-            href="/invoices"
-            hrefLabel="Open Invoices"
-          >
-            {issuedInvoices.length === 0 ? (
-              <EmptyState title="No issued invoices in this period" />
-            ) : (
-              <div className="max-h-72 overflow-auto">
-                <DataTable headers={["Invoice", "Customer", "Status", "Total"]}>
-                  {issuedInvoices.map((invoice) => (
-                    <tr key={invoice.id}>
-                      <td>
-                        <Link className="link link-hover" href={`/invoices/${invoice.id}`}>
-                          {invoice.invoice_number}
-                        </Link>
-                      </td>
-                      <td>{customerName.get(invoice.customer_id) ?? "-"}</td>
-                      <td>
-                        <StatusBadge status={invoice.status} />
-                      </td>
-                      <td>
-                        <Money value={Number(invoice.total_amount ?? 0)} />
-                      </td>
-                    </tr>
-                  ))}
-                </DataTable>
-              </div>
-            )}
-          </DashboardMetricAccordion>
-
-          <DashboardMetricAccordion
-            label="Partially Paid"
-            value={String(partialInvoices.length)}
-            hint={`Remaining ${formatCurrency(partialBalanceTotal)}`}
-            tone={partialInvoices.length > 0 ? "warning" : "default"}
-            explanation={partialExplanation}
-            href="/accounts-receivable"
-            hrefLabel="Open Accounts Receivable"
-          >
-            {partialInvoices.length === 0 ? (
-              <EmptyState title="No partial payments" description="No open invoices have a partial payment applied." />
-            ) : (
-              <DataTable headers={["Invoice", "Customer", "Paid", "Balance"]}>
-                {partialInvoices.map((invoice) => (
-                  <tr key={invoice.id}>
-                    <td>
-                      <Link className="link link-hover" href={`/invoices/${invoice.id}`}>
-                        {invoice.invoice_number}
-                      </Link>
-                    </td>
-                    <td>{customerName.get(invoice.customer_id) ?? "-"}</td>
-                    <td>
-                      <Money value={Number(invoice.amount_paid)} />
-                    </td>
-                    <td>
-                      <Money value={Number(invoice.remaining_balance)} />
-                    </td>
-                  </tr>
-                ))}
-              </DataTable>
-            )}
-          </DashboardMetricAccordion>
-        </div>
-      </DashboardSection>
-
-      <DashboardSection title="Collections">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {agingSummary.map((row) => (
-            <Link
-              key={row.bucket}
-              href="/accounts-receivable"
-              className="rounded-box border border-base-300 bg-base-100 p-3 shadow-sm transition hover:border-primary/40"
-            >
-              <p className="text-xs font-medium uppercase tracking-wide opacity-60">{row.bucket}</p>
-              <p className="mt-1 text-lg font-semibold tabular-nums">
-                <Money value={row.total} />
-              </p>
-              <p className="text-xs opacity-60">
-                {row.invoices.length} invoice{row.invoices.length === 1 ? "" : "s"}
-              </p>
-            </Link>
-          ))}
-        </div>
-
-        <DashboardCollapse
-          title={`Accounts Receivable Aging | ${period.label}`}
-          defaultOpen
-          actions={<ExplainNumber explanation={agingExplanation} />}
-        >
-          <DataTable headers={["Bucket", "Invoices", "Balance"]}>
-            {agingSummary.map((row) => (
-              <tr key={row.bucket}>
-                <td>{row.bucket}</td>
-                <td>{row.invoices.length}</td>
-                <td>
-                  <Money value={row.total} />
-                </td>
-              </tr>
-            ))}
-          </DataTable>
-        </DashboardCollapse>
-
-        <DashboardCollapse title={`Oldest overdue invoices | ${period.label}`} defaultOpen>
-          {sortedOverdue.length === 0 ? (
-            <EmptyState title="Nothing overdue" description="All invoices are within terms." />
-          ) : (
-            <div className="space-y-2">
-              <DataTable headers={["Invoice", "Customer", "Days past due", "Balance", "Due"]}>
-                {sortedOverdue.slice(0, 5).map((invoice) => (
-                  <tr key={invoice.id}>
-                    <td>
-                      <Link className="link link-hover" href={`/invoices/${invoice.id}`}>
-                        {invoice.invoice_number}
-                      </Link>
-                    </td>
-                    <td>{customerName.get(invoice.customer_id) ?? "-"}</td>
-                    <td>{invoiceDaysPastDue(invoice.due_date)}</td>
-                    <td>
-                      <Money value={Number(invoice.remaining_balance)} />
-                    </td>
-                    <td>
-                      <DateText value={invoice.due_date} />
-                    </td>
-                  </tr>
-                ))}
-              </DataTable>
-              {sortedOverdue.length > 5 ? (
-                <p className="text-right text-sm">
-                  <Link href="/accounts-receivable" className="link link-hover">
-                    View all {sortedOverdue.length} overdue invoices
-                  </Link>
-                </p>
-              ) : null}
-            </div>
-          )}
-        </DashboardCollapse>
-      </DashboardSection>
-
-      <DashboardSection title="Accounting" description="Recognition categories for the selected period.">
-        <div className="grid items-start gap-4 sm:grid-cols-2">
-          <DashboardMetricAccordion
-            label="Deferred Revenue"
-            value={formatCurrency(deferred)}
-            explanation={deferredExplanation}
-            href="/accounting"
-            hrefLabel="Open Accounting Review"
-          >
-            {deferredRows.length === 0 ? (
-              <EmptyState title="No deferred revenue in this period" />
-            ) : (
-              <div className="max-h-72 overflow-auto">
-                <DataTable headers={["Description", "Period", "Amount"]}>
-                  {deferredRows.map((row, index) => (
-                    <tr key={`${row.description}-${row.period_month}-${index}`}>
-                      <td>{row.description || row.revenue_type.replace(/_/g, " ")}</td>
-                      <td>{row.period_month}</td>
-                      <td>
-                        <Money value={Number(row.amount)} />
-                      </td>
-                    </tr>
-                  ))}
-                </DataTable>
-              </div>
-            )}
-          </DashboardMetricAccordion>
-
-          <DashboardMetricAccordion
-            label="Unbilled Revenue"
-            value={formatCurrency(unbilled)}
-            explanation={unbilledExplanation}
-            href="/accounting"
-            hrefLabel="Open Accounting Review"
-          >
-            {unbilledRows.length === 0 ? (
-              <EmptyState title="No unbilled revenue in this period" />
-            ) : (
-              <div className="max-h-72 overflow-auto">
-                <DataTable headers={["Description", "Period", "Amount"]}>
-                  {unbilledRows.map((row, index) => (
-                    <tr key={`${row.description}-${row.period_month}-${index}`}>
-                      <td>{row.description || row.revenue_type.replace(/_/g, " ")}</td>
-                      <td>{row.period_month}</td>
-                      <td>
-                        <Money value={Number(row.amount)} />
-                      </td>
-                    </tr>
-                  ))}
-                </DataTable>
-              </div>
-            )}
-          </DashboardMetricAccordion>
-        </div>
-      </DashboardSection>
-
-      <DashboardCollapse title="Contract billing portfolio">
-        <ContractMetricsWidgets metrics={contractMetrics} showTables={false} title={null} />
-      </DashboardCollapse>
-    </div>
+    <BillingHomeVisuals
+      fullName={profile.full_name}
+      periodLabel={period.label}
+      periodActions={<PeriodViewControls {...periodViewControlProps(period)} />}
+      statusBits={statusBits}
+      metrics={[
+        {
+          label: "Ready to Bill",
+          value: String(readyToBill),
+          hint: `${formatCurrency(readyToBillAmount)} · ${period.label}`,
+          href: "/billing-review",
+          tone: readyToBill > 0 ? "amber" : "slate",
+          explanation: readyExplanation,
+        },
+        {
+          label: "Accounts Receivable",
+          value: formatCurrency(totalAr),
+          hint: `Past due ${formatCurrency(pastDueAr)}`,
+          href: "/accounts-receivable",
+          tone: "violet",
+          explanation: arExplanation,
+        },
+        {
+          label: "Payments",
+          value: formatCurrency(paymentsInPeriod),
+          hint: period.label,
+          href: "/payments",
+          tone: "emerald",
+          explanation: paymentsExplanation,
+        },
+        {
+          label: "Overdue",
+          value: formatCurrency(overdueBalance),
+          hint: `${overdueInvoices.length} invoice${overdueInvoices.length === 1 ? "" : "s"}`,
+          href: "/accounts-receivable",
+          tone: overdueInvoices.length > 0 ? "rose" : "emerald",
+          explanation: overdueExplanation,
+        },
+        {
+          label: "Draft Invoices",
+          value: String(draftInvoices.length),
+          hint: "Review before sending",
+          href: "/invoices",
+          tone: draftInvoices.length > 0 ? "amber" : "sky",
+          explanation: draftExplanation,
+        },
+      ]}
+      aging={agingSummary.map((row) => ({
+        bucket: row.bucket,
+        total: row.total,
+        count: row.invoices.length,
+      }))}
+      attention={[
+        ...packagesReady.slice(0, 2).map((pkg) => ({
+          id: `pkg-${pkg.contractId}`,
+          title: "Ready to bill package",
+          detail: `${pkg.customerName} · ${pkg.contractName}`,
+          amount: formatCurrency(pkg.estimatedTotal),
+          href: "/billing-review",
+          severity: "warning" as const,
+        })),
+        ...review.exceptions.slice(0, 2).map((exception) => ({
+          id: exception.id,
+          title: "Pending approval",
+          detail: `${exception.customerName} · ${exception.reason}`,
+          href: "/billing-review",
+          severity: "warning" as const,
+        })),
+        ...sortedOverdue.slice(0, 2).map((invoice) => ({
+          id: invoice.id,
+          title: invoice.invoice_number,
+          detail: `${customerName.get(invoice.customer_id) ?? "Customer"} · ${invoiceDaysPastDue(invoice.due_date)} days past due`,
+          amount: formatCurrency(Number(invoice.remaining_balance)),
+          href: `/invoices/${invoice.id}`,
+          severity: "error" as const,
+        })),
+        ...disputedInvoices.slice(0, 2).map((invoice) => ({
+          id: `dispute-${invoice.id}`,
+          title: "Disputed invoice",
+          detail: `${invoice.invoice_number} · ${customerName.get(invoice.customer_id) ?? "Customer"}`,
+          amount: formatCurrency(Number(invoice.remaining_balance)),
+          href: `/invoices/${invoice.id}`,
+          severity: "error" as const,
+        })),
+      ]}
+      collection={{
+        billed: issuedTotal,
+        collected: paymentsInPeriod,
+        outstanding: totalAr,
+      }}
+    />
   );
 }
 

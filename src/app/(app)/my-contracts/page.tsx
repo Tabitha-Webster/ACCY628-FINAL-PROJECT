@@ -5,7 +5,39 @@ import { getCurrentProfile, requireApprovedCustomer } from "@/lib/auth";
 import { CONTRACTS_NAV_COPY } from "@/lib/constants";
 import { PageHeader, EmptyState, StatusBadge, Money, Hours, DateText, ErrorState } from "@/components/ui";
 import type { Contract, ContractService, ContractStatus } from "@/lib/types";
-import { listContractServices, listCustomerContracts } from "@/lib/contracts";
+import {
+  listContractServices,
+  listCustomerContracts,
+  unwrapAssignedManager,
+  billedMonthlyRecurringFee,
+} from "@/lib/contracts";
+import type { ContractSignaturePacket } from "@/lib/contracts/signature-packets";
+import { CustomerContractSignaturePanel } from "@/components/CustomerContractSignaturePanel";
+import { CustomerContractPdfActions } from "@/components/CustomerContractPdfActions";
+
+function toPdfContract(c: Contract) {
+  return {
+    id: c.id,
+    customer_id: c.customer_id,
+    contract_number: c.contract_number,
+    name: c.name,
+    status: c.status,
+    contract_type: c.contract_type,
+    start_date: c.start_date,
+    end_date: c.end_date,
+    monthly_recurring_fee: c.monthly_recurring_fee,
+    work_location: c.work_location,
+    included_hours_per_month: c.included_hours_per_month,
+    additional_hourly_rate: c.additional_hourly_rate,
+    payment_terms: c.payment_terms,
+    billing_frequency: c.billing_frequency,
+    sla_response_hours: c.sla_response_hours,
+    sla_resolution_hours: c.sla_resolution_hours,
+    description: c.description,
+    scope: c.scope,
+    included_services: c.included_services,
+  };
+}
 
 const COMPLETED_STATUSES: ContractStatus[] = ["expired", "renewed", "canceled"];
 
@@ -16,10 +48,23 @@ function isCompletedContract(status: ContractStatus) {
 function ContractCard({
   contract,
   services,
+  customerName,
+  managerName,
+  profileId,
+  profileName,
+  packet,
 }: {
   contract: Contract;
   services: ContractService[];
+  customerName: string;
+  managerName: string | null;
+  profileId: string;
+  profileName: string;
+  packet: ContractSignaturePacket | null;
 }) {
+  const needsSignature = packet?.status === "awaiting_customer";
+  const pdfContract = toPdfContract(contract);
+
   return (
     <div className="rounded-2xl border border-emerald-200/80 bg-gradient-to-b from-emerald-50/70 to-base-100 p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -29,8 +74,37 @@ function ContractCard({
             {contract.contract_number} · {contract.contract_type.replace(/_/g, " ")}
           </p>
         </div>
-        <StatusBadge status={contract.status} />
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge status={contract.status} />
+          {needsSignature ? (
+            <StatusBadge status="awaiting_customer" label="Sign to activate" />
+          ) : null}
+        </div>
       </div>
+
+      {contract.status === "pending_approval" && !needsSignature ? (
+        <p className="mt-3 text-sm opacity-70">
+          This agreement is awaiting ServiceSync signatures and is not active yet. When it is ready
+          for you, you will be asked to sign and accept it here.
+        </p>
+      ) : null}
+
+      {needsSignature ? (
+        <p className="mt-3 text-sm opacity-70">
+          Your account manager and executive have signed. Review the agreement below, then sign and
+          accept to activate it.
+        </p>
+      ) : null}
+
+      {contract.status !== "pending_approval" ? (
+        <CustomerContractPdfActions
+          className="mt-3"
+          contract={pdfContract}
+          customerName={customerName}
+          managerName={managerName}
+          packet={packet}
+        />
+      ) : null}
 
       {contract.description ? (
         <p className="mt-2 text-sm leading-relaxed opacity-80">{contract.description}</p>
@@ -40,7 +114,7 @@ function ContractCard({
         <div className="flex justify-between gap-3">
           <dt className="opacity-60">Monthly Fee</dt>
           <dd className="font-medium">
-            <Money value={Number(contract.monthly_recurring_fee)} />
+            <Money value={billedMonthlyRecurringFee(contract)} />
           </dd>
         </div>
         <div className="flex justify-between gap-3">
@@ -106,6 +180,18 @@ function ContractCard({
           </ul>
         </div>
       ) : null}
+
+      {packet &&
+      (packet.status === "awaiting_customer" || packet.status === "fully_executed") ? (
+        <CustomerContractSignaturePanel
+          contract={pdfContract}
+          customerName={customerName}
+          managerName={managerName}
+          profileId={profileId}
+          profileName={profileName}
+          packet={packet}
+        />
+      ) : null}
     </div>
   );
 }
@@ -118,7 +204,10 @@ export default async function MyContractsPage() {
 
   const copy = CONTRACTS_NAV_COPY.customer;
   const supabase = await createClient();
-  const { data: contracts, error } = await listCustomerContracts(supabase, profile.customer_id);
+  const [{ data: contracts, error }, { data: customerRow }] = await Promise.all([
+    listCustomerContracts(supabase, profile.customer_id),
+    supabase.from("customers").select("name").eq("id", profile.customer_id).maybeSingle(),
+  ]);
 
   if (error) {
     return (
@@ -129,7 +218,12 @@ export default async function MyContractsPage() {
     );
   }
 
-  const rows = (contracts ?? []) as Contract[];
+  const customerName = customerRow?.name?.trim() || profile.full_name;
+  const rows = (contracts ?? []) as Array<
+    Contract & {
+      assigned_manager?: { full_name: string } | { full_name: string }[] | null;
+    }
+  >;
   if (rows.length === 0) {
     return (
       <div>
@@ -145,15 +239,44 @@ export default async function MyContractsPage() {
   const current = rows.filter((c) => !isCompletedContract(c.status));
   const completed = rows.filter((c) => isCompletedContract(c.status));
 
-  const { data: services } = await listContractServices(
-    supabase,
-    rows.map((c) => c.id)
-  );
+  const contractIds = rows.map((c) => c.id);
+  const [{ data: services }, packetsRes] = await Promise.all([
+    listContractServices(supabase, contractIds),
+    supabase
+      .from("contract_signature_packets")
+      .select("*")
+      .in("contract_id", contractIds)
+      .eq("is_current", true),
+  ]);
+
   const servicesByContract = new Map<string, ContractService[]>();
   for (const s of (services ?? []) as ContractService[]) {
     const list = servicesByContract.get(s.contract_id) ?? [];
     list.push(s);
     servicesByContract.set(s.contract_id, list);
+  }
+
+  const packetByContract = new Map<string, ContractSignaturePacket>();
+  for (const packet of (packetsRes.data ?? []) as ContractSignaturePacket[]) {
+    packetByContract.set(packet.contract_id, packet);
+  }
+
+  const profileId = profile.id;
+  const profileName = profile.full_name;
+
+  function renderCard(c: (typeof rows)[number]) {
+    return (
+      <ContractCard
+        key={c.id}
+        contract={c}
+        services={servicesByContract.get(c.id) ?? []}
+        customerName={customerName}
+        managerName={unwrapAssignedManager(c)?.full_name ?? null}
+        profileId={profileId}
+        profileName={profileName}
+        packet={packetByContract.get(c.id) ?? null}
+      />
+    );
   }
 
   return (
@@ -182,13 +305,7 @@ export default async function MyContractsPage() {
               description="Your completed agreements are listed below."
             />
           ) : (
-            current.map((c) => (
-              <ContractCard
-                key={c.id}
-                contract={c}
-                services={servicesByContract.get(c.id) ?? []}
-              />
-            ))
+            current.map(renderCard)
           )}
         </section>
 
@@ -204,13 +321,7 @@ export default async function MyContractsPage() {
               No completed contracts yet.
             </p>
           ) : (
-            completed.map((c) => (
-              <ContractCard
-                key={c.id}
-                contract={c}
-                services={servicesByContract.get(c.id) ?? []}
-              />
-            ))
+            completed.map(renderCard)
           )}
         </section>
       </div>

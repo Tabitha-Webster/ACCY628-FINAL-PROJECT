@@ -62,7 +62,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     supabase
       .from("additional_work_requests")
       .select(
-        "id, title, description, estimated_hours, estimated_amount, approval_status, created_at, requested_by, reviewed_by, reviewed_at, project_id, contract_id"
+        "id, title, description, estimated_hours, estimated_amount, approval_status, customer_approval_status, created_at, requested_by, reviewed_by, reviewed_at, project_id, contract_id"
       )
       .eq("project_id", p.id)
       .order("created_at", { ascending: false }),
@@ -139,7 +139,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   const completedMilestoneAmount = milestones.filter((m) => m.completed).reduce((sum, m) => sum + Number(m.amount), 0);
   const totalMilestoneAmount = milestones.reduce((sum, m) => sum + Number(m.amount), 0);
-  const pendingChangeCount = changeRequests.filter((r) => r.approval_status === "pending").length;
+  const pendingChangeCount = changeRequests.filter(
+    (r) => r.approval_status === "pending" || r.customer_approval_status === "pending"
+  ).length;
 
   const backHref = profile.role === "customer" ? "/my-projects" : "/projects";
 
@@ -160,8 +162,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         }
       />
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
+      <div className="grid gap-4 lg:grid-cols-5">
+        <div className="space-y-4 lg:col-span-3">
           <div className="rounded-box border border-base-300 bg-base-100 p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <StatusBadge status={p.status} />
@@ -184,31 +186,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             ) : null}
             {p.description ? <p className="text-sm leading-relaxed opacity-80">{p.description}</p> : <p className="text-sm opacity-60">No description provided.</p>}
           </div>
-
-          <ProjectProgressCard
-            status={p.status}
-            startDate={p.start_date}
-            targetCompletionDate={p.target_completion_date}
-            projectManagerName={p.project_manager_id ? profileName.get(p.project_manager_id) ?? null : null}
-            milestones={milestones.map((m) => ({
-              id: m.id,
-              name: m.name,
-              completed: m.completed,
-              approval_status: m.approval_status,
-              due_date: m.due_date,
-            }))}
-            contract={contractRes.data}
-            laborHours={laborHours}
-            materialsCost={materialsCost}
-            pendingChangeRequests={pendingChangeCount}
-            pendingRequestedHours={changeRequests
-              .filter((r) => r.approval_status === "pending")
-              .reduce((sum, r) => sum + Number(r.estimated_hours ?? 0), 0)}
-            pendingRequestedPrice={changeRequests
-              .filter((r) => r.approval_status === "pending")
-              .reduce((sum, r) => sum + Number(r.estimated_amount ?? 0), 0)}
-            showMilestoneList={false}
-          />
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <div className="rounded-box border border-base-300 bg-base-100 p-4">
@@ -313,18 +290,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             )}
           </div>
 
-          <div>
-            <h2 className="mb-2 text-sm font-semibold">Out of Scope & Change Requests</h2>
-            <ProjectChangeRequestPanel
-              requests={changeRequests}
-              requesterNames={requesterNames}
-              projectNames={{ [p.id]: p.name }}
-              contractLabels={contractLabels}
-              role={profile.role}
-              currentUserId={profile.id}
-            />
-          </div>
-
           {assignments.length > 0 ? (
             <div>
               <h2 className="mb-2 text-sm font-semibold">Technician Assignments</h2>
@@ -344,23 +309,57 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           ) : null}
         </div>
 
-        <div className="space-y-4">
-          <ProjectActions
-            projectId={p.id}
-            projectName={p.name}
-            customerId={p.customer_id}
-            contractId={p.contract_id}
-            contractOptions={customerContracts}
+        <div className="space-y-3 self-start lg:col-span-2">
+          <div className="grid grid-cols-2 gap-3">
+            <ProjectChangeRequestPanel
+              requests={changeRequests}
+              requesterNames={requesterNames}
+              projectNames={{ [p.id]: p.name }}
+              contractLabels={contractLabels}
+              role={profile.role}
+              currentUserId={profile.id}
+            />
+            <ProjectActions
+              projectId={p.id}
+              projectName={p.name}
+              customerId={p.customer_id}
+              contractId={p.contract_id}
+              contractOptions={customerContracts}
+              status={p.status}
+              customerApprovalStatus={p.customer_approval_status}
+              currentUserId={profile.id}
+              role={profile.role}
+              milestones={milestones.map((m) => ({
+                id: m.id,
+                name: m.name,
+                completed: m.completed,
+                approval_status: m.approval_status,
+              }))}
+            />
+          </div>
+          <ProjectProgressCard
             status={p.status}
-            customerApprovalStatus={p.customer_approval_status}
-            currentUserId={profile.id}
-            role={profile.role}
+            startDate={p.start_date}
+            targetCompletionDate={p.target_completion_date}
+            projectManagerName={p.project_manager_id ? profileName.get(p.project_manager_id) ?? null : null}
             milestones={milestones.map((m) => ({
               id: m.id,
               name: m.name,
               completed: m.completed,
               approval_status: m.approval_status,
+              due_date: m.due_date,
             }))}
+            contract={contractRes.data}
+            laborHours={laborHours}
+            materialsCost={materialsCost}
+            pendingChangeRequests={pendingChangeCount}
+            pendingRequestedHours={changeRequests
+              .filter((r) => r.approval_status === "pending" || r.customer_approval_status === "pending")
+              .reduce((sum, r) => sum + Number(r.estimated_hours ?? 0), 0)}
+            pendingRequestedPrice={changeRequests
+              .filter((r) => r.approval_status === "pending" || r.customer_approval_status === "pending")
+              .reduce((sum, r) => sum + Number(r.estimated_amount ?? 0), 0)}
+            showMilestoneList={false}
           />
         </div>
       </div>

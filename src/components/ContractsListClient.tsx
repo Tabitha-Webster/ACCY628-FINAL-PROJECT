@@ -12,7 +12,9 @@ import {
   CONTRACT_STATUS_LABELS,
   CONTRACT_TYPE_LABELS,
   CONTRACT_TYPES,
+  billedMonthlyRecurringFee,
   contractHighlightClass,
+  daysUntilDate,
   getContractHighlight,
   getContractRenewalDate,
   getContractWarnings,
@@ -31,6 +33,7 @@ type SortKey =
   | "contract_type"
   | "start_date"
   | "end_date"
+  | "days_to_end"
   | "mrr"
   | "renewal_date"
   | "manager";
@@ -38,6 +41,14 @@ type SortKey =
 type SortDir = "asc" | "desc";
 
 type DatePreset = "" | "next_30" | "next_60" | "next_90" | "past" | "custom";
+
+function formatDaysToEnd(days: number | null): string | null {
+  if (days == null) return null;
+  if (days === 0) return "Expires today";
+  if (days > 0) return `${days} day${days === 1 ? "" : "s"} left`;
+  const past = Math.abs(days);
+  return `${past} day${past === 1 ? "" : "s"} past`;
+}
 
 function inDateRange(
   value: string | null,
@@ -156,6 +167,7 @@ export function ContractsListClient({
       const customer = unwrapCustomer(row);
       const manager = unwrapAssignedManager(row);
       const renewalDate = getContractRenewalDate(row);
+      const highlight = getContractHighlight(row, now);
       const warnings = getContractWarnings(row, now).filter((w) =>
         [
           "ends_soon",
@@ -167,7 +179,6 @@ export function ContractsListClient({
           "expiration_warning",
         ].includes(w.code)
       );
-      // Prefer specific reminder badges over the generic renewal_soon duplicate
       const displayWarnings = warnings.filter((w) => {
         if (w.code === "renewal_soon") {
           return !warnings.some((x) =>
@@ -179,7 +190,7 @@ export function ContractsListClient({
         }
         return true;
       });
-      const highlight = getContractHighlight(row, now);
+      const endDays = daysUntilDate(row.end_date, now);
       return {
         row,
         customer,
@@ -187,7 +198,8 @@ export function ContractsListClient({
         renewalDate,
         warnings: displayWarnings,
         highlight,
-        mrr: Number(row.monthly_recurring_fee ?? 0),
+        daysUntilEnd: endDays,
+        mrr: billedMonthlyRecurringFee(row),
       };
     });
   }, [contracts, now]);
@@ -246,6 +258,15 @@ export function ContractsListClient({
         case "end_date":
           result = compareDate(a.row.end_date, b.row.end_date);
           break;
+        case "days_to_end": {
+          const aDays = a.daysUntilEnd;
+          const bDays = b.daysUntilEnd;
+          if (aDays == null && bDays == null) result = 0;
+          else if (aDays == null) result = 1;
+          else if (bDays == null) result = -1;
+          else result = aDays - bDays;
+          break;
+        }
         case "mrr":
           result = a.mrr - b.mrr;
           break;
@@ -280,41 +301,33 @@ export function ContractsListClient({
 
   const highlightCounts = useMemo(() => {
     const counts = {
-      ends_soon: 0,
-      renewal_soon: 0,
-      past_end_date: 0,
       renewal_90: 0,
       renewal_60: 0,
       renewal_30: 0,
+      ends_soon: 0,
+      past_end_date: 0,
     };
-    for (const item of enriched) {
-      if (item.highlight === "ends_soon" || item.highlight === "renewal_30") counts.ends_soon += 1;
-      if (
-        item.highlight === "renewal_soon" ||
-        item.highlight === "renewal_60" ||
-        item.highlight === "renewal_90"
-      ) {
-        counts.renewal_soon += 1;
-      }
-      if (item.highlight === "past_end_date") counts.past_end_date += 1;
+    for (const item of filtered) {
       if (item.highlight === "renewal_90") counts.renewal_90 += 1;
-      if (item.highlight === "renewal_60") counts.renewal_60 += 1;
-      if (item.highlight === "renewal_30") counts.renewal_30 += 1;
+      else if (item.highlight === "renewal_60" || item.highlight === "renewal_soon") {
+        counts.renewal_60 += 1;
+      } else if (item.highlight === "renewal_30") counts.renewal_30 += 1;
+      else if (item.highlight === "ends_soon") counts.ends_soon += 1;
+      else if (item.highlight === "past_end_date") counts.past_end_date += 1;
     }
     return counts;
-  }, [enriched]);
+  }, [filtered]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
       setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      setSortDir(key === "mrr" || key === "end_date" || key === "renewal_date" ? "asc" : "asc");
+      setSortDir("asc");
     }
   }
 
   function clearFilters() {
-    setSearch("");
     setCustomerId("");
     setStatus("");
     setContractType("");
@@ -328,7 +341,6 @@ export function ContractsListClient({
   }
 
   const hasFilters =
-    search ||
     customerId ||
     status ||
     contractType ||
@@ -355,8 +367,8 @@ export function ContractsListClient({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-box border border-base-300 bg-base-100 p-4">
+    <div className="flex flex-col gap-3">
+      <div className="rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50/70 to-base-100 p-3 shadow-sm">
         <div className="grid gap-3">
           <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
             <label className="form-control w-full min-w-0">
@@ -371,6 +383,7 @@ export function ContractsListClient({
                   placeholder="Search contract #, name, customer, manager…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
+                  aria-label="Search contracts"
                 />
               </div>
             </label>
@@ -531,7 +544,7 @@ export function ContractsListClient({
           </div>
         ) : null}
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="opacity-60">
               Showing {filtered.length} of {contracts.length}
@@ -546,152 +559,191 @@ export function ContractsListClient({
               Past end date: {highlightCounts.past_end_date}
             </span>
           </div>
+
           {role ? (
-            <ExportContractsButton rows={filtered.map((item) => item.row)} role={role} />
+            <div className="ml-auto">
+              <ExportContractsButton rows={filtered.map((item) => item.row)} role={role} />
+            </div>
           ) : null}
         </div>
       </div>
 
-      {filtered.length === 0 ? (
-        <EmptyState
-          title="No contracts match your filters"
-          description="Clear filters or adjust search to see more agreements."
-        />
-      ) : (
-        <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
-          <table className="table table-sm">
-            <thead>
-              <tr>
-                <th>
-                  <SortHeader label="Contract #" column="contract_number" />
-                </th>
-                <th>
-                  <SortHeader label="Customer" column="customer" />
-                </th>
-                <th>
-                  <SortHeader label="Contract name" column="name" />
-                </th>
-                <th>
-                  <SortHeader label="Status" column="status" />
-                </th>
-                <th>
-                  <SortHeader label="Type" column="contract_type" />
-                </th>
-                <th>
-                  <SortHeader label="Start" column="start_date" />
-                </th>
-                <th>
-                  <SortHeader label="End" column="end_date" />
-                </th>
-                <th>
-                  <SortHeader label="MRR" column="mrr" />
-                </th>
-                <th>
-                  <SortHeader label="Renewal" column="renewal_date" />
-                </th>
-                <th>
-                  <SortHeader label="Account manager" column="manager" />
-                </th>
-                <th>Alerts</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(({ row, customer, manager, renewalDate, warnings, highlight, mrr }) => (
-                <tr key={row.id} className={contractHighlightClass(highlight)}>
-                  <td className="font-mono text-xs">{row.contract_number}</td>
-                  <td>
-                    {customer ? (
-                      <Link href={`/customers/${customer.id}`} className="link link-hover">
-                        {customer.name}
-                      </Link>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td>
-                    <Link href={`/contracts/${row.id}`} className="link link-hover font-medium">
-                      {row.name}
-                    </Link>
-                  </td>
-                  <td className="min-w-[7.5rem] max-w-[11rem]">
-                    <StatusBadge
-                      status={row.status}
-                      label={
-                        CONTRACT_STATUS_LABELS[row.status as keyof typeof CONTRACT_STATUS_LABELS] ??
-                        statusLabel(row.status)
-                      }
-                      className="badge-sm h-auto max-w-full whitespace-normal px-2.5 py-1 text-left text-[0.7rem] font-medium leading-snug"
-                    />
-                  </td>
-                  <td className="text-xs">
-                    {CONTRACT_TYPE_LABELS[row.contract_type as keyof typeof CONTRACT_TYPE_LABELS] ??
-                      statusLabel(String(row.contract_type))}
-                  </td>
-                  <td className="whitespace-nowrap text-xs">{formatDate(row.start_date)}</td>
-                  <td className="whitespace-nowrap text-xs">{formatDate(row.end_date)}</td>
-                  <td className="whitespace-nowrap">
-                    <Money value={mrr} />
-                  </td>
-                  <td className="whitespace-nowrap text-xs">
-                    {renewalDate ? formatDate(renewalDate) : "—"}
-                    {row.renewal_type && row.renewal_type !== "none" ? (
-                      <div className="opacity-50">{statusLabel(String(row.renewal_type))}</div>
-                    ) : null}
-                  </td>
-                  <td className="text-xs">{manager?.full_name ?? "—"}</td>
-                  <td className="min-w-[11rem] max-w-[16rem]">
-                    {warnings.length > 0 ? (
-                      <div className="flex flex-col items-start gap-1">
-                        {warnings.map((warning) => (
-                          <span
-                            key={warning.code}
-                            className={`badge badge-sm h-auto max-w-full whitespace-normal px-2.5 py-1 text-left text-[0.7rem] font-medium leading-snug ${
-                              warning.code === "past_end_date"
-                                ? "badge-error"
-                                : warning.code === "renewal_90"
-                                  ? "badge-ghost"
-                                  : warning.code === "renewal_60" || warning.code === "renewal_soon"
-                                    ? "badge-info"
-                                    : "badge-warning"
-                            }`}
-                          >
-                            {warning.label}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-xs opacity-40">—</span>
-                    )}
-                  </td>
-                  <td className="text-right">
-                    <div className="flex flex-wrap justify-end gap-1">
-                      <Link href={`/contracts/${row.id}`} className="btn btn-ghost btn-xs">
-                        View
-                      </Link>
-                      {canEdit ? (
-                        <Link href={`/contracts/${row.id}/edit`} className="btn btn-ghost btn-xs">
-                          Edit
-                        </Link>
-                      ) : null}
-                      {row.status === "pending_approval" ? (
-                        <Link href={`/contracts/${row.id}`} className="btn btn-primary btn-xs">
-                          Approve
-                        </Link>
-                      ) : null}
-                      {row.status === "active" || row.status === "expired" ? (
-                        <Link href={`/contracts/${row.id}`} className="btn btn-outline btn-xs">
-                          Renew / Cancel
-                        </Link>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <section className="overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-b from-violet-50/70 to-base-100 shadow-sm">
+        <div className="border-b border-violet-200/70 px-3 py-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-violet-900/80">
+            Contract directory ({filtered.length})
+          </h2>
         </div>
-      )}
+        <div className="p-3">
+          {filtered.length === 0 ? (
+            <EmptyState
+              title="No contracts match your filters"
+              description="Clear filters or adjust search to see more agreements."
+            />
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-violet-100 bg-white/85">
+              <table className="table table-sm">
+                <thead>
+                  <tr>
+                    <th>
+                      <SortHeader label="Contract #" column="contract_number" />
+                    </th>
+                    <th>
+                      <SortHeader label="Customer" column="customer" />
+                    </th>
+                    <th>
+                      <SortHeader label="Contract name" column="name" />
+                    </th>
+                    <th>
+                      <SortHeader label="Status" column="status" />
+                    </th>
+                    <th>
+                      <SortHeader label="Type" column="contract_type" />
+                    </th>
+                    <th>
+                      <SortHeader label="Start" column="start_date" />
+                    </th>
+                    <th>
+                      <SortHeader label="End" column="end_date" />
+                    </th>
+                    <th>
+                      <SortHeader label="Days to end" column="days_to_end" />
+                    </th>
+                    <th>
+                      <SortHeader label="MRR" column="mrr" />
+                    </th>
+                    <th>
+                      <SortHeader label="Renewal" column="renewal_date" />
+                    </th>
+                    <th>
+                      <SortHeader label="Account manager" column="manager" />
+                    </th>
+                    <th>Alerts</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(
+                    ({ row, customer, manager, renewalDate, warnings, highlight, daysUntilEnd, mrr }) => (
+                      <tr key={row.id} className={contractHighlightClass(highlight)}>
+                        <td className="font-mono text-xs">{row.contract_number}</td>
+                        <td>
+                          {customer ? (
+                            <Link href={`/customers/${customer.id}`} className="link link-hover">
+                              {customer.name}
+                            </Link>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td>
+                          <Link href={`/contracts/${row.id}`} className="link link-hover font-medium">
+                            {row.name}
+                          </Link>
+                        </td>
+                        <td className="min-w-[7.5rem] max-w-[11rem]">
+                          <StatusBadge
+                            status={row.status}
+                            label={
+                              CONTRACT_STATUS_LABELS[
+                                row.status as keyof typeof CONTRACT_STATUS_LABELS
+                              ] ?? statusLabel(row.status)
+                            }
+                            className="badge-sm h-auto max-w-full whitespace-normal px-2.5 py-1 text-left text-[0.7rem] font-medium leading-snug"
+                          />
+                        </td>
+                        <td className="text-xs">
+                          {CONTRACT_TYPE_LABELS[
+                            row.contract_type as keyof typeof CONTRACT_TYPE_LABELS
+                          ] ?? statusLabel(String(row.contract_type))}
+                        </td>
+                        <td className="whitespace-nowrap text-xs">{formatDate(row.start_date)}</td>
+                        <td className="whitespace-nowrap text-xs">{formatDate(row.end_date)}</td>
+                        <td className="whitespace-nowrap text-xs">
+                          {(() => {
+                            const label = formatDaysToEnd(daysUntilEnd);
+                            if (!label) return <span className="opacity-40">—</span>;
+                            if (daysUntilEnd != null && daysUntilEnd < 0) {
+                              return <span className="font-medium text-error">{label}</span>;
+                            }
+                            if (daysUntilEnd != null && daysUntilEnd <= 30) {
+                              return <span className="font-medium text-warning">{label}</span>;
+                            }
+                            return <span>{label}</span>;
+                          })()}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          <Money value={mrr} />
+                        </td>
+                        <td className="whitespace-nowrap text-xs">
+                          {renewalDate ? formatDate(renewalDate) : "—"}
+                          {row.renewal_type && row.renewal_type !== "none" ? (
+                            <div className="opacity-50">{statusLabel(String(row.renewal_type))}</div>
+                          ) : null}
+                        </td>
+                        <td className="text-xs">{manager?.full_name ?? "—"}</td>
+                        <td className="min-w-[11rem] max-w-[16rem]">
+                          {warnings.length > 0 ? (
+                            <div className="flex flex-col items-start gap-1">
+                              {warnings.map((warning) => (
+                                <span
+                                  key={warning.code}
+                                  className={`badge badge-sm h-auto max-w-full whitespace-normal px-2.5 py-1 text-left text-[0.7rem] font-medium leading-snug ${
+                                    warning.code === "past_end_date"
+                                      ? "badge-error"
+                                      : warning.code === "renewal_90"
+                                        ? "badge-ghost"
+                                        : warning.code === "renewal_60" ||
+                                            warning.code === "renewal_soon"
+                                          ? "badge-info"
+                                          : "badge-warning"
+                                  }`}
+                                >
+                                  {warning.label}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs opacity-40">—</span>
+                          )}
+                        </td>
+                        <td className="text-right">
+                          <div className="flex flex-wrap justify-end gap-1">
+                            <Link href={`/contracts/${row.id}`} className="btn btn-ghost btn-xs">
+                              View
+                            </Link>
+                            {canEdit ? (
+                              <Link
+                                href={`/contracts/${row.id}/edit`}
+                                className="btn btn-ghost btn-xs"
+                              >
+                                {row.status === "draft" ? "Continue" : "Edit"}
+                              </Link>
+                            ) : null}
+                            {row.status === "pending_approval" ? (
+                              <Link
+                                href={`/contracts/${row.id}${role === "executive" ? "#pdf-signatures" : ""}`}
+                                className="btn btn-primary btn-xs"
+                              >
+                                {role === "executive" ? "Review & sign" : "Review"}
+                              </Link>
+                            ) : null}
+                            {row.status === "active" || row.status === "expired" ? (
+                              <Link href={`/contracts/${row.id}`} className="btn btn-outline btn-xs">
+                                Renew / Cancel
+                              </Link>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

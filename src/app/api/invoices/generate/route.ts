@@ -6,11 +6,13 @@ import {
   ONE_TIME_BILLING_SOURCES,
   directCostBillingBlockReason,
   hasDuplicateIds,
+  isAdditionalWorkBlockingBilling,
   milestoneBillingBlockReason,
   pendingAdditionalWorkBlockReason,
   projectBillingBlockReason,
   timeEntryBillingBlockReason,
 } from "@/lib/billing-eligibility";
+import { billedMonthlyRecurringFee } from "@/lib/contracts";
 
 type RequestedItem = {
   type: "time_entry" | "direct_cost" | "project" | "milestone" | "recurring";
@@ -104,7 +106,7 @@ export async function POST(request: Request) {
     recurringIds.length > 0
       ? supabase
           .from("contracts")
-          .select("id, customer_id, name, status, monthly_recurring_fee, billing_timing, payment_terms")
+          .select("id, customer_id, name, status, monthly_recurring_fee, work_location, billing_timing, payment_terms")
           .in("id", recurringIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
@@ -142,20 +144,26 @@ export async function POST(request: Request) {
     pendingAwFilters.length > 0
       ? await supabase
           .from("additional_work_requests")
-          .select("id, project_id, support_ticket_id, title")
-          .eq("approval_status", "pending")
+          .select("id, project_id, support_ticket_id, title, approval_status, customer_approval_status")
+          .or("approval_status.eq.pending,customer_approval_status.eq.pending")
           .or(pendingAwFilters.join(","))
-      : { data: [] as { id: string; project_id: string | null; support_ticket_id: string | null; title: string }[], error: null };
+      : { data: [] as { id: string; project_id: string | null; support_ticket_id: string | null; title: string; approval_status: string; customer_approval_status: string | null }[], error: null };
 
   if (pendingAwRes.error) {
     return NextResponse.json({ error: pendingAwRes.error.message }, { status: 500 });
   }
 
-  const pendingAwByProject = new Set(
-    (pendingAwRes.data ?? []).map((r) => r.project_id).filter((id): id is string => Boolean(id))
+  const blockingAw = (pendingAwRes.data ?? []).filter((r) =>
+    isAdditionalWorkBlockingBilling({
+      approval_status: r.approval_status,
+      customer_approval_status: r.customer_approval_status,
+      project_id: r.project_id,
+    })
   );
+
+  const pendingAwByProject = new Set(blockingAw.map((r) => r.project_id).filter((id): id is string => Boolean(id)));
   const pendingAwByTicket = new Set(
-    (pendingAwRes.data ?? []).map((r) => r.support_ticket_id).filter((id): id is string => Boolean(id))
+    blockingAw.map((r) => r.support_ticket_id).filter((id): id is string => Boolean(id))
   );
 
   const conflicts: string[] = [];
@@ -274,7 +282,7 @@ export async function POST(request: Request) {
   for (const contract of recurringContracts) {
     if (contract.customer_id !== customerId) conflicts.push(`Contract "${contract.name}" belongs to a different customer.`);
     if (contract.status !== "active") conflicts.push(`Contract "${contract.name}" is not active.`);
-    if (Number(contract.monthly_recurring_fee ?? 0) <= 0)
+    if (billedMonthlyRecurringFee(contract) <= 0)
       conflicts.push(`Contract "${contract.name}" has no monthly fee to bill.`);
   }
 
@@ -392,7 +400,7 @@ export async function POST(request: Request) {
     });
   }
   for (const contract of recurringContracts) {
-    const amount = Number(contract.monthly_recurring_fee ?? 0);
+    const amount = billedMonthlyRecurringFee(contract);
     drafts.push({
       ...makeInvoiceLine({
         description: `${contract.name} monthly support fee (${billingPeriodStart} to ${billingPeriodEnd})`,
@@ -543,7 +551,7 @@ export async function POST(request: Request) {
     else if (!updated?.length) updateErrors.push(`Milestone "${milestone.name}" was billed by another invoice.`);
   }
   for (const contract of recurringContracts) {
-    const amount = Number(contract.monthly_recurring_fee ?? 0);
+    const amount = billedMonthlyRecurringFee(contract);
     const recognition = contract.billing_timing === "in_advance" ? "deferred" : "earned";
     const { error } = await supabase.from("revenue_records").insert({
       customer_id: customerId,

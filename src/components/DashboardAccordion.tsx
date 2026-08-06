@@ -82,14 +82,14 @@ export function DashboardMetricAccordion({
     return (
       <button
         type="button"
-        className="flex w-full items-start justify-between gap-3 p-4 text-left"
+        className="flex h-full min-h-[7.5rem] w-full items-start justify-between gap-3 p-4 text-left"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
       >
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-xs font-medium uppercase tracking-wide opacity-60">{label}</p>
           <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
-          {hint ? <p className="mt-1 text-xs opacity-60">{hint}</p> : null}
+          <p className="mt-1 line-clamp-2 min-h-[2rem] text-xs opacity-60">{hint ?? "\u00a0"}</p>
         </div>
         <ChevronDown className={`mt-1 size-4 shrink-0 opacity-50 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
@@ -97,8 +97,8 @@ export function DashboardMetricAccordion({
   }
 
   return (
-    <div ref={rootRef} className={`relative self-start ${open ? "z-40" : "z-0"}`}>
-      <div className={`rounded-box border ${border} bg-base-100 shadow-sm ${open ? "invisible" : ""}`}>
+    <div ref={rootRef} className={`relative h-full ${open ? "z-40" : "z-0"}`}>
+      <div className={`h-full rounded-box border ${border} bg-base-100 shadow-sm ${open ? "invisible" : ""}`}>
         <MetricHeader />
       </div>
 
@@ -149,11 +149,35 @@ export function DashboardCollapse({
           onClick={() => setOpen((current) => !current)}
         >
           <h3 className="text-sm font-semibold">{title}</h3>
-          <ChevronDown className={`size-4 shrink-0 opacity-50 transition-transform ${open ? "rotate-180" : ""}`} />
+          <span className="flex shrink-0 items-center gap-2">
+            <span className="text-xs opacity-60">{open ? "Hide" : "Show"}</span>
+            <ChevronDown className={`size-4 opacity-50 transition-transform ${open ? "rotate-180" : ""}`} />
+          </span>
         </button>
         {actions ? <div className="shrink-0">{actions}</div> : null}
       </div>
       {open ? <div className="border-t border-base-300 px-4 py-3">{children}</div> : null}
+    </div>
+  );
+}
+
+/** Compact action row for dashboard hubs — links to the real work pages. */
+export function DashboardHubShortcuts({
+  links,
+}: {
+  links: { href: string; label: string; primary?: boolean }[];
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {links.map((link) => (
+        <Link
+          key={link.href + link.label}
+          href={link.href}
+          className={link.primary ? "btn btn-primary btn-sm" : "btn btn-outline btn-sm"}
+        >
+          {link.label}
+        </Link>
+      ))}
     </div>
   );
 }

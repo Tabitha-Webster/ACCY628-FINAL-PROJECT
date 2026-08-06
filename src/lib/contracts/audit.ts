@@ -13,7 +13,7 @@ export const CONTRACT_CHANGE_FIELD_LABELS: Record<string, string> = {
   description: "Description / notes",
   customer_id: "Customer",
   assigned_manager_id: "Account manager",
-  assigned_technician_id: "Technician",
+assigned_technician_id: "Assigned technician",
   sales_representative_id: "Sales representative",
   billing_contact: "Billing contact",
   scope: "Scope",
@@ -28,6 +28,7 @@ export const CONTRACT_CHANGE_FIELD_LABELS: Record<string, string> = {
   cancellation_terms: "Cancellation terms",
   cancellation_notice_days: "Notice period",
   monthly_recurring_fee: "Monthly recurring revenue (MRR)",
+  work_location: "Work location",
   one_time_setup_fee: "One-time setup fee",
   deposit_amount: "Deposit amount",
   included_hours_per_month: "Included support hours",
@@ -62,6 +63,7 @@ export const CONTRACT_CHANGE_FIELD_LABELS: Record<string, string> = {
 /** Commercial / price fields that require manager approval on active contracts. */
 export const CONTRACT_PRICE_FIELDS = [
   "monthly_recurring_fee",
+  "work_location",
   "one_time_setup_fee",
   "deposit_amount",
   "included_hours_per_month",
@@ -117,6 +119,7 @@ const TRACKED_FIELDS: Array<keyof ContractFormValues> = [
   "scope",
   "contract_type",
   "status",
+  "work_location",
   "start_date",
   "end_date",
   "effective_date",

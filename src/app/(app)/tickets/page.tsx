@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { PageHeader, ErrorState } from "@/components/ui";
+import { ErrorState } from "@/components/ui";
 import { TicketListClient, type TicketListItem } from "@/components/TicketListClient";
 
 export default async function TicketsPage({
@@ -40,8 +40,8 @@ export default async function TicketsPage({
 
   if (error) {
     return (
-      <div>
-        <PageHeader title="Support Tickets" description="Live ticket queue from Supabase." />
+      <div className="space-y-3">
+        <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Support Tickets</h1>
         <ErrorState message={`We couldn't load support tickets right now. ${error.message}`} />
       </div>
     );
@@ -123,27 +123,22 @@ export default async function TicketsPage({
         : "All support tickets across customers.";
 
   return (
-    <div>
-      <PageHeader
-        title="Support Tickets"
-        description={`${listItems.length} ticket${listItems.length === 1 ? "" : "s"} · ${roleDescription}`}
-        actions={
-          profile.role === "manager" ? (
-            <Link href="/operations" className="btn btn-sm btn-outline">
-              Service Operations
-            </Link>
-          ) : null
-        }
-      />
-
-      <TicketListClient
-        tickets={listItems}
-        role={profile.role}
-        customers={filterCustomers}
-        technicians={filterTechnicians}
-        categories={categories}
-        initialPriority={priorityParam}
-      />
-    </div>
+    <TicketListClient
+      tickets={listItems}
+      role={profile.role}
+      customers={filterCustomers}
+      technicians={filterTechnicians}
+      categories={categories}
+      initialPriority={priorityParam}
+      title="Support Tickets"
+      subtitle={`${listItems.length} ticket${listItems.length === 1 ? "" : "s"} · ${roleDescription}`}
+      headerAction={
+        profile.role === "manager" ? (
+          <Link href="/operations" className="btn btn-sm btn-outline">
+            Service Operations
+          </Link>
+        ) : null
+      }
+    />
   );
 }

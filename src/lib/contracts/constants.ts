@@ -37,6 +37,40 @@ export const BILLING_FREQUENCIES: readonly BillingFrequency[] = [
 
 export const BILLING_TIMINGS: readonly BillingTiming[] = ["in_advance", "in_arrears"] as const;
 
+/** Selectable covered services for new/edit contract coverage. */
+export const CONTRACT_COVERED_SERVICE_OPTIONS = [
+  "Help desk / service desk support",
+  "Remote monitoring and management (RMM)",
+  "Patch management",
+  "Antivirus / endpoint protection",
+  "Backup monitoring and restore assistance",
+  "Network monitoring",
+  "On-site break/fix support",
+  "User onboarding and offboarding",
+  "Password resets and account administration",
+  "Email / Microsoft 365 administration",
+  "Vendor coordination",
+  "Quarterly business / IT reviews",
+  "Documentation and runbooks",
+  "Workstation setup and imaging",
+] as const;
+
+/** Selectable excluded services for new/edit contract coverage. */
+export const CONTRACT_EXCLUDED_SERVICE_OPTIONS = [
+  "New hardware purchases",
+  "Structured cabling / physical installs",
+  "After-hours emergency response (unless approved)",
+  "Application development / custom software",
+  "Major project work (migrations, refreshes)",
+  "Third-party SaaS licensing costs",
+  "Printer / MFP hardware repair",
+  "Training beyond standard end-user guidance",
+  "Construction / move support",
+  "Security audits and penetration testing",
+  "Data recovery from failed backups",
+  "Line-of-business application customization",
+] as const;
+
 /** Longest window used for list filters and expiry highlighting. */
 export const CONTRACT_EXPIRY_WARNING_DAYS = 90;
 
@@ -56,7 +90,7 @@ export const RENEWAL_REMINDER_KIND_BY_DAYS: Record<
 
 export const CONTRACT_STATUS_LABELS: Record<ContractStatus, string> = {
   draft: "Draft",
-  pending_approval: "Pending Approval",
+  pending_approval: "Awaiting Executive Signature",
   active: "Active",
   on_hold: "Suspended",
   expired: "Completed",
@@ -84,6 +118,7 @@ export const CONTRACT_INTEGRATION_POINTS = {
     routes: ["/ready-to-bill", "/invoices", "/payments", "/accounts-receivable"],
     fields: [
       "monthly_recurring_fee",
+      "work_location",
       "billing_frequency",
       "billing_timing",
       "billing_method",

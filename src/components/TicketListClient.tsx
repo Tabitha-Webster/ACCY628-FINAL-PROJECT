@@ -2,6 +2,21 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Flame,
+  Inbox,
+  Timer,
+} from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { EmptyState, StatusBadge } from "@/components/ui";
 import { TicketSlaAlerts, SlaConditionBadge } from "@/components/SlaBadges";
 import { ServiceModeBadge } from "@/components/ServiceModeBadge";
@@ -41,6 +56,9 @@ type Props = {
   technicians: FilterOption[];
   categories: string[];
   initialPriority?: string;
+  title?: string;
+  subtitle?: string;
+  headerAction?: React.ReactNode;
 };
 
 const STATUSES = [
@@ -55,6 +73,49 @@ const STATUSES = [
 ] as const;
 
 const PRIORITIES = ["low", "medium", "high", "critical"] as const;
+
+const OPEN_STATUSES = new Set([
+  "new",
+  "assigned",
+  "in_progress",
+  "waiting_on_customer",
+  "waiting_on_approval",
+]);
+
+const TONE_STYLES = {
+  sky: {
+    card: "border-sky-300/60 bg-gradient-to-br from-sky-50 to-sky-100/80",
+    icon: "bg-sky-500/15 text-sky-700",
+    value: "text-sky-900",
+  },
+  violet: {
+    card: "border-violet-300/60 bg-gradient-to-br from-violet-50 to-violet-100/80",
+    icon: "bg-violet-500/15 text-violet-700",
+    value: "text-violet-900",
+  },
+  amber: {
+    card: "border-amber-300/60 bg-gradient-to-br from-amber-50 to-amber-100/80",
+    icon: "bg-amber-500/15 text-amber-800",
+    value: "text-amber-950",
+  },
+  rose: {
+    card: "border-rose-300/70 bg-gradient-to-br from-rose-50 to-rose-100/90",
+    icon: "bg-rose-500/15 text-rose-700",
+    value: "text-rose-900",
+  },
+  emerald: {
+    card: "border-emerald-300/60 bg-gradient-to-br from-emerald-50 to-emerald-100/80",
+    icon: "bg-emerald-500/15 text-emerald-700",
+    value: "text-emerald-900",
+  },
+} as const;
+
+const PRIORITY_COLORS = {
+  Critical: "#f43f5e",
+  High: "#f97316",
+  Medium: "#f59e0b",
+  Low: "#0ea5e9",
+} as const;
 
 function CriticalPriorityBadge({ priority }: { priority: string }) {
   if (priority === "critical") {
@@ -79,6 +140,9 @@ export function TicketListClient({
   technicians,
   categories,
   initialPriority = "",
+  title = "Support Tickets",
+  subtitle,
+  headerAction,
 }: Props) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -101,6 +165,27 @@ export function TicketListClient({
       }),
     [tickets]
   );
+
+  const metrics = useMemo(() => {
+    const open = enriched.filter(({ ticket: t }) => OPEN_STATUSES.has(t.status));
+    const critical = open.filter(({ ticket: t }) => t.priority === "critical").length;
+    const overdue = open.filter(({ sla }) => sla.overdue || sla.overall === "missed").length;
+    const atRisk = open.filter(
+      ({ sla }) => !sla.overdue && sla.overall !== "missed" && sla.overall === "at_risk"
+    ).length;
+    return {
+      open: open.length,
+      critical,
+      overdue,
+      atRisk,
+      priorityMix: [
+        { name: "Critical", count: open.filter(({ ticket: t }) => t.priority === "critical").length },
+        { name: "High", count: open.filter(({ ticket: t }) => t.priority === "high").length },
+        { name: "Medium", count: open.filter(({ ticket: t }) => t.priority === "medium").length },
+        { name: "Low", count: open.filter(({ ticket: t }) => t.priority === "low").length },
+      ],
+    };
+  }, [enriched]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -135,14 +220,104 @@ export function TicketListClient({
     setOverdueOnly(false);
   }
 
+  const mixMax = Math.max(1, ...metrics.priorityMix.map((d) => d.count));
+  const metricTiles = [
+    {
+      label: "Open",
+      value: String(metrics.open),
+      tone: "sky" as const,
+      icon: <Inbox className="h-4 w-4" />,
+    },
+    {
+      label: "Critical",
+      value: String(metrics.critical),
+      tone: metrics.critical > 0 ? ("rose" as const) : ("emerald" as const),
+      icon: <Flame className="h-4 w-4" />,
+    },
+    {
+      label: "Overdue",
+      value: String(metrics.overdue),
+      tone: metrics.overdue > 0 ? ("rose" as const) : ("emerald" as const),
+      icon: <AlertTriangle className="h-4 w-4" />,
+    },
+    {
+      label: "At risk",
+      value: String(metrics.atRisk),
+      tone: metrics.atRisk > 0 ? ("amber" as const) : ("emerald" as const),
+      icon: <Timer className="h-4 w-4" />,
+    },
+  ];
+
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-0.5">
+          <h1 className="text-xl font-semibold tracking-tight md:text-2xl">{title}</h1>
+          {subtitle ? <p className="text-sm opacity-70">{subtitle}</p> : null}
+        </div>
+        {headerAction}
+      </div>
+
       {priority === "critical" ? (
         <div className="alert alert-error text-sm" role="alert">
           <span>Showing critical-priority tickets only. Treat these as highest urgency.</span>
         </div>
       ) : null}
-      <div className="flex flex-col gap-3 rounded-box border border-base-300 bg-base-100 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+
+      <div className="grid gap-3 lg:grid-cols-12">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:col-span-7">
+          {metricTiles.map((m) => {
+            const tone = TONE_STYLES[m.tone];
+            return (
+              <div key={m.label} className={`rounded-2xl border p-3 shadow-sm ${tone.card}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{m.label}</p>
+                  <span className={`rounded-lg p-1.5 ${tone.icon}`}>{m.icon}</span>
+                </div>
+                <p className={`mt-1 text-xl font-semibold tabular-nums ${tone.value}`}>{m.value}</p>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex min-h-[11rem] flex-col rounded-2xl border border-base-300 bg-base-100 p-3 shadow-sm lg:col-span-5">
+          <p className="mb-0.5 text-xs font-semibold">Open by priority</p>
+          <p className="mb-2 text-[10px] opacity-60">Critical through low among open tickets</p>
+          <div className="h-40 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={metrics.priorityMix}
+                layout="vertical"
+                margin={{ top: 4, right: 12, left: 4, bottom: 0 }}
+              >
+                <XAxis type="number" hide domain={[0, Math.ceil(mixMax * 1.15) || 1]} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={64}
+                  tick={{ fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                  formatter={(value) => [value ?? 0, "Tickets"]}
+                  contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                />
+                <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={16}>
+                  {metrics.priorityMix.map((entry) => (
+                    <Cell
+                      key={entry.name}
+                      fill={PRIORITY_COLORS[entry.name as keyof typeof PRIORITY_COLORS]}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50/70 to-base-100 p-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-end">
         <label className="form-control w-full sm:max-w-xs">
           <span className="label-text text-xs">Search</span>
           <input
@@ -232,7 +407,7 @@ export function TicketListClient({
             </select>
           </label>
         ) : null}
-        <label className="label cursor-pointer gap-2 justify-start">
+        <label className="label cursor-pointer justify-start gap-2">
           <input
             type="checkbox"
             className="checkbox checkbox-sm checkbox-error"
@@ -246,156 +421,93 @@ export function TicketListClient({
         </button>
       </div>
 
-      {filtered.length === 0 ? (
-        <EmptyState
-          title="No tickets match"
-          description={
-            tickets.length === 0
-              ? role === "technician"
-                ? "No tickets are currently assigned to you."
-                : "Support tickets from customers will appear here once submitted."
-              : "Try clearing filters or adjusting your search."
-          }
-        />
-      ) : (
-        <>
-          <div className="grid gap-3 lg:hidden">
-            {filtered.map(({ ticket: t, sla }) => {
-              const isCritical = t.priority === "critical";
-              const overall = sla.overall as SlaCondition;
-              return (
-                <Link
-                  key={t.id}
-                  href={`/tickets/${t.id}`}
-                  className={`block rounded-box border bg-base-100 p-4 shadow-sm transition hover:border-primary/40 ${
-                    isCritical || sla.overdue
-                      ? "border-error/50"
-                      : overall === "at_risk"
-                        ? "border-warning/40"
-                        : "border-base-300"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-semibold">{t.ticket_number}</p>
-                      <p className="mt-0.5 text-sm">{t.title}</p>
-                    </div>
-                    <CriticalPriorityBadge priority={t.priority} />
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <StatusBadge status={t.status} />
-                    <ServiceModeBadge mode={t.service_mode} location={t.service_location} />
-                    <SlaConditionBadge condition={overall} />
-                    {t.service_category ? <span className="badge badge-ghost">{t.service_category}</span> : null}
-                  </div>
-                  {(isCritical || sla.overdue || overall === "at_risk") && (
-                    <div className="mt-3">
-                      <TicketSlaAlerts ticket={t} />
-                    </div>
-                  )}
-                  <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                    <div>
-                      <dt className="opacity-60">Customer</dt>
-                      <dd>{t.customer_name}</dd>
-                    </div>
-                    <div>
-                      <dt className="opacity-60">Contract</dt>
-                      <dd>{t.contract_label ?? "—"}</dd>
-                    </div>
-                    <div>
-                      <dt className="opacity-60">Technician</dt>
-                      <dd>{t.assigned_technician_name ?? "Unassigned"}</dd>
-                    </div>
-                    <div>
-                      <dt className="opacity-60">Submitted</dt>
-                      <dd>{formatDateTime(t.submitted_at)}</dd>
-                    </div>
-                    <div>
-                      <dt className="opacity-60">Response due</dt>
-                      <dd>{formatDateTime(t.target_response_at)}</dd>
-                    </div>
-                    <div>
-                      <dt className="opacity-60">Resolution due</dt>
-                      <dd>{formatDateTime(t.target_resolution_at)}</dd>
-                    </div>
-                  </dl>
-                </Link>
-              );
-            })}
-          </div>
-
-          <div className="hidden overflow-x-auto rounded-box border border-base-300 bg-base-100 lg:block">
-            <table className="table table-sm">
-              <thead>
-                <tr>
-                  <th>Ticket</th>
-                  <th>Customer</th>
-                  <th>Contract</th>
-                  <th>Priority</th>
-                  <th>Job type</th>
-                  <th>Category</th>
-                  <th>Technician</th>
-                  <th>Status</th>
-                  <th>Submitted</th>
-                  <th>Response due</th>
-                  <th>Resolution due</th>
-                  <th>SLA</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(({ ticket: t, sla }) => {
-                  const overall = sla.overall as SlaCondition;
-                  const rowTone =
-                    t.priority === "critical" || sla.overdue
-                      ? "bg-error/5"
-                      : overall === "at_risk"
-                        ? "bg-warning/[0.04]"
-                        : "";
-                  return (
-                    <tr key={t.id} className={`hover ${rowTone}`}>
-                      <td className="min-w-48">
-                        <Link className="link link-hover font-medium" href={`/tickets/${t.id}`}>
-                          {t.ticket_number}
-                        </Link>
-                        <div className="max-w-xs truncate text-xs opacity-70">{t.title}</div>
-                        {sla.overdue || t.priority === "critical" ? (
-                          <div className="mt-1 max-w-xs">
-                            <TicketSlaAlerts ticket={t} />
-                          </div>
-                        ) : null}
-                      </td>
-                      <td>{t.customer_name}</td>
-                      <td className="max-w-40 truncate">{t.contract_label ?? "—"}</td>
-                      <td>
-                        <CriticalPriorityBadge priority={t.priority} />
-                      </td>
-                      <td>
-                        <ServiceModeBadge
-                          mode={t.service_mode}
-                          location={t.service_location}
-                          showLocation={false}
-                          size="xs"
-                        />
-                      </td>
-                      <td>{t.service_category ?? "—"}</td>
-                      <td>{t.assigned_technician_name ?? "Unassigned"}</td>
-                      <td>
-                        <StatusBadge status={t.status} />
-                      </td>
-                      <td className="whitespace-nowrap text-xs">{formatDateTime(t.submitted_at)}</td>
-                      <td className="whitespace-nowrap text-xs">{formatDateTime(t.target_response_at)}</td>
-                      <td className="whitespace-nowrap text-xs">{formatDateTime(t.target_resolution_at)}</td>
-                      <td>
-                        <SlaConditionBadge condition={overall} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+      <section className="overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-b from-violet-50/70 to-base-100 shadow-sm">
+        <div className="border-b border-violet-200/70 px-3 py-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-violet-900/80">
+            Ticket queue ({filtered.length})
+          </h2>
+        </div>
+        <div className="p-3">
+          {filtered.length === 0 ? (
+            <EmptyState
+              title="No tickets match"
+              description={
+                tickets.length === 0
+                  ? role === "technician"
+                    ? "No tickets are currently assigned to you."
+                    : "Support tickets from customers will appear here once submitted."
+                  : "Try clearing filters or adjusting your search."
+              }
+            />
+          ) : (
+            <ul className="grid gap-2">
+              {filtered.map(({ ticket: t, sla }) => {
+                const isCritical = t.priority === "critical";
+                const overall = sla.overall as SlaCondition;
+                const border =
+                  isCritical || sla.overdue
+                    ? "border-rose-200 bg-white/90"
+                    : overall === "at_risk"
+                      ? "border-amber-200 bg-white/90"
+                      : "border-violet-100 bg-white/85";
+                return (
+                  <li key={t.id}>
+                    <Link
+                      href={`/tickets/${t.id}`}
+                      className={`block rounded-xl border px-3 py-2.5 shadow-sm transition hover:border-violet-300 ${border}`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold">
+                            {t.ticket_number}
+                            <span className="font-medium opacity-80"> · {t.title}</span>
+                          </p>
+                          <p className="truncate text-[11px] opacity-70">
+                            {t.customer_name}
+                            {t.contract_label ? ` · ${t.contract_label}` : ""}
+                            {" · "}
+                            {t.assigned_technician_name ?? "Unassigned"}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-wrap items-center gap-1">
+                          <CriticalPriorityBadge priority={t.priority} />
+                          <StatusBadge status={t.status} />
+                          <ServiceModeBadge
+                            mode={t.service_mode}
+                            location={t.service_location}
+                            showLocation={false}
+                            size="xs"
+                          />
+                          <SlaConditionBadge condition={overall} />
+                        </div>
+                      </div>
+                      {(isCritical || sla.overdue || overall === "at_risk") && (
+                        <div className="mt-2">
+                          <TicketSlaAlerts ticket={t} />
+                        </div>
+                      )}
+                      <dl className="mt-2 grid gap-1 text-[11px] opacity-70 sm:grid-cols-3">
+                        <div>
+                          <dt className="inline opacity-60">Submitted </dt>
+                          <dd className="inline">{formatDateTime(t.submitted_at)}</dd>
+                        </div>
+                        <div>
+                          <dt className="inline opacity-60">Response </dt>
+                          <dd className="inline">{formatDateTime(t.target_response_at)}</dd>
+                        </div>
+                        <div>
+                          <dt className="inline opacity-60">Resolution </dt>
+                          <dd className="inline">{formatDateTime(t.target_resolution_at)}</dd>
+                        </div>
+                      </dl>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

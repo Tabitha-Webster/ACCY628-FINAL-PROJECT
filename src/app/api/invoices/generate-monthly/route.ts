@@ -12,11 +12,13 @@ import {
 } from "@/lib/billing";
 import {
   isApprovedForBilling,
+  isAdditionalWorkBlockingBilling,
   isOpenBillingStatus,
   isTimeEntryAlreadyInvoiced,
   pendingAdditionalWorkBlockReason,
   projectBillingBlockReason,
 } from "@/lib/billing-eligibility";
+import { billedHourlyRate, billedMonthlyRecurringFee } from "@/lib/contracts";
 
 function generateInvoiceNumber(): string {
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
   let contractQuery = supabase
     .from("contracts")
     .select(
-      "id, name, customer_id, status, monthly_recurring_fee, included_hours_per_month, additional_hourly_rate, payment_terms, billing_timing, tax_status"
+      "id, name, customer_id, status, monthly_recurring_fee, work_location, included_hours_per_month, additional_hourly_rate, payment_terms, billing_timing, tax_status"
     )
     .eq("status", "active");
 
@@ -115,23 +117,31 @@ export async function POST(request: Request) {
         .eq("projects.contract_id", contract.id),
       supabase
         .from("additional_work_requests")
-        .select("id, project_id, support_ticket_id")
+        .select("id, project_id, support_ticket_id, approval_status, customer_approval_status")
         .eq("contract_id", contract.id)
-        .eq("approval_status", "pending"),
+        .or("approval_status.eq.pending,customer_approval_status.eq.pending"),
     ]);
 
+    const blockingAw = (pendingAw ?? []).filter((r) =>
+      isAdditionalWorkBlockingBilling({
+        approval_status: r.approval_status,
+        customer_approval_status: r.customer_approval_status,
+        project_id: r.project_id,
+      })
+    );
+
     const pendingAwByProject = new Set(
-      (pendingAw ?? []).map((r) => r.project_id).filter((id): id is string => Boolean(id))
+      blockingAw.map((r) => r.project_id).filter((id): id is string => Boolean(id))
     );
     const pendingAwByTicket = new Set(
-      (pendingAw ?? []).map((r) => r.support_ticket_id).filter((id): id is string => Boolean(id))
+      blockingAw.map((r) => r.support_ticket_id).filter((id): id is string => Boolean(id))
     );
 
     const usage = computeMonthlyUsage(
       timeEntries ?? [],
       Number(contract.included_hours_per_month ?? 0),
-      Number(contract.additional_hourly_rate ?? 0),
-      Number(contract.monthly_recurring_fee ?? 0)
+      billedHourlyRate(contract),
+      billedMonthlyRecurringFee(contract)
     );
     const approvedProjects = (projects ?? []).filter((project) => {
       if (projectBillingBlockReason(project)) return false;

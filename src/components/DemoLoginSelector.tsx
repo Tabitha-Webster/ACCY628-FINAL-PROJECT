@@ -4,6 +4,9 @@ import { useRef, useState } from "react";
 import { DEMO_ACCOUNTS, type UserRole } from "@/lib/constants";
 import { isDemoModeEnabled } from "@/lib/demo-mode";
 
+/** Public class-demo password shown in README; used when Demo Mode API is off. */
+const FALLBACK_DEMO_PASSWORD = "1234";
+
 type Props = {
   onSelect: (email: string, password: string) => void;
 };
@@ -15,42 +18,45 @@ export function DemoLoginSelector({ onSelect }: Props) {
   const [error, setError] = useState<string | null>(null);
   const inFlightRef = useRef(false);
 
-  if (!demoMode) {
-    return null;
-  }
-
   async function onPick(role: UserRole) {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     setLoadingRole(role);
     setError(null);
 
-    try {
-      const res = await fetch("/api/demo/autofill", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
-      });
-      const data = (await res.json().catch(() => ({}))) as {
-        email?: string;
-        password?: string;
-        error?: string;
-      };
+    const account = DEMO_ACCOUNTS.find((row) => row.role === role);
+    if (!account) {
+      inFlightRef.current = false;
+      setLoadingRole(null);
+      setError("Unknown demo role.");
+      return;
+    }
 
-      if (!res.ok || !data.email || !data.password) {
-        setError(
-          data.error ||
-            (res.redirected || res.status === 307 || res.status === 302
-              ? "Demo autofill was blocked. Refresh and try again."
-              : "Could not load demo credentials.")
-        );
-        return;
+    try {
+      if (demoMode) {
+        const res = await fetch("/api/demo/autofill", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          email?: string;
+          password?: string;
+          error?: string;
+        };
+
+        if (res.ok && data.email && data.password) {
+          setSelectedEmail(data.email);
+          onSelect(data.email, data.password);
+          return;
+        }
       }
 
-      setSelectedEmail(data.email);
-      onSelect(data.email, data.password);
+      setSelectedEmail(account.email);
+      onSelect(account.email, FALLBACK_DEMO_PASSWORD);
     } catch {
-      setError("Network error while loading demo credentials.");
+      setSelectedEmail(account.email);
+      onSelect(account.email, FALLBACK_DEMO_PASSWORD);
     } finally {
       inFlightRef.current = false;
       setLoadingRole(null);
@@ -58,13 +64,9 @@ export function DemoLoginSelector({ onSelect }: Props) {
   }
 
   return (
-    <div className="rounded-xl border border-base-300/70 bg-base-200/40 p-3.5 sm:p-4">
-      <p className="text-sm font-semibold">Demo Login Selector</p>
-      <p className="mt-1.5 text-xs leading-relaxed text-base-content/70">
-        For class demos only. Pick a role to fill the login form, then click Sign in.
-        Each account still uses real Supabase Auth and database security.
-      </p>
-      <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+    <div className="login-demo-panel rounded-2xl border border-slate-200/90 bg-slate-50/80 p-4 sm:p-5">
+      <p className="text-sm font-semibold tracking-tight">Demo Login Selector</p>
+      <div className="mt-3.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
         {DEMO_ACCOUNTS.map((account) => {
           const selected = selectedEmail === account.email;
           const loading = loadingRole === account.role;
@@ -75,7 +77,7 @@ export function DemoLoginSelector({ onSelect }: Props) {
               aria-pressed={selected}
               disabled={loadingRole !== null}
               className={[
-                "btn login-demo-role-btn h-11 min-h-11 w-full justify-center px-3 text-sm font-medium normal-case",
+                "btn login-demo-role-btn h-11 min-h-11 w-full justify-center px-3.5 text-sm font-medium normal-case",
                 "border",
                 selected ? "login-demo-role-btn-selected" : "",
               ].join(" ")}

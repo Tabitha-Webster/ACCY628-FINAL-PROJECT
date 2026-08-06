@@ -4,19 +4,27 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { StatusBadge } from "@/components/ui";
+import { roleLabel } from "@/lib/constants";
 
 export type EmployeeRow = {
   id: string;
   full_name: string;
   title: string;
   department: string;
-  role: "admin" | "manager" | "technician" | "billing" | "hr";
+  role: "admin" | "manager" | "executive" | "technician" | "billing" | "hr";
   email: string | null;
   notes: string | null;
   is_active: boolean;
 };
 
-const EMPLOYEE_ROLES: EmployeeRow["role"][] = ["admin", "manager", "technician", "billing", "hr"];
+const EMPLOYEE_ROLES: EmployeeRow["role"][] = [
+  "admin",
+  "manager",
+  "executive",
+  "technician",
+  "billing",
+  "hr",
+];
 
 const EMPTY_FORM = {
   full_name: "",
@@ -273,7 +281,7 @@ export function AdminEmployeesManager({
                 >
                   {EMPLOYEE_ROLES.map((role) => (
                     <option key={role} value={role}>
-                      {role}
+                      {roleLabel(role)}
                     </option>
                   ))}
                 </select>

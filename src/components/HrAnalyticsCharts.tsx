@@ -48,11 +48,13 @@ export function HrAnalyticsCharts({
   const showCost = variant === "full" || variant === "cost";
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid gap-3 lg:grid-cols-2">
       {showOps ? (
         <>
-          <div className="rounded-box border border-base-300 bg-base-100 p-4">
-            <p className="mb-2 text-sm font-semibold">Active contractors by department</p>
+          <div className="rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50/70 to-base-100 p-3 shadow-sm">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-sky-900/80">
+              Active contractors by department
+            </p>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={headcountByDept} margin={{ top: 5, right: 10, left: 0, bottom: 40 }}>
@@ -67,14 +69,16 @@ export function HrAnalyticsCharts({
                   />
                   <YAxis fontSize={12} allowDecimals={false} width={32} />
                   <Tooltip />
-                  <Bar dataKey="activeCount" name="Active" fill="#0891b2" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="activeCount" name="Active" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="rounded-box border border-base-300 bg-base-100 p-4">
-            <p className="mb-2 text-sm font-semibold">Hiring trends (last 12 months)</p>
+          <div className="rounded-2xl border border-violet-200/80 bg-gradient-to-b from-violet-50/70 to-base-100 p-3 shadow-sm">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-violet-900/80">
+              Hiring trends (last 12 months)
+            </p>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={hiringTrends} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
@@ -83,7 +87,7 @@ export function HrAnalyticsCharts({
                   <YAxis fontSize={12} allowDecimals={false} width={28} />
                   <Tooltip />
                   <Legend />
-                  <Line type="monotone" dataKey="hires" name="Hires" stroke="#2563eb" strokeWidth={2} />
+                  <Line type="monotone" dataKey="hires" name="Hires" stroke="#8b5cf6" strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -93,11 +97,13 @@ export function HrAnalyticsCharts({
 
       {showCost ? (
         <div
-          className={`rounded-box border border-base-300 bg-base-100 p-4 ${
+          className={`rounded-2xl border border-emerald-200/80 bg-gradient-to-b from-emerald-50/70 to-base-100 p-3 shadow-sm ${
             variant === "cost" ? "lg:col-span-2" : "lg:col-span-2"
           }`}
         >
-          <p className="mb-2 text-sm font-semibold">Avg annual cost per contractor by department</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-900/80">
+            Avg annual cost per contractor by department
+          </p>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={costByDept} margin={{ top: 5, right: 10, left: 0, bottom: 40 }}>
@@ -114,7 +120,7 @@ export function HrAnalyticsCharts({
                 <Tooltip
                   formatter={(value) => currencyTick(Number(Array.isArray(value) ? value[0] : value))}
                 />
-                <Bar dataKey="avgAnnualCost" name="Avg cost" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="avgAnnualCost" name="Avg cost" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

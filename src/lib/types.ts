@@ -49,6 +49,7 @@ export type ContractType =
   | "managed_plus_project"
   | "pass_through";
 export type RenewalType = "auto" | "manual" | "none";
+export type WorkLocation = "remote" | "on_site";
 export type BillingFrequency = "monthly" | "quarterly" | "annual" | "one_time";
 export type BillingTiming = "in_advance" | "in_arrears";
 export type RevenueRecognition = "earned" | "deferred" | "unbilled";
@@ -107,6 +108,7 @@ export type Contract = {
   additional_hourly_rate: number;
   overages_allowed: boolean | null;
   overage_charges: number | null;
+  work_location: WorkLocation | string | null;
   sla_response_hours: number | null;
   sla_resolution_hours: number | null;
   sla_critical_response_hours: number | null;
@@ -375,7 +377,10 @@ export type AdditionalWorkRequest = {
   description: string;
   estimated_hours: number | null;
   estimated_amount: number | null;
+  /** Manager (internal) decision. */
   approval_status: ApprovalStatus;
+  /** Customer decision for project OOS/CRs; not_required for ticket-only requests. */
+  customer_approval_status?: ApprovalStatus | "not_required" | null;
   reviewed_by: string | null;
   review_notes: string | null;
   reviewed_at: string | null;

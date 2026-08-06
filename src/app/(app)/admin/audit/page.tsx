@@ -33,6 +33,7 @@ const FIELD_LABELS: Record<string, string> = {
   billing_frequency: "Billing frequency",
   payment_terms: "Payment terms",
   monthly_recurring_fee: "Monthly recurring fee",
+  work_location: "Work location",
   billing_status: "Billing status",
   contract_id: "Contract link",
   due_date: "Due date",
@@ -97,7 +98,7 @@ export default async function AdminAuditPage() {
     return (
       <div>
         <PageHeader
-          title="Audit Trail"
+          title="Change Log"
           description="Change-only history for sensitive system records."
           actions={
             <Link href="/admin" className="btn btn-sm btn-outline">
@@ -131,7 +132,7 @@ export default async function AdminAuditPage() {
   return (
     <div>
       <PageHeader
-        title="Audit Trail"
+        title="Change Log"
         description="Who changed sensitive system data, what changed, which record was affected, and when."
         actions={
           <div className="flex flex-wrap gap-2">
