@@ -47,7 +47,7 @@ export function ExportCustomersButton({ rows, role }: Props) {
 
     if (!canExportCustomers(role)) {
       setError(
-        "Access denied. Only Admin, Manager, and Billing & Accounting can export the customer list. HR, Technician, and Customer roles cannot export."
+        "Access denied. Only Admin, Manager, Executive, and Billing & Accounting can export the customer list."
       );
       return;
     }
@@ -75,7 +75,7 @@ export function ExportCustomersButton({ rows, role }: Props) {
     return (
       <div className="alert alert-warning text-sm py-2 max-w-xl" role="alert">
         Access denied for customer list export. Your role ({role}) cannot download the customer
-        list. Only Admin, Manager, and Billing & Accounting may export.
+        list. Only Admin, Manager, Executive, and Billing & Accounting may export.
       </div>
     );
   }

@@ -37,6 +37,7 @@ export type AttentionTicket = {
   customer: string;
   priority: string;
   sla: string;
+  href?: string;
 };
 
 export type HoursRiskRow = {
@@ -46,6 +47,8 @@ export type HoursRiskRow = {
   used: number;
   included: number;
   pct: number;
+  href?: string;
+  meta?: string;
 };
 
 export type ApprovalChip = {
@@ -105,8 +108,9 @@ function MetricIcon({ tone }: { tone: ExecutiveMetricTile["tone"] }) {
 const currencyTick = (value: number) =>
   `$${Intl.NumberFormat("en-US", { notation: "compact" }).format(value)}`;
 
-/** One-viewport executive home styled like Customer Home. */
+/** Shared pastel one-viewport home used by manager and executive dashboards. */
 export function ExecutiveDashboardVisuals({
+  title = "Manager Dashboard",
   fullName,
   overdueBalance,
   year,
@@ -117,229 +121,470 @@ export function ExecutiveDashboardVisuals({
   hoursAtRisk,
   approvals,
   pendingApprovalsTotal,
+  overdueHref = "/accounts-receivable",
+  chartTitle,
+  chartEmptyMessage,
+  primaryQueueTitle = "Tickets Needing Attention",
+  primaryQueueHref = "/tickets",
+  primaryQueueEmpty = "No critical, at-risk, or missed-SLA tickets.",
+  secondaryQueueTitle = "Approvals & Hours",
+  secondaryQueueHref = "/projects",
+  secondaryQueueLinkLabel,
+  secondaryPrimaryHeading = "Waiting on approval",
+  secondaryPrimaryEmpty = "Nothing in the approval queue.",
+  secondarySecondaryHeading = "Over included hours",
+  secondarySecondaryEmpty = "All contracts within included hours.",
+  showHoursAsProgress = true,
+  showFinancialChart = true,
 }: {
+  title?: string;
   fullName: string;
   overdueBalance: number;
   year: number;
   metrics: ExecutiveMetricTile[];
   ticketStatusSlices: SupportStatusSlice[];
-  monthlyFinancials: MonthlyFinancials[];
+  monthlyFinancials?: MonthlyFinancials[];
   attentionTickets: AttentionTicket[];
   hoursAtRisk: HoursRiskRow[];
   approvals: ApprovalChip[];
   pendingApprovalsTotal: number;
+  overdueHref?: string;
+  chartTitle?: string;
+  chartEmptyMessage?: string;
+  primaryQueueTitle?: string;
+  primaryQueueHref?: string;
+  primaryQueueEmpty?: string;
+  secondaryQueueTitle?: string;
+  secondaryQueueHref?: string;
+  secondaryQueueLinkLabel?: string;
+  secondaryPrimaryHeading?: string;
+  secondaryPrimaryEmpty?: string;
+  secondarySecondaryHeading?: string;
+  secondarySecondaryEmpty?: string;
+  showHoursAsProgress?: boolean;
+  showFinancialChart?: boolean;
 }) {
   return (
-    <div className="flex min-h-0 flex-col gap-3 overflow-hidden lg:h-[calc(100vh-7.5rem)]">
-      <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
+    <div className="flex min-h-0 flex-col gap-2 overflow-hidden lg:h-[calc(100dvh-8.25rem)] lg:max-h-[calc(100dvh-8.25rem)]">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div className="min-w-0 space-y-0.5">
-          <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Manager Dashboard</h1>
-          <p className="text-sm opacity-70">Welcome back, {fullName}.</p>
+          <h1 className="text-lg font-semibold tracking-tight md:text-xl">{title}</h1>
+          <p className="text-xs opacity-70 sm:text-sm">Welcome back, {fullName}.</p>
         </div>
         <Link
-          href="/accounts-receivable"
+          href={overdueHref}
           className={
             overdueBalance > 0
-              ? "relative block min-w-[10.5rem] max-w-[13rem] overflow-hidden rounded-2xl border border-rose-400/50 bg-gradient-to-br from-rose-500 to-rose-600 px-3 py-2.5 text-right text-white shadow-md shadow-rose-500/25 transition hover:brightness-110"
-              : "relative block min-w-[10.5rem] max-w-[13rem] overflow-hidden rounded-2xl border border-emerald-400/50 bg-gradient-to-br from-emerald-500 to-emerald-600 px-3 py-2.5 text-right text-white shadow-md shadow-emerald-500/25 transition hover:brightness-110"
+              ? "relative block min-w-[9.5rem] max-w-[12rem] overflow-hidden rounded-2xl border border-rose-400/50 bg-gradient-to-br from-rose-500 to-rose-600 px-3 py-2 text-right text-white shadow-md shadow-rose-500/25 transition hover:brightness-110"
+              : "relative block min-w-[9.5rem] max-w-[12rem] overflow-hidden rounded-2xl border border-emerald-400/50 bg-gradient-to-br from-emerald-500 to-emerald-600 px-3 py-2 text-right text-white shadow-md shadow-emerald-500/25 transition hover:brightness-110"
           }
         >
           <div className="pointer-events-none absolute -right-4 -top-4 size-16 rounded-full bg-white/15" />
           <p className="text-[10px] font-semibold uppercase leading-tight tracking-wide text-white/90">
             Overdue Balance
           </p>
-          <p className="mt-0.5 truncate text-xl font-semibold tabular-nums leading-none" title={formatCurrency(overdueBalance)}>
+          <p
+            className="mt-0.5 truncate text-lg font-semibold tabular-nums leading-none"
+            title={formatCurrency(overdueBalance)}
+          >
             {formatCurrency(overdueBalance)}
           </p>
-          <p className="mt-1 text-[10px] leading-snug text-white/85">
+          <p className="mt-0.5 text-[10px] leading-snug text-white/85">
             {overdueBalance > 0 ? "Tap to review AR" : "Collections look clean"}
           </p>
         </Link>
       </div>
 
-      <div className="grid shrink-0 gap-3 lg:grid-cols-12">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:col-span-7">
-          {metrics.map((metric) => {
-            const tone = TONE_STYLES[metric.tone] ?? TONE_STYLES.sky;
-            const body = (
-              <>
-                <div className="flex min-w-0 items-start justify-between gap-2">
-                  <p className="min-w-0 flex-1 text-[10px] font-semibold uppercase leading-tight tracking-wide opacity-70 line-clamp-2">
-                    {metric.label}
-                  </p>
-                  <span className={`shrink-0 rounded-lg p-1.5 ${tone.icon}`}>
-                    <MetricIcon tone={metric.tone} />
-                  </span>
-                </div>
-                <p
-                  className={`mt-1 min-w-0 truncate text-lg font-semibold tabular-nums leading-tight sm:text-xl ${tone.value}`}
-                  title={metric.value}
-                >
-                  {metric.value}
-                </p>
-                {metric.hint ? (
-                  <p className="mt-0.5 min-w-0 text-[10px] leading-snug opacity-60 line-clamp-2" title={metric.hint}>
-                    {metric.hint}
-                  </p>
-                ) : null}
-              </>
-            );
-            const classes = `flex min-h-[5.75rem] min-w-0 flex-col overflow-hidden rounded-2xl border p-3 shadow-sm ${tone.card}`;
-            return metric.href ? (
-              <Link
-                key={metric.label}
-                href={metric.href}
-                className={`${classes} transition hover:brightness-[0.98]`}
-              >
-                {body}
-              </Link>
-            ) : (
-              <div key={metric.label} className={classes}>
-                {body}
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="min-h-[10.5rem] lg:col-span-5">
-          <CustomerSupportStatusChart data={ticketStatusSlices} year={year} compact />
-        </div>
-      </div>
-
-      <div className="grid min-h-0 flex-1 gap-3 overflow-hidden lg:grid-cols-3">
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-b from-violet-50/80 to-base-100 dark:border-violet-800/50 dark:from-violet-950/40">
-          <h2 className="shrink-0 border-b border-violet-200/70 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-violet-900/80 dark:border-violet-800/60 dark:text-violet-200">
-            Revenue, Cost &amp; Profit
-          </h2>
-          <div className="min-h-0 flex-1 p-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlyFinancials} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                <XAxis dataKey="month" fontSize={10} tickLine={false} />
-                <YAxis fontSize={10} width={40} tickFormatter={currencyTick} tickLine={false} />
-                <Tooltip
-                  formatter={(value) =>
-                    currencyTick(Number(Array.isArray(value) ? value[0] : value))
-                  }
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#2563eb" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="cost" name="Cost" stroke="#dc2626" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="profit" name="Profit" stroke="#16a34a" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50/80 to-base-100 dark:border-sky-800/50 dark:from-sky-950/40">
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-sky-200/70 px-3 py-2 dark:border-sky-800/60">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-900/80 dark:text-sky-200">
-              Tickets Needing Attention
-            </h2>
-            <Link href="/tickets" className="text-[10px] font-medium text-sky-700 hover:underline dark:text-sky-300">
-              View all
-            </Link>
-          </div>
-          <div className="min-h-0 flex-1 space-y-2 overflow-hidden p-3">
-            {attentionTickets.length === 0 ? (
-              <p className="text-sm opacity-60">No critical, at-risk, or missed-SLA tickets.</p>
-            ) : (
-              attentionTickets.slice(0, 5).map((t) => (
-                <Link
-                  key={t.id}
-                  href={`/tickets/${t.id}`}
-                  className="flex items-start gap-2 rounded-xl border border-sky-100 bg-white/80 px-2.5 py-2 shadow-sm transition hover:border-sky-300 dark:border-sky-900 dark:bg-base-200/60"
-                >
-                  <span
-                    className={`mt-1 size-2.5 shrink-0 rounded-full ${
-                      PRIORITY_COLORS[t.priority] ?? "bg-slate-400"
-                    }`}
-                    title={statusLabel(t.priority)}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-semibold">{t.ticketNumber}</span>
-                    <span className="block truncate text-[11px] opacity-70">{t.title}</span>
-                    <span className="mt-0.5 flex min-w-0 flex-wrap gap-1">
-                      <span className="max-w-full truncate rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium leading-tight text-sky-800 dark:bg-sky-900/60 dark:text-sky-200">
-                        {t.customer}
-                      </span>
-                      <span className="shrink-0 rounded-full bg-base-200 px-1.5 py-0.5 text-[10px] font-medium leading-tight">
-                        {statusLabel(t.sla)}
-                      </span>
+      {!showFinancialChart ? (
+        <>
+          <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4">
+            {metrics.map((metric) => {
+              const tone = TONE_STYLES[metric.tone] ?? TONE_STYLES.sky;
+              const body = (
+                <>
+                  <div className="flex min-w-0 items-start justify-between gap-1.5">
+                    <p className="min-w-0 flex-1 text-[10px] font-semibold uppercase leading-tight tracking-wide opacity-70 line-clamp-2">
+                      {metric.label}
+                    </p>
+                    <span className={`shrink-0 rounded-md p-1 ${tone.icon}`}>
+                      <MetricIcon tone={metric.tone} />
                     </span>
-                  </span>
-                </Link>
-              ))
-            )}
-          </div>
-        </section>
-
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-b from-emerald-50/80 to-base-100 dark:border-emerald-800/50 dark:from-emerald-950/40">
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-emerald-200/70 px-3 py-2 dark:border-emerald-800/60">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-emerald-900/80 dark:text-emerald-200">
-              Approvals &amp; Hours
-            </h2>
-            <Link
-              href="/projects"
-              className="text-[10px] font-medium text-emerald-700 hover:underline dark:text-emerald-300"
-            >
-              {pendingApprovalsTotal} pending
-            </Link>
-          </div>
-          <div className="min-h-0 flex-1 space-y-3 overflow-hidden p-3">
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60">
-                Waiting on approval
-              </p>
-              {approvals.length === 0 ? (
-                <p className="text-xs opacity-60">Nothing in the approval queue.</p>
-              ) : (
-                approvals.slice(0, 3).map((item) => (
-                  <Link
-                    key={item.id}
-                    href={item.href}
-                    className="block rounded-xl border border-emerald-100 bg-white/80 px-2.5 py-1.5 shadow-sm transition hover:border-emerald-300 dark:border-emerald-900 dark:bg-base-200/60"
+                  </div>
+                  <p
+                    className={`mt-1 min-w-0 truncate text-base font-semibold tabular-nums leading-tight sm:text-lg ${tone.value}`}
+                    title={metric.value}
                   >
-                    <span className="block truncate text-xs font-semibold">{item.label}</span>
-                    <span className="block truncate text-[11px] opacity-70">{item.detail}</span>
-                  </Link>
-                ))
-              )}
+                    {metric.value}
+                  </p>
+                  {metric.hint ? (
+                    <p
+                      className="mt-0.5 min-w-0 text-[10px] leading-snug opacity-60 line-clamp-1"
+                      title={metric.hint}
+                    >
+                      {metric.hint}
+                    </p>
+                  ) : null}
+                </>
+              );
+              const classes = `flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border p-2.5 shadow-sm ${tone.card}`;
+              return metric.href ? (
+                <Link
+                  key={metric.label}
+                  href={metric.href}
+                  className={`${classes} transition hover:brightness-[0.98]`}
+                >
+                  {body}
+                </Link>
+              ) : (
+                <div key={metric.label} className={classes}>
+                  {body}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="grid min-h-0 flex-1 gap-2 overflow-hidden lg:grid-cols-3">
+            <div className="min-h-0 overflow-hidden">
+              <CustomerSupportStatusChart
+                data={ticketStatusSlices}
+                year={year}
+                compact
+                title={chartTitle}
+                emptyMessage={chartEmptyMessage}
+              />
             </div>
 
-            <div className="space-y-1.5 border-t border-emerald-200/60 pt-2 dark:border-emerald-800/50">
-              <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60">
-                Over included hours
-              </p>
-              {hoursAtRisk.length === 0 ? (
-                <p className="text-xs opacity-60">All contracts within included hours.</p>
-              ) : (
-                hoursAtRisk.slice(0, 3).map((c) => (
-                  <Link
-                    key={c.id}
-                    href={`/contracts/${c.id}`}
-                    className="block space-y-1 rounded-xl p-1 hover:bg-emerald-100/40 dark:hover:bg-emerald-900/30"
-                  >
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="truncate font-medium">{c.name}</span>
-                      <span className="shrink-0 tabular-nums opacity-70">
-                        {c.used.toFixed(0)}/{c.included.toFixed(0)}h
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50/80 to-base-100 dark:border-sky-800/50 dark:from-sky-950/40">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-sky-200/70 px-3 py-1.5 dark:border-sky-800/60">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-900/80 dark:text-sky-200">
+                  {primaryQueueTitle}
+                </h2>
+                <Link
+                  href={primaryQueueHref}
+                  className="text-[10px] font-medium text-sky-700 hover:underline dark:text-sky-300"
+                >
+                  View all
+                </Link>
+              </div>
+              <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2.5">
+                {attentionTickets.length === 0 ? (
+                  <p className="text-sm opacity-60">{primaryQueueEmpty}</p>
+                ) : (
+                  attentionTickets.slice(0, 4).map((t) => (
+                    <Link
+                      key={t.id}
+                      href={t.href ?? `/tickets/${t.id}`}
+                      className="flex items-start gap-2 rounded-xl border border-sky-100 bg-white/80 px-2 py-1.5 shadow-sm transition hover:border-sky-300 dark:border-sky-900 dark:bg-base-200/60"
+                    >
+                      <span
+                        className={`mt-1 size-2.5 shrink-0 rounded-full ${
+                          PRIORITY_COLORS[t.priority] ?? "bg-slate-400"
+                        }`}
+                        title={statusLabel(t.priority)}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-semibold">{t.ticketNumber}</span>
+                        <span className="block truncate text-[11px] opacity-70">{t.title}</span>
+                        <span className="mt-0.5 flex min-w-0 flex-wrap gap-1">
+                          <span className="max-w-full truncate rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium leading-tight text-sky-800 dark:bg-sky-900/60 dark:text-sky-200">
+                            {t.customer}
+                          </span>
+                          <span className="shrink-0 rounded-full bg-base-200 px-1.5 py-0.5 text-[10px] font-medium leading-tight">
+                            {t.sla.includes("_") ? statusLabel(t.sla) : t.sla}
+                          </span>
+                        </span>
+                      </span>
+                    </Link>
+                  ))
+                )}
+              </div>
+            </section>
+
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-b from-emerald-50/80 to-base-100 dark:border-emerald-800/50 dark:from-emerald-950/40">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-emerald-200/70 px-3 py-1.5 dark:border-emerald-800/60">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-emerald-900/80 dark:text-emerald-200">
+                  {secondaryQueueTitle}
+                </h2>
+                <Link
+                  href={secondaryQueueHref}
+                  className="text-[10px] font-medium text-emerald-700 hover:underline dark:text-emerald-300"
+                >
+                  {secondaryQueueLinkLabel ?? `${pendingApprovalsTotal} pending`}
+                </Link>
+              </div>
+              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60">
+                    {secondaryPrimaryHeading}
+                  </p>
+                  {approvals.length === 0 ? (
+                    <p className="text-xs opacity-60">{secondaryPrimaryEmpty}</p>
+                  ) : (
+                    approvals.slice(0, 3).map((item) => (
+                      <Link
+                        key={item.id}
+                        href={item.href}
+                        className="block rounded-xl border border-emerald-100 bg-white/80 px-2 py-1.5 shadow-sm transition hover:border-emerald-300 dark:border-emerald-900 dark:bg-base-200/60"
+                      >
+                        <span className="block truncate text-xs font-semibold">{item.label}</span>
+                        <span className="block truncate text-[11px] opacity-70">{item.detail}</span>
+                      </Link>
+                    ))
+                  )}
+                </div>
+                <div className="space-y-1 border-t border-emerald-200/60 pt-2 dark:border-emerald-800/50">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60">
+                    {secondarySecondaryHeading}
+                  </p>
+                  {hoursAtRisk.length === 0 ? (
+                    <p className="text-xs opacity-60">{secondarySecondaryEmpty}</p>
+                  ) : (
+                    hoursAtRisk.slice(0, 3).map((c) => (
+                      <Link
+                        key={c.id}
+                        href={c.href ?? `/contracts/${c.id}`}
+                        className="block space-y-0.5 rounded-xl p-1 hover:bg-emerald-100/40 dark:hover:bg-emerald-900/30"
+                      >
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="truncate font-medium">{c.name}</span>
+                          <span className="shrink-0 tabular-nums opacity-70">
+                            {c.meta ?? `${c.used.toFixed(0)}/${c.included.toFixed(0)}h`}
+                          </span>
+                        </div>
+                        <p className="text-[10px] opacity-60">{c.customer}</p>
+                      </Link>
+                    ))
+                  )}
+                </div>
+              </div>
+            </section>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="grid shrink-0 gap-3 lg:grid-cols-12">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:col-span-7">
+              {metrics.map((metric) => {
+                const tone = TONE_STYLES[metric.tone] ?? TONE_STYLES.sky;
+                const body = (
+                  <>
+                    <div className="flex min-w-0 items-start justify-between gap-2">
+                      <p className="min-w-0 flex-1 text-[10px] font-semibold uppercase leading-tight tracking-wide opacity-70 line-clamp-2">
+                        {metric.label}
+                      </p>
+                      <span className={`shrink-0 rounded-lg p-1.5 ${tone.icon}`}>
+                        <MetricIcon tone={metric.tone} />
                       </span>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-emerald-900/10 dark:bg-emerald-100/10">
-                      <div
-                        className="h-full rounded-full bg-rose-500"
-                        style={{ width: `${Math.min(100, Math.max(8, c.pct))}%` }}
-                      />
-                    </div>
-                    <p className="text-[10px] opacity-60">{c.customer}</p>
+                    <p
+                      className={`mt-1 min-w-0 truncate text-lg font-semibold tabular-nums leading-tight sm:text-xl ${tone.value}`}
+                      title={metric.value}
+                    >
+                      {metric.value}
+                    </p>
+                    {metric.hint ? (
+                      <p
+                        className="mt-0.5 min-w-0 text-[10px] leading-snug opacity-60 line-clamp-2"
+                        title={metric.hint}
+                      >
+                        {metric.hint}
+                      </p>
+                    ) : null}
+                  </>
+                );
+                const classes = `flex min-h-[5.75rem] min-w-0 flex-col overflow-hidden rounded-2xl border p-3 shadow-sm ${tone.card}`;
+                return metric.href ? (
+                  <Link
+                    key={metric.label}
+                    href={metric.href}
+                    className={`${classes} transition hover:brightness-[0.98]`}
+                  >
+                    {body}
                   </Link>
-                ))
-              )}
+                ) : (
+                  <div key={metric.label} className={classes}>
+                    {body}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="min-h-[10.5rem] lg:col-span-5">
+              <CustomerSupportStatusChart
+                data={ticketStatusSlices}
+                year={year}
+                compact
+                title={chartTitle}
+                emptyMessage={chartEmptyMessage}
+              />
             </div>
           </div>
-        </section>
-      </div>
+
+          <div className="grid min-h-0 flex-1 gap-3 overflow-hidden lg:grid-cols-3">
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-b from-violet-50/80 to-base-100 dark:border-violet-800/50 dark:from-violet-950/40">
+              <h2 className="shrink-0 border-b border-violet-200/70 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-violet-900/80 dark:border-violet-800/60 dark:text-violet-200">
+                Revenue, Cost &amp; Profit
+              </h2>
+              <div className="min-h-0 flex-1 p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={monthlyFinancials ?? []}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                    <XAxis dataKey="month" fontSize={10} tickLine={false} />
+                    <YAxis fontSize={10} width={40} tickFormatter={currencyTick} tickLine={false} />
+                    <Tooltip
+                      formatter={(value) =>
+                        currencyTick(Number(Array.isArray(value) ? value[0] : value))
+                      }
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Line
+                      type="monotone"
+                      dataKey="revenue"
+                      name="Revenue"
+                      stroke="#2563eb"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="cost"
+                      name="Cost"
+                      stroke="#dc2626"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="profit"
+                      name="Profit"
+                      stroke="#16a34a"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50/80 to-base-100 dark:border-sky-800/50 dark:from-sky-950/40">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-sky-200/70 px-3 py-2 dark:border-sky-800/60">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-900/80 dark:text-sky-200">
+                  {primaryQueueTitle}
+                </h2>
+                <Link
+                  href={primaryQueueHref}
+                  className="text-[10px] font-medium text-sky-700 hover:underline dark:text-sky-300"
+                >
+                  View all
+                </Link>
+              </div>
+              <div className="min-h-0 flex-1 space-y-2 overflow-hidden p-3">
+                {attentionTickets.length === 0 ? (
+                  <p className="text-sm opacity-60">{primaryQueueEmpty}</p>
+                ) : (
+                  attentionTickets.slice(0, 5).map((t) => (
+                    <Link
+                      key={t.id}
+                      href={t.href ?? `/tickets/${t.id}`}
+                      className="flex items-start gap-2 rounded-xl border border-sky-100 bg-white/80 px-2.5 py-2 shadow-sm transition hover:border-sky-300 dark:border-sky-900 dark:bg-base-200/60"
+                    >
+                      <span
+                        className={`mt-1 size-2.5 shrink-0 rounded-full ${
+                          PRIORITY_COLORS[t.priority] ?? "bg-slate-400"
+                        }`}
+                        title={statusLabel(t.priority)}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-semibold">{t.ticketNumber}</span>
+                        <span className="block truncate text-[11px] opacity-70">{t.title}</span>
+                        <span className="mt-0.5 flex min-w-0 flex-wrap gap-1">
+                          <span className="max-w-full truncate rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium leading-tight text-sky-800 dark:bg-sky-900/60 dark:text-sky-200">
+                            {t.customer}
+                          </span>
+                          <span className="shrink-0 rounded-full bg-base-200 px-1.5 py-0.5 text-[10px] font-medium leading-tight">
+                            {t.sla.includes("_") ? statusLabel(t.sla) : t.sla}
+                          </span>
+                        </span>
+                      </span>
+                    </Link>
+                  ))
+                )}
+              </div>
+            </section>
+
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-b from-emerald-50/80 to-base-100 dark:border-emerald-800/50 dark:from-emerald-950/40">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-emerald-200/70 px-3 py-2 dark:border-emerald-800/60">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-emerald-900/80 dark:text-emerald-200">
+                  {secondaryQueueTitle}
+                </h2>
+                <Link
+                  href={secondaryQueueHref}
+                  className="text-[10px] font-medium text-emerald-700 hover:underline dark:text-emerald-300"
+                >
+                  {secondaryQueueLinkLabel ?? `${pendingApprovalsTotal} pending`}
+                </Link>
+              </div>
+              <div className="min-h-0 flex-1 space-y-3 overflow-hidden p-3">
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60">
+                    {secondaryPrimaryHeading}
+                  </p>
+                  {approvals.length === 0 ? (
+                    <p className="text-xs opacity-60">{secondaryPrimaryEmpty}</p>
+                  ) : (
+                    approvals.slice(0, 3).map((item) => (
+                      <Link
+                        key={item.id}
+                        href={item.href}
+                        className="block rounded-xl border border-emerald-100 bg-white/80 px-2.5 py-1.5 shadow-sm transition hover:border-emerald-300 dark:border-emerald-900 dark:bg-base-200/60"
+                      >
+                        <span className="block truncate text-xs font-semibold">{item.label}</span>
+                        <span className="block truncate text-[11px] opacity-70">{item.detail}</span>
+                      </Link>
+                    ))
+                  )}
+                </div>
+
+                <div className="space-y-1.5 border-t border-emerald-200/60 pt-2 dark:border-emerald-800/50">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60">
+                    {secondarySecondaryHeading}
+                  </p>
+                  {hoursAtRisk.length === 0 ? (
+                    <p className="text-xs opacity-60">{secondarySecondaryEmpty}</p>
+                  ) : (
+                    hoursAtRisk.slice(0, 3).map((c) => (
+                      <Link
+                        key={c.id}
+                        href={c.href ?? `/contracts/${c.id}`}
+                        className="block space-y-1 rounded-xl p-1 hover:bg-emerald-100/40 dark:hover:bg-emerald-900/30"
+                      >
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="truncate font-medium">{c.name}</span>
+                          <span className="shrink-0 tabular-nums opacity-70">
+                            {c.meta ?? `${c.used.toFixed(0)}/${c.included.toFixed(0)}h`}
+                          </span>
+                        </div>
+                        {showHoursAsProgress ? (
+                          <div className="h-2 overflow-hidden rounded-full bg-emerald-900/10 dark:bg-emerald-100/10">
+                            <div
+                              className="h-full rounded-full bg-rose-500"
+                              style={{ width: `${Math.min(100, Math.max(8, c.pct))}%` }}
+                            />
+                          </div>
+                        ) : null}
+                        <p className="text-[10px] opacity-60">{c.customer}</p>
+                      </Link>
+                    ))
+                  )}
+                </div>
+              </div>
+            </section>
+          </div>
+        </>
+      )}
     </div>
   );
 }

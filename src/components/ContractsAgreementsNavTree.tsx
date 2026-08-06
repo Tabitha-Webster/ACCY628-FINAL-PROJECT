@@ -36,6 +36,7 @@ export function ContractsAgreementsNavTree({
   showCustomerContractData = false,
   showAwaitingSignature = false,
   showViewEditContracts = false,
+  showRenewals = true,
   onNavigate,
   allowedPageKeys = null,
 }: {
@@ -44,6 +45,7 @@ export function ContractsAgreementsNavTree({
   showCustomerContractData?: boolean;
   showAwaitingSignature?: boolean;
   showViewEditContracts?: boolean;
+  showRenewals?: boolean;
   onNavigate?: () => void;
   allowedPageKeys?: Set<string> | null;
 }) {
@@ -59,12 +61,19 @@ export function ContractsAgreementsNavTree({
         ? [{ href: "/contracts/awaiting-signature", label: "Awaiting Your Signature" }]
         : []),
       ...(showNewContract ? [{ href: "/contracts/new", label: "New Contract" }] : []),
-      { href: "/contracts/renewals", label: "Renewal & Expiration" },
+      ...(showRenewals ? [{ href: "/contracts/renewals", label: "Renewal & Expiration" }] : []),
       ...(showCustomerContractData
         ? [{ href: "/contracts/customers", label: "Customer Contract Data" }]
         : []),
     ],
-    [showReports, showNewContract, showCustomerContractData, showAwaitingSignature, showViewEditContracts]
+    [
+      showReports,
+      showNewContract,
+      showCustomerContractData,
+      showAwaitingSignature,
+      showViewEditContracts,
+      showRenewals,
+    ]
   );
   const links = useMemo(
     () => allLinks.filter((link) => hrefAllowedByPageKeys(link.href, allowedPageKeys)),

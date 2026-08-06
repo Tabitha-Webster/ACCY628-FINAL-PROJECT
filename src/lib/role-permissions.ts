@@ -149,7 +149,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
     label: "Renewal & Expiration",
     description: "Contracts nearing renewal or past end date.",
     pathPrefixes: ["/contracts/renewals"],
-    defaultRoles: ["admin", "manager", "billing", "technician", "executive"],
+    defaultRoles: ["admin", "manager", "billing", "technician"],
     group: "Contracts",
   },
   {

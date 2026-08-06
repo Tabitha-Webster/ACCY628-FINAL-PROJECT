@@ -424,7 +424,6 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/contracts",
       "/customers",
       "/contracts/reports",
-      "/contracts/renewals",
       "/contracts/awaiting-signature",
       "/accounts-receivable",
       "/admin/employees",

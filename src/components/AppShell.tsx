@@ -126,6 +126,7 @@ function SideNav({
                   showNewContract={false}
                   showCustomerContractData={false}
                   showAwaitingSignature
+                  showRenewals={false}
                   onNavigate={onNavigate}
                   allowedPageKeys={allowedPageKeys}
                 />

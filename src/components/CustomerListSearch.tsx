@@ -245,8 +245,12 @@ export function CustomerListSearch({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid gap-3 lg:grid-cols-12">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:col-span-7">
+      <div className={role === "executive" ? "grid gap-3" : "grid gap-3 lg:grid-cols-12"}>
+        <div
+          className={`grid grid-cols-2 gap-3 sm:grid-cols-4 ${
+            role === "executive" ? "" : "lg:col-span-7"
+          }`}
+        >
           {metricTiles.map((m) => {
             const tone = TONE[m.tone];
             return (
@@ -265,35 +269,37 @@ export function CustomerListSearch({
             );
           })}
         </div>
-        <div className="flex min-h-[11rem] flex-col rounded-2xl border border-base-300 bg-base-100 p-3 shadow-sm lg:col-span-5">
-          <p className="mb-0.5 text-xs font-semibold">Status mix</p>
-          <p className="mb-2 text-[10px] opacity-60">How your customer list is distributed</p>
-          <div className="h-40 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={statusMix} layout="vertical" margin={{ top: 4, right: 12, left: 4, bottom: 0 }}>
-                <XAxis type="number" hide domain={[0, Math.ceil(mixMax * 1.15) || 1]} />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={80}
-                  tick={{ fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  cursor={{ fill: "rgba(0,0,0,0.04)" }}
-                  formatter={(value) => [value ?? 0, "Customers"]}
-                  contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                />
-                <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={16}>
-                  {statusMix.map((entry) => (
-                    <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? STATUS_COLORS.Other} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+        {role === "executive" ? null : (
+          <div className="flex min-h-[11rem] flex-col rounded-2xl border border-base-300 bg-base-100 p-3 shadow-sm lg:col-span-5">
+            <p className="mb-0.5 text-xs font-semibold">Status mix</p>
+            <p className="mb-2 text-[10px] opacity-60">How your customer list is distributed</p>
+            <div className="h-40 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={statusMix} layout="vertical" margin={{ top: 4, right: 12, left: 4, bottom: 0 }}>
+                  <XAxis type="number" hide domain={[0, Math.ceil(mixMax * 1.15) || 1]} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={80}
+                    tick={{ fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                    formatter={(value) => [value ?? 0, "Customers"]}
+                    contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                  />
+                  <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={16}>
+                    {statusMix.map((entry) => (
+                      <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? STATUS_COLORS.Other} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-3 rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50/70 to-base-100 p-3 shadow-sm lg:flex-row lg:items-end lg:justify-between">

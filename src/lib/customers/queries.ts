@@ -13,7 +13,7 @@ export const CUSTOMER_MANAGE_ROLES: UserRole[] = ["admin", "manager"];
 export const CUSTOMER_APPROVE_ROLES: UserRole[] = ["admin"];
 
 /** Roles allowed to export the customer list to Excel (Admin matches Manager). */
-export const CUSTOMER_EXPORT_ROLES: UserRole[] = ["admin", "manager", "billing"];
+export const CUSTOMER_EXPORT_ROLES: UserRole[] = ["admin", "manager", "billing", "executive"];
 
 export function canViewCustomers(role: UserRole) {
   return CUSTOMER_VIEW_ROLES.includes(role);

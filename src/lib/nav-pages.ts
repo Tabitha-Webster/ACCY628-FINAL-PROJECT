@@ -79,6 +79,8 @@ export function pagesForRole(
         if (page.href === "/contracts/customers") return role === "admin" || role === "manager";
         if (page.href === "/contracts/awaiting-signature") return role === "executive" || role === "admin";
         if (page.href === "/contracts/view-edit") return role === "admin" || role === "manager";
+        if (page.href === "/contracts/renewals")
+          return role === "admin" || role === "manager" || role === "billing" || role === "technician";
         return true;
       })
     );
