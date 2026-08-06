@@ -248,6 +248,7 @@ const MANAGER_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/customers", label: "Customers" },
   { href: "/customer-approvals", label: "Approvals" },
+  { href: "/admin/employees", label: "Employees" },
   // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
   { href: "/projects", label: "Projects" },
   { href: "/operations", label: "Service Operations" },
@@ -276,9 +277,12 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/admin/exports", label: "CSV Exports" },
     { href: "/admin/exceptions", label: "Exceptions" },
     { href: "/admin/system", label: "System Health" },
-    // Manager nav minus Customers/Approvals (already listed above).
+    // Manager nav minus items already listed above.
     ...MANAGER_NAV.filter(
-      (item) => item.href !== "/customers" && item.href !== "/customer-approvals"
+      (item) =>
+        item.href !== "/customers" &&
+        item.href !== "/customer-approvals" &&
+        item.href !== "/admin/employees"
     ),
     { href: "/ready-to-bill", label: "Ready to Bill" },
     { href: "/invoices", label: "Invoices" },
@@ -305,6 +309,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/dashboard", label: "HR Home" },
     { href: "/customers", label: "Customers" },
     { href: "/customer-approvals", label: "Approvals" },
+    { href: "/admin/employees", label: "Employees" },
     { href: "/hr-analytics", label: "HR Analytics" },
     { href: "/hr-positions", label: "Positions" },
     { href: "/admin/hr", label: "HR Directory" },

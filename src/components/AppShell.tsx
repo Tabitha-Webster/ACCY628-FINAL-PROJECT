@@ -15,9 +15,9 @@ import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
 import { applyPreferencesToDom, loadPreferences } from "@/lib/user-preferences";
 import type { CustomerStatus } from "@/lib/types";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useId, useState } from "react";
 
-const SIDEBAR_COLLAPSED_KEY = "servicesync-sidebar-collapsed";
+const SIDEBAR_COLLAPSED_KEY = "servicesync-sidebar-collapsed-v2";
 
 function SideNav({
   profile,
@@ -25,7 +25,6 @@ function SideNav({
   onNavigate,
   showSettings,
   onOpenSettings,
-  onCollapse,
   restrictedCustomer = false,
 }: {
   profile: Profile;
@@ -33,7 +32,6 @@ function SideNav({
   onNavigate?: () => void;
   showSettings?: boolean;
   onOpenSettings?: () => void;
-  onCollapse?: () => void;
   restrictedCustomer?: boolean;
 }) {
   const nav = restrictedCustomer
@@ -43,43 +41,29 @@ function SideNav({
   const isBilling = profile.role === "billing";
   const isManager = isManagerRole(profile.role);
   const isTechnician = profile.role === "technician";
+  const homeHref = restrictedCustomer ? "/pending-approval" : roleHomePath(profile.role as UserRole);
 
   return (
     <>
       <div className="border-b border-base-300 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <Link
-              href={restrictedCustomer ? "/pending-approval" : roleHomePath(profile.role as UserRole)}
-              className="block outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
-              onClick={onNavigate}
-              aria-label="ServiceSync MSP home"
-            >
-              <Image
-                src="/images/servicesync-msp-logo.png?v=5"
-                alt="ServiceSync MSP"
-                width={1160}
-                height={700}
-                className="sidebar-brand-logo h-auto w-full max-w-[11.5rem] object-contain object-left"
-                sizes="184px"
-                priority
-                unoptimized
-              />
-            </Link>
-            <p className="mt-2 text-xs opacity-60">Contract-to-cash workspace</p>
-          </div>
-          {onCollapse ? (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm btn-square shrink-0"
-              onClick={onCollapse}
-              aria-label="Collapse side menu"
-              title="Collapse side menu"
-            >
-              <PanelLeftClose className="h-4 w-4" />
-            </button>
-          ) : null}
-        </div>
+        <Link
+          href={homeHref}
+          className="block outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+          onClick={onNavigate}
+          aria-label="ServiceSync MSP home"
+        >
+          <Image
+            src="/images/servicesync-msp-logo.png?v=5"
+            alt="ServiceSync MSP"
+            width={1160}
+            height={700}
+            className="sidebar-brand-logo h-auto w-full max-w-[11.5rem] object-contain object-left"
+            sizes="184px"
+            priority
+            unoptimized
+          />
+        </Link>
+        <p className="mt-2 text-xs opacity-60">Contract-to-cash workspace</p>
         <div className="mt-3">
           <span className="badge badge-primary badge-outline">{statusLabel(profile.role)}</span>
         </div>
@@ -149,10 +133,11 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const sidebarId = useId();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsPathname, setSettingsPathname] = useState(pathname);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [sidebarReady, setSidebarReady] = useState(false);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
 
   // Dismiss the settings panel when the route changes.
   if (settingsPathname !== pathname) {
@@ -181,7 +166,7 @@ export function AppShell({
     } catch {
       setSidebarCollapsed(false);
     }
-    setSidebarReady(true);
+    setPrefsLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -199,7 +184,30 @@ export function AppShell({
     };
   }, [settingsOpen]);
 
-  function setCollapsed(next: boolean) {
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "b") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+      event.preventDefault();
+      setSidebarCollapsed((current) => {
+        const next = !current;
+        try {
+          window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
+        } catch {
+          // Ignore storage failures in private browsing.
+        }
+        return next;
+      });
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  function persistCollapsed(next: boolean) {
     setSidebarCollapsed(next);
     try {
       window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
@@ -208,7 +216,7 @@ export function AppShell({
     }
   }
 
-  const showSidebar = !sidebarReady || !sidebarCollapsed;
+  const collapsed = prefsLoaded && sidebarCollapsed;
 
   async function logout() {
     const supabase = createClient();
@@ -219,43 +227,53 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen bg-base-100">
-      <aside
-        className={`app-sidebar sticky top-0 flex h-screen shrink-0 flex-col border-r border-base-300 overflow-hidden transition-[width] duration-200 ease-out ${
-          showSidebar ? "w-72" : "w-0 border-transparent"
-        }`}
-        aria-hidden={!showSidebar}
+      <div
+        className={`relative sticky top-0 z-30 h-screen shrink-0 transition-[width] duration-200 ease-out ${
+          collapsed ? "w-0" : "w-72"
+        } ${prefsLoaded ? "" : "transition-none"}`}
       >
-        <div className={`flex h-full w-72 flex-col ${showSidebar ? "" : "pointer-events-none"}`}>
-          <SideNav
-            profile={profile}
-            pathname={pathname}
-            restrictedCustomer={restrictedCustomer}
-            showSettings
-            onOpenSettings={() => setSettingsOpen(true)}
-            onCollapse={() => setCollapsed(true)}
-          />
-        </div>
-      </aside>
+        {!collapsed ? (
+          <aside
+            id={sidebarId}
+            className="app-sidebar flex h-full w-72 flex-col border-r border-base-300"
+            aria-label="Side menu"
+          >
+            <SideNav
+              profile={profile}
+              pathname={pathname}
+              restrictedCustomer={restrictedCustomer}
+              showSettings
+              onOpenSettings={() => setSettingsOpen(true)}
+            />
+          </aside>
+        ) : null}
+
+        <button
+          type="button"
+          className={`app-sidebar-toggle absolute top-4 z-40 flex size-7 items-center justify-center rounded-full border border-base-300 bg-base-100 text-base-content shadow-sm transition hover:border-primary/50 hover:bg-base-200 ${
+            collapsed ? "left-3" : "-right-3"
+          }`}
+          onClick={() => persistCollapsed(!collapsed)}
+          aria-controls={collapsed ? undefined : sidebarId}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "Expand side menu" : "Collapse side menu"}
+          title={collapsed ? "Expand side menu (Ctrl+B)" : "Collapse side menu (Ctrl+B)"}
+        >
+          {collapsed ? <PanelLeft className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+        </button>
+      </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex flex-wrap items-center gap-3 border-b border-base-300 bg-base-100 px-4 py-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm btn-square"
-              onClick={() => setCollapsed(showSidebar)}
-              aria-label={showSidebar ? "Collapse side menu" : "Expand side menu"}
-              aria-expanded={showSidebar}
-              title={showSidebar ? "Collapse side menu" : "Expand side menu"}
-            >
-              {showSidebar ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
-            </button>
-            <div>
-              <p className="text-sm font-semibold leading-tight">ServiceSync MSP</p>
-              <p className="hidden text-xs opacity-60 sm:block">
-                From service agreement to support, billing, and collection.
-              </p>
-            </div>
+          <div className={`flex min-w-0 items-center gap-2 ${collapsed ? "pl-10" : "pl-3"}`}>
+            {collapsed ? (
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold leading-tight">ServiceSync MSP</p>
+                <p className="hidden truncate text-xs opacity-60 sm:block">
+                  From service agreement to support, billing, and collection.
+                </p>
+              </div>
+            ) : null}
           </div>
           <div className="order-3 flex w-full justify-center md:order-none md:w-auto md:flex-1">
             <DemoRoleSwitcher currentRole={profile.role as UserRole} />
