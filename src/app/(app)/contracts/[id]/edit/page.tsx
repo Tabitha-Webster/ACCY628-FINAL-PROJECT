@@ -23,16 +23,23 @@ export default async function EditContractPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: contractData, error }, { data: customers }, { data: managers }] = await Promise.all([
-    getContractById(supabase, id),
-    supabase.from("customers").select("id, name").order("name"),
-    supabase
-      .from("profiles")
-      .select("id, full_name")
-      .eq("role", "manager")
-      .eq("is_active", true)
-      .order("full_name"),
-  ]);
+  const [{ data: contractData, error }, { data: customers }, { data: managers }, { data: technicians }] =
+    await Promise.all([
+      getContractById(supabase, id),
+      supabase.from("customers").select("id, name").order("name"),
+      supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("role", "manager")
+        .eq("is_active", true)
+        .order("full_name"),
+      supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("role", "technician")
+        .eq("is_active", true)
+        .order("full_name"),
+    ]);
 
   if (!error && !contractData) notFound();
   if (error || !contractData) {
@@ -53,30 +60,43 @@ export default async function EditContractPage({
   const contract = contractData as ContractDetailRow;
   const overagesAllowed =
     contract.overages_allowed ?? Number(contract.additional_hourly_rate ?? 0) > 0;
+  const isDraft = contract.status === "draft";
 
   return (
     <div>
       <div className="mb-4">
-        <Link href={`/contracts/${id}`} className="btn btn-ghost btn-sm">
-          ← Back to contract
+        <Link
+          href={isDraft ? "/contracts?status=draft" : "/contracts/view-edit"}
+          className="btn btn-ghost btn-sm"
+        >
+          {isDraft ? "← Back to drafts" : "← Back to view and edit"}
         </Link>
       </div>
       <ContractForm
         mode="edit"
         profileId={profile.id}
+        profileName={profile.full_name}
         contractId={id}
         currentVersion={Number(contract.version_number ?? 1)}
         customers={customers.map((c) => ({ id: c.id, label: c.name }))}
         managers={(managers ?? []).map((m) => ({ id: m.id, label: m.full_name }))}
+        technicians={(technicians ?? []).map((t) => ({ id: t.id, label: t.full_name }))}
         initialValues={{
           contract_number: contract.contract_number,
           name: contract.name,
           description: contract.description ?? "",
           customer_id: contract.customer_id,
           assigned_manager_id: contract.assigned_manager_id ?? "",
+          assigned_technician_id: contract.assigned_technician_id ?? "",
           sales_representative_id: contract.sales_representative_id ?? "",
           contract_type: contract.contract_type,
           status: contract.status,
+          work_location:
+            contract.work_location === "on_site" || contract.work_location === "remote"
+              ? contract.work_location
+              : contract.onsite_support
+                ? "on_site"
+                : "remote",
           start_date: contract.start_date,
           end_date: contract.end_date ?? "",
           effective_date: contract.effective_date ?? "",

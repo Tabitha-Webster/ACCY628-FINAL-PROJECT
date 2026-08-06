@@ -26,6 +26,7 @@ export type ContractListRow = Pick<
   | "next_invoice_date"
   | "last_invoice_date"
   | "monthly_recurring_fee"
+  | "work_location"
   | "included_hours_per_month"
   | "additional_hourly_rate"
   | "overages_allowed"
@@ -61,7 +62,7 @@ export type ContractDetailRow = Contract & {
 };
 
 const LIST_SELECT =
-  "id, customer_id, contract_number, name, status, contract_type, start_date, end_date, renewal_type, payment_terms, billing_frequency, billing_method, billing_status, next_invoice_date, last_invoice_date, monthly_recurring_fee, included_hours_per_month, additional_hourly_rate, overages_allowed, overage_charges, assigned_manager_id, customers(id, name), assigned_manager:profiles!contracts_assigned_manager_id_fkey(id, full_name)";
+  "id, customer_id, contract_number, name, status, contract_type, start_date, end_date, renewal_type, payment_terms, billing_frequency, billing_method, billing_status, next_invoice_date, last_invoice_date, monthly_recurring_fee, work_location, included_hours_per_month, additional_hourly_rate, overages_allowed, overage_charges, assigned_manager_id, customers(id, name), assigned_manager:profiles!contracts_assigned_manager_id_fkey(id, full_name)";
 
 const DETAIL_SELECT =
   "*, customers(id, name, primary_contact, contact_email, service_address, status), assigned_manager:profiles!contracts_assigned_manager_id_fkey(id, full_name, email), sales_representative:profiles!contracts_sales_representative_id_fkey(id, full_name, email), created_by_profile:profiles!contracts_created_by_fkey(id, full_name, email), updated_by_profile:profiles!contracts_updated_by_fkey(id, full_name, email)";
@@ -78,7 +79,7 @@ export function unwrapCustomer(row: {
 }
 
 export function unwrapAssignedManager<T extends { full_name: string }>(row: {
-  assigned_manager: T | T[] | null;
+  assigned_manager?: T | T[] | null;
 }) {
   return unwrapOne(row.assigned_manager);
 }
@@ -96,8 +97,11 @@ export async function listContracts(supabase: SupabaseClient) {
 export async function listCustomerContracts(supabase: SupabaseClient, customerId: string) {
   return supabase
     .from("contracts")
-    .select("*")
+    .select(
+      "*, assigned_manager:profiles!contracts_assigned_manager_id_fkey(id, full_name)"
+    )
     .eq("customer_id", customerId)
+    .neq("status", "draft" satisfies ContractStatus)
     .order("start_date", { ascending: false });
 }
 

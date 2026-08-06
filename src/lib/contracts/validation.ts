@@ -1,9 +1,10 @@
-import type { BillingStatus, ContractStatus, ContractType, RenewalType } from "@/lib/types";
+import type { BillingStatus, ContractStatus, ContractType, RenewalType, WorkLocation } from "@/lib/types";
 import { CONTRACT_STATUSES, CONTRACT_TYPES, RENEWAL_TYPES } from "./constants";
 import {
   CONTRACT_BILLING_STATUSES,
   defaultNextInvoiceDate,
 } from "./billing";
+import { isWorkLocation } from "./locationPricing";
 
 export type ContractFormValues = {
   contract_number: string;
@@ -11,9 +12,11 @@ export type ContractFormValues = {
   description: string;
   customer_id: string;
   assigned_manager_id: string;
+  assigned_technician_id: string;
   sales_representative_id: string;
   contract_type: ContractType | string;
   status: ContractStatus | string;
+  work_location: WorkLocation | string;
   start_date: string;
   end_date: string;
   effective_date: string;
@@ -61,6 +64,7 @@ const REQUIRED_FIELDS: Array<keyof ContractFormValues> = [
   "customer_id",
   "contract_type",
   "status",
+  "work_location",
   "start_date",
   "monthly_recurring_fee",
   "included_hours_per_month",
@@ -79,9 +83,11 @@ export function emptyContractFormValues(overrides?: Partial<ContractFormValues>)
     description: "",
     customer_id: "",
     assigned_manager_id: "",
+    assigned_technician_id: "",
     sales_representative_id: "",
     contract_type: "managed_support",
     status: "draft",
+    work_location: "remote",
     start_date: "",
     end_date: "",
     effective_date: "",
@@ -142,6 +148,9 @@ export function validateContractFormValues(
   }
   if (values.renewal_type && !RENEWAL_TYPES.includes(values.renewal_type as RenewalType)) {
     fieldErrors.renewal_type = "Select a valid renewal type.";
+  }
+  if (values.work_location && !isWorkLocation(values.work_location)) {
+    fieldErrors.work_location = "Select remote or on-site.";
   }
 
   if (values.start_date && values.end_date) {
@@ -211,6 +220,147 @@ export function validateContractFormValues(
   };
 }
 
+/** Minimal checks for saving an incomplete manager draft (not ready for executive). */
+export function validateContractDraftValues(
+  values: ContractFormValues,
+  options?: {
+    customerExists?: boolean | null;
+    contractNumberUnique?: boolean | null;
+  }
+): ContractFormValidationResult {
+  const fieldErrors: ContractFormFieldErrors = {};
+
+  if (!values.contract_number.trim()) {
+    fieldErrors.contract_number = "Enter a contract number to save a draft.";
+  }
+  if (!values.customer_id.trim()) {
+    fieldErrors.customer_id = "Select or create a customer to save a draft.";
+  }
+  if (values.work_location && !isWorkLocation(values.work_location)) {
+    fieldErrors.work_location = "Select remote or on-site.";
+  }
+  if (values.start_date && values.end_date) {
+    const start = new Date(values.start_date);
+    const end = new Date(values.end_date);
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end < start) {
+      fieldErrors.end_date = "End date cannot be before start date.";
+    }
+  }
+  if (options?.customerExists === false) {
+    fieldErrors.customer_id = "Customer must exist before saving a draft.";
+  }
+  if (options?.contractNumberUnique === false) {
+    fieldErrors.contract_number = "Contract number must be unique.";
+  }
+
+  const keys = Object.keys(fieldErrors);
+  return {
+    ok: keys.length === 0,
+    fieldErrors,
+    formError: keys.length
+      ? "Please fix the highlighted fields before saving the draft."
+      : null,
+  };
+}
+
+const CREATE_STEP_DETAILS_FIELDS: Array<keyof ContractFormValues> = [
+  "contract_number",
+  "name",
+  "contract_type",
+  "work_location",
+  "start_date",
+];
+
+const CREATE_STEP_BILLING_FIELDS: Array<keyof ContractFormValues> = [
+  "monthly_recurring_fee",
+  "included_hours_per_month",
+];
+
+/** Per-step checks for the new-contract wizard (create mode only). */
+export function validateCreateContractStep(
+  step: 0 | 1 | 2,
+  values: ContractFormValues,
+  options?: {
+    customerSource?: "existing" | "new";
+    newCustomerName?: string;
+    customerExists?: boolean | null;
+    contractNumberUnique?: boolean | null;
+  }
+): ContractFormValidationResult {
+  const fieldErrors: ContractFormFieldErrors = {};
+
+  if (step === 0) {
+    for (const field of CREATE_STEP_DETAILS_FIELDS) {
+      const value = values[field];
+      if (typeof value === "string" && !value.trim()) {
+        fieldErrors[field] = "This field is required.";
+      }
+    }
+    if (options?.customerSource === "new") {
+      if (!options.newCustomerName?.trim()) {
+        fieldErrors.customer_id = "Enter a customer name.";
+      }
+    } else if (!values.customer_id.trim()) {
+      fieldErrors.customer_id = "This field is required.";
+    }
+    if (values.work_location && !isWorkLocation(values.work_location)) {
+      fieldErrors.work_location = "Select remote or on-site.";
+    }
+    if (values.start_date && values.end_date) {
+      const start = new Date(values.start_date);
+      const end = new Date(values.end_date);
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end < start) {
+        fieldErrors.end_date = "End date cannot be before start date.";
+      }
+    }
+    if (options?.customerExists === false) {
+      fieldErrors.customer_id = "Selected customer was not found.";
+    }
+    if (options?.contractNumberUnique === false) {
+      fieldErrors.contract_number = "Contract number must be unique.";
+    }
+  }
+
+  if (step === 1) {
+    for (const field of CREATE_STEP_BILLING_FIELDS) {
+      const value = values[field];
+      if (typeof value === "string" && !value.trim()) {
+        fieldErrors[field] = "This field is required.";
+      }
+    }
+    const monthlyFee = parseNumber(values.monthly_recurring_fee);
+    if (monthlyFee == null) {
+      fieldErrors.monthly_recurring_fee = "Enter a valid monthly fee.";
+    } else if (monthlyFee < 0) {
+      fieldErrors.monthly_recurring_fee = "Monthly fee cannot be negative.";
+    }
+    const includedHours = parseNumber(values.included_hours_per_month);
+    if (includedHours == null) {
+      fieldErrors.included_hours_per_month = "Enter valid support hours.";
+    } else if (includedHours < 0) {
+      fieldErrors.included_hours_per_month = "Support hours cannot be negative.";
+    }
+    const hourlyRate = parseNumber(values.additional_hourly_rate);
+    if (values.overages_allowed) {
+      if (hourlyRate == null) {
+        fieldErrors.additional_hourly_rate = "Hourly rate is required when overages are allowed.";
+      } else if (hourlyRate <= 0) {
+        fieldErrors.additional_hourly_rate =
+          "Hourly rate must be greater than zero if overages are allowed.";
+      }
+    }
+  }
+
+  // Step 2 (coverage) has no hard-required fields.
+
+  const keys = Object.keys(fieldErrors);
+  return {
+    ok: keys.length === 0,
+    fieldErrors,
+    formError: keys.length ? "Complete the required fields before continuing." : null,
+  };
+}
+
 export function contractFormToPayload(
   values: ContractFormValues,
   profileId: string,
@@ -233,9 +383,13 @@ export function contractFormToPayload(
     description: nullable(values.description),
     customer_id: values.customer_id,
     assigned_manager_id: nullable(values.assigned_manager_id),
+    assigned_technician_id: nullable(values.assigned_technician_id),
     sales_representative_id: nullable(values.sales_representative_id),
     contract_type: values.contract_type,
     status: values.status,
+    work_location: isWorkLocation(values.work_location) ? values.work_location : "remote",
+    remote_support: values.work_location === "remote",
+    onsite_support: values.work_location === "on_site",
     start_date: values.start_date,
     end_date: nullable(values.end_date),
     effective_date: nullable(values.effective_date) ?? values.start_date,

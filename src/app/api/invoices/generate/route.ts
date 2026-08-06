@@ -11,6 +11,7 @@ import {
   projectBillingBlockReason,
   timeEntryBillingBlockReason,
 } from "@/lib/billing-eligibility";
+import { billedMonthlyRecurringFee } from "@/lib/contracts";
 
 type RequestedItem = {
   type: "time_entry" | "direct_cost" | "project" | "milestone" | "recurring";
@@ -104,7 +105,7 @@ export async function POST(request: Request) {
     recurringIds.length > 0
       ? supabase
           .from("contracts")
-          .select("id, customer_id, name, status, monthly_recurring_fee, billing_timing, payment_terms")
+          .select("id, customer_id, name, status, monthly_recurring_fee, work_location, billing_timing, payment_terms")
           .in("id", recurringIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
@@ -274,7 +275,7 @@ export async function POST(request: Request) {
   for (const contract of recurringContracts) {
     if (contract.customer_id !== customerId) conflicts.push(`Contract "${contract.name}" belongs to a different customer.`);
     if (contract.status !== "active") conflicts.push(`Contract "${contract.name}" is not active.`);
-    if (Number(contract.monthly_recurring_fee ?? 0) <= 0)
+    if (billedMonthlyRecurringFee(contract) <= 0)
       conflicts.push(`Contract "${contract.name}" has no monthly fee to bill.`);
   }
 
@@ -392,7 +393,7 @@ export async function POST(request: Request) {
     });
   }
   for (const contract of recurringContracts) {
-    const amount = Number(contract.monthly_recurring_fee ?? 0);
+    const amount = billedMonthlyRecurringFee(contract);
     drafts.push({
       ...makeInvoiceLine({
         description: `${contract.name} monthly support fee (${billingPeriodStart} to ${billingPeriodEnd})`,
@@ -543,7 +544,7 @@ export async function POST(request: Request) {
     else if (!updated?.length) updateErrors.push(`Milestone "${milestone.name}" was billed by another invoice.`);
   }
   for (const contract of recurringContracts) {
-    const amount = Number(contract.monthly_recurring_fee ?? 0);
+    const amount = billedMonthlyRecurringFee(contract);
     const recognition = contract.billing_timing === "in_advance" ? "deferred" : "earned";
     const { error } = await supabase.from("revenue_records").insert({
       customer_id: customerId,

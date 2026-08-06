@@ -11,6 +11,8 @@ export type PagePermissionKey =
   | "contracts"
   | "contracts_reports"
   | "contracts_renewals"
+  | "contracts_awaiting_signature"
+  | "contracts_view_edit"
   | "contracts_customers"
   | "contracts_new"
   | "projects"
@@ -72,7 +74,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
     label: "Home / Dashboard",
     description: "Role home page and primary landing screen.",
     pathPrefixes: ["/dashboard"],
-    defaultRoles: ["manager", "technician", "billing", "customer", "hr", "admin"],
+    defaultRoles: ["manager", "technician", "billing", "customer", "hr", "admin", "executive"],
     group: "Core",
   },
   {
@@ -107,7 +109,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
     label: "Employees",
     description: "Internal employee directory.",
     pathPrefixes: ["/admin/employees"],
-    defaultRoles: ["admin"],
+    defaultRoles: ["admin", "manager", "hr", "executive"],
     group: "Company Directory",
   },
   {
@@ -115,7 +117,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
     label: "Customers",
     description: "Customer master list and customer records.",
     pathPrefixes: ["/customers"],
-    defaultRoles: ["admin", "manager", "technician", "billing", "hr"],
+    defaultRoles: ["admin", "manager", "technician", "billing", "hr", "executive"],
     group: "Company Directory",
   },
   {
@@ -131,7 +133,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
     label: "Manage Contracts",
     description: "Contract list and contract detail screens.",
     pathPrefixes: ["/contracts"],
-    defaultRoles: ["admin", "manager", "technician", "billing", "hr"],
+    defaultRoles: ["admin", "manager", "technician", "billing", "hr", "executive"],
     group: "Contracts",
   },
   {
@@ -139,7 +141,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
     label: "Contracts Dashboard",
     description: "Contract metrics and reporting.",
     pathPrefixes: ["/contracts/reports"],
-    defaultRoles: ["admin", "manager", "billing"],
+    defaultRoles: ["admin", "manager", "billing", "executive"],
     group: "Contracts",
   },
   {
@@ -147,7 +149,23 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
     label: "Renewal & Expiration",
     description: "Contracts nearing renewal or past end date.",
     pathPrefixes: ["/contracts/renewals"],
-    defaultRoles: ["admin", "manager", "billing", "technician"],
+    defaultRoles: ["admin", "manager", "billing", "technician", "executive"],
+    group: "Contracts",
+  },
+  {
+    key: "contracts_awaiting_signature",
+    label: "Awaiting Your Signature",
+    description: "Executive queue of contracts waiting for CEO signature.",
+    pathPrefixes: ["/contracts/awaiting-signature"],
+    defaultRoles: ["executive", "admin"],
+    group: "Contracts",
+  },
+  {
+    key: "contracts_view_edit",
+    label: "View and Edit Contracts",
+    description: "Simple contract list with PDF view and stepped edit.",
+    pathPrefixes: ["/contracts/view-edit"],
+    defaultRoles: ["admin", "manager"],
     group: "Contracts",
   },
   {
@@ -259,7 +277,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
     label: "Accounts Receivable",
     description: "Open AR, aging, and collection status.",
     pathPrefixes: ["/accounts-receivable"],
-    defaultRoles: ["admin", "billing", "manager"],
+    defaultRoles: ["admin", "billing", "manager", "executive"],
     group: "Billing",
   },
   {

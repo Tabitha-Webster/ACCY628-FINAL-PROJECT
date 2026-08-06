@@ -12,17 +12,27 @@ export default async function NewContractPage() {
   if (!canCreateContracts(profile.role)) redirect("/contracts/reports");
 
   const supabase = await createClient();
-  const [{ data: customers, error: customersError }, { data: managers }, { data: numbers }] =
-    await Promise.all([
-      supabase.from("customers").select("id, name").order("name"),
-      supabase
-        .from("profiles")
-        .select("id, full_name")
-        .eq("role", "manager")
-        .eq("is_active", true)
-        .order("full_name"),
-      supabase.from("contracts").select("contract_number"),
-    ]);
+  const [
+    { data: customers, error: customersError },
+    { data: managers },
+    { data: technicians },
+    { data: numbers },
+  ] = await Promise.all([
+    supabase.from("customers").select("id, name").order("name"),
+    supabase
+      .from("profiles")
+      .select("id, full_name")
+      .eq("role", "manager")
+      .eq("is_active", true)
+      .order("full_name"),
+    supabase
+      .from("profiles")
+      .select("id, full_name")
+      .eq("role", "technician")
+      .eq("is_active", true)
+      .order("full_name"),
+    supabase.from("contracts").select("contract_number"),
+  ]);
 
   if (customersError) {
     return <ErrorState message={customersError.message} />;
@@ -35,15 +45,17 @@ export default async function NewContractPage() {
   return (
     <div>
       <div className="mb-4">
-        <Link href="/contracts/reports" className="btn btn-ghost btn-sm">
-          ← Back to dashboard
+        <Link href="/contracts" className="btn btn-ghost btn-sm">
+          ← Back to contracts
         </Link>
       </div>
       <ContractForm
         mode="create"
         profileId={profile.id}
+        profileName={profile.full_name}
         customers={(customers ?? []).map((c) => ({ id: c.id, label: c.name }))}
         managers={(managers ?? []).map((m) => ({ id: m.id, label: m.full_name }))}
+        technicians={(technicians ?? []).map((t) => ({ id: t.id, label: t.full_name }))}
         initialValues={{
           contract_number: suggestedNumber,
           assigned_manager_id: profile.id,

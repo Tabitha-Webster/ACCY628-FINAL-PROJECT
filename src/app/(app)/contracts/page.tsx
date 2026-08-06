@@ -105,10 +105,21 @@ export default async function ContractsPage({ searchParams }: { searchParams: Se
       ) : null}
 
       {!error ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+          <Link href="/contracts" className="block">
+            <StatCard
+              label="All contracts"
+              value={String(contracts.length)}
+              tone={!statusFilter ? "info" : "default"}
+            />
+          </Link>
           {(Object.entries(statusCounts) as [ContractStatus, number][]).map(([status, count]) => (
             <Link key={status} href={`/contracts?status=${status}`} className="block">
-              <StatCard label={status.replace(/_/g, " ")} value={String(count)} />
+              <StatCard
+                label={status.replace(/_/g, " ")}
+                value={String(count)}
+                tone={statusFilter === status ? "info" : "default"}
+              />
             </Link>
           ))}
         </div>

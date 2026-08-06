@@ -49,6 +49,7 @@ export type ContractType =
   | "managed_plus_project"
   | "pass_through";
 export type RenewalType = "auto" | "manual" | "none";
+export type WorkLocation = "remote" | "on_site";
 export type BillingFrequency = "monthly" | "quarterly" | "annual" | "one_time";
 export type BillingTiming = "in_advance" | "in_arrears";
 export type RevenueRecognition = "earned" | "deferred" | "unbilled";
@@ -97,6 +98,7 @@ export type Contract = {
   renewal_type: RenewalType | string | null;
   cancellation_notice_days: number | null;
   assigned_manager_id: string | null;
+  assigned_technician_id: string | null;
   sales_representative_id: string | null;
   description: string | null;
   scope: string | null;
@@ -106,6 +108,7 @@ export type Contract = {
   additional_hourly_rate: number;
   overages_allowed: boolean | null;
   overage_charges: number | null;
+  work_location: WorkLocation | string | null;
   sla_response_hours: number | null;
   sla_resolution_hours: number | null;
   sla_critical_response_hours: number | null;

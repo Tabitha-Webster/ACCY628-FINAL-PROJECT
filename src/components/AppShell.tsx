@@ -48,6 +48,7 @@ function SideNav({
   const isManager = isManagerRole(profile.role);
   const isTechnician = profile.role === "technician";
   const isAdmin = profile.role === "admin";
+  const isExecutive = profile.role === "executive";
   const homeHref = restrictedCustomer ? "/pending-approval" : roleHomePath(profile.role as UserRole);
 
   function canShowHref(href: string) {
@@ -110,6 +111,17 @@ function SideNav({
                   showReports
                   showNewContract
                   showCustomerContractData
+                  showViewEditContracts
+                  onNavigate={onNavigate}
+                  allowedPageKeys={allowedPageKeys}
+                />
+              ) : null}
+              {!restrictedCustomer && isExecutive && item.href === "/customers" ? (
+                <ContractsAgreementsNavTree
+                  showReports
+                  showNewContract={false}
+                  showCustomerContractData={false}
+                  showAwaitingSignature
                   onNavigate={onNavigate}
                   allowedPageKeys={allowedPageKeys}
                 />

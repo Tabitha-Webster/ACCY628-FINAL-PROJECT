@@ -10,13 +10,20 @@ export type EmployeeRow = {
   full_name: string;
   title: string;
   department: string;
-  role: "admin" | "manager" | "technician" | "billing" | "hr";
+  role: "admin" | "manager" | "executive" | "technician" | "billing" | "hr";
   email: string | null;
   notes: string | null;
   is_active: boolean;
 };
 
-const EMPLOYEE_ROLES: EmployeeRow["role"][] = ["admin", "manager", "technician", "billing", "hr"];
+const EMPLOYEE_ROLES: EmployeeRow["role"][] = [
+  "admin",
+  "manager",
+  "executive",
+  "technician",
+  "billing",
+  "hr",
+];
 
 const EMPTY_FORM = {
   full_name: "",

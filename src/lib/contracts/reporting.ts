@@ -2,6 +2,7 @@ import type { Contract, ContractStatus, SupportTicket } from "@/lib/types";
 import { daysUntilDate, isRenewableContract } from "./renewals";
 import { CONTRACT_EXPIRY_WARNING_DAYS } from "./constants";
 import { slaStatus, usagePercentage, usageStatus } from "@/lib/calculations";
+import { billedMonthlyRecurringFee } from "./locationPricing";
 
 export type ContractReportRow = Pick<
   Contract,
@@ -14,6 +15,7 @@ export type ContractReportRow = Pick<
   | "end_date"
   | "renewal_type"
   | "monthly_recurring_fee"
+  | "work_location"
   | "included_hours_per_month"
   | "billing_frequency"
 >;
@@ -111,7 +113,7 @@ export function buildContractReportMetrics(input: {
   const activeContracts = input.contracts.filter((c) => c.status === "active").length;
 
   const monthlyRecurringRevenue = activeLike.reduce(
-    (sum, c) => sum + Number(c.monthly_recurring_fee ?? 0),
+    (sum, c) => sum + billedMonthlyRecurringFee(c),
     0
   );
   const annualContractValue = monthlyRecurringRevenue * 12;

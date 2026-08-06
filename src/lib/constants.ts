@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "manager" | "technician" | "billing" | "customer" | "hr";
+export type UserRole = "admin" | "manager" | "technician" | "billing" | "customer" | "hr" | "executive";
 
 export type Profile = {
   id: string;
@@ -15,6 +15,7 @@ export type Profile = {
 export const ASSIGNABLE_ROLES: UserRole[] = [
   "admin",
   "manager",
+  "executive",
   "technician",
   "billing",
   "customer",
@@ -25,6 +26,7 @@ export const ASSIGNABLE_ROLES: UserRole[] = [
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Admin",
   manager: "Manager",
+  executive: "Executive",
   technician: "Technician",
   billing: "Billing",
   customer: "Customer",
@@ -63,16 +65,16 @@ export const ROLE_ACCESS_MATRIX: {
   customerData: boolean;
 }[] = [
   {
-    area: "Executive Dashboard",
+    area: "Manager & Executive Dashboards",
     description: "Company-wide KPIs and exception highlights",
-    roles: ["admin", "manager"],
+    roles: ["admin", "manager", "executive"],
     financial: true,
     customerData: true,
   },
   {
     area: "Customers & Contracts",
     description: "Customer master data and contract terms",
-    roles: ["admin", "manager", "billing", "technician"],
+    roles: ["admin", "manager", "executive", "billing", "technician"],
     financial: true,
     customerData: true,
   },
@@ -136,6 +138,13 @@ export const DEMO_ACCOUNTS = [
     name: "Emilie Pierson",
   },
   {
+    role: "executive" as UserRole,
+    label: "Executive",
+    email: "executive@servicesync.demo",
+    password: "1234",
+    name: "Evan Bean",
+  },
+  {
     role: "technician" as UserRole,
     label: "Technician",
     email: "tech@servicesync.demo",
@@ -196,6 +205,15 @@ export const COMPANY_EMPLOYEES: CompanyEmployee[] = [
     role: "manager",
   },
   {
+    name: "Evan Bean",
+    title: "Chief Executive Officer",
+    department: "Executive Office",
+    hasLogin: true,
+    sharesRoleLogin: false,
+    email: "executive@servicesync.demo",
+    role: "executive",
+  },
+  {
     name: "Jackson Pecunia",
     title: "Lead Technician",
     department: "Service Delivery",
@@ -240,15 +258,6 @@ export const COMPANY_EMPLOYEES: CompanyEmployee[] = [
     email: "billing@servicesync.demo",
     role: "billing",
   },
-  {
-    name: "Evan Bean",
-    title: "Account Manager",
-    department: "Project Delivery",
-    hasLogin: true,
-    sharesRoleLogin: true,
-    email: "manager@servicesync.demo",
-    role: "manager",
-  },
 ];
 
 export type NavItem = {
@@ -259,7 +268,7 @@ export type NavItem = {
 };
 
 const MANAGER_NAV: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard", label: "Manager Dashboard" },
   { href: "/customers", label: "Customers" },
   { href: "/customer-approvals", label: "Approvals" },
   { href: "/admin/employees", label: "Employees" },
@@ -285,6 +294,13 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/controls", label: "Controls and Exceptions" },
   ],
   manager: MANAGER_NAV,
+  executive: [
+    { href: "/dashboard", label: "Executive Dashboard" },
+    { href: "/customers", label: "Customers" },
+    { href: "/admin/employees", label: "Employees" },
+    { href: "/accounts-receivable", label: "Accounts Receivable" },
+    // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
+  ],
   technician: [
     { href: "/dashboard", label: "My Assignments" },
     { href: "/assignments", label: "Assignments Workbench" },
@@ -335,6 +351,12 @@ export const CONTRACTS_NAV_COPY: Record<
     description:
       "Manage the full agreement lifecycle — draft, approval, active service, holds, renewals, and cancellations.",
   },
+  executive: {
+    href: "/contracts/awaiting-signature",
+    title: "Contracts for Signature",
+    description:
+      "Review contracts awaiting executive signature, add your signature, and release them to the customer.",
+  },
   technician: {
     href: "/contracts",
     title: "Contracts & Agreements",
@@ -356,7 +378,7 @@ export const CONTRACTS_NAV_COPY: Record<
     href: "/my-contracts",
     title: "My Contracts",
     description:
-      "View the service agreements for your organization, including fees, included hours, and covered services.",
+      "View your organization's service agreements, download or print PDFs, and sign when a new agreement is ready.",
   },
 };
 
@@ -405,6 +427,15 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/billing-collections",
     ],
     manager: managerShared,
+    executive: [
+      "/contracts",
+      "/customers",
+      "/contracts/reports",
+      "/contracts/renewals",
+      "/contracts/awaiting-signature",
+      "/accounts-receivable",
+      "/admin/employees",
+    ],
     technician: ["/contracts", "/customers", "/assignments"],
     billing: [
       "/customers",

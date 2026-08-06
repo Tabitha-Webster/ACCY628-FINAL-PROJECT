@@ -30,7 +30,7 @@ import {
   localDateKeyFromIso,
 } from "@/lib/sla";
 import { formatCurrency } from "@/lib/format";
-import { fetchContractReportMetrics } from "@/lib/contracts";
+import { fetchContractReportMetrics, listAwaitingExecutiveSignatures } from "@/lib/contracts";
 import { round2, withDerivedInvoiceStatus } from "@/lib/billing";
 import { loadBillingReviewData } from "@/lib/billing-review-data";
 import {
@@ -107,6 +107,7 @@ export default async function DashboardPage({
 
   if (profile.role === "admin") redirect("/admin");
   if (profile.role === "manager") return <ManagerDashboard profile={profile} />;
+  if (profile.role === "executive") return <ExecutiveDashboard profile={profile} />;
   if (profile.role === "technician") return <TechnicianDashboard profile={profile} />;
   if (profile.role === "billing") {
     const params = await searchParams;
@@ -115,6 +116,268 @@ export default async function DashboardPage({
   if (profile.role === "hr") return <HrDashboard profile={profile} />;
   if (profile.role === "customer") return <CustomerDashboard profile={profile} />;
   redirect("/login");
+}
+
+// ---------------------------------------------------------------------------
+// Executive
+// ---------------------------------------------------------------------------
+
+async function ExecutiveDashboard({ profile }: { profile: Profile }) {
+  const supabase = await createClient();
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const [
+    { data: pending },
+    { count: activeContractsCount },
+    { data: activeContractRows },
+    { count: activeCustomersCount },
+    { data: activeCustomerRows },
+    { data: invoiceRows },
+    { count: awaitingCustomerCount },
+  ] = await Promise.all([
+    listAwaitingExecutiveSignatures(supabase).then((res) => ({ data: res.data })),
+    supabase
+      .from("contracts")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active"),
+    supabase
+      .from("contracts")
+      .select("id, contract_number, name, monthly_recurring_fee, end_date, customer_id")
+      .eq("status", "active")
+      .order("name"),
+    supabase
+      .from("customers")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active"),
+    supabase.from("customers").select("id, name").eq("status", "active").order("name"),
+    supabase
+      .from("invoices")
+      .select("id, invoice_number, status, remaining_balance, due_date, customers(name)"),
+    supabase
+      .from("contract_signature_packets")
+      .select("id", { count: "exact", head: true })
+      .eq("is_current", true)
+      .eq("status", "awaiting_customer"),
+  ]);
+
+  const openInvoices = (invoiceRows ?? []).filter(
+    (invoice) =>
+      !["draft", "canceled", "paid"].includes(invoice.status) &&
+      Number(invoice.remaining_balance) > 0.01
+  );
+  const totalAr = openInvoices.reduce((sum, invoice) => sum + Number(invoice.remaining_balance), 0);
+  const overdueAr = openInvoices
+    .filter((invoice) => invoice.due_date != null && invoice.due_date < todayStr)
+    .reduce((sum, invoice) => sum + Number(invoice.remaining_balance), 0);
+
+  const mrr = (activeContractRows ?? []).reduce(
+    (sum, contract) => sum + Number(contract.monthly_recurring_fee ?? 0),
+    0
+  );
+
+  const in90 = new Date();
+  in90.setDate(in90.getDate() + 90);
+  const in90Key = in90.toISOString().slice(0, 10);
+  const expiringSoon = (activeContractRows ?? []).filter(
+    (contract) => contract.end_date && contract.end_date >= todayStr && contract.end_date <= in90Key
+  );
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Executive Dashboard"
+        description={`Welcome, ${profile.full_name}. Review agreements that need your signature, then scan company health across contracts, customers, and receivables.`}
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Awaiting your signature"
+          value={String(pending.length)}
+          tone={pending.length ? "warning" : "success"}
+          explanation={{
+            title: "Awaiting your signature",
+            result: String(pending.length),
+            formula: "Current signature packets in awaiting_executive (plus pending contracts not yet released to the customer)",
+            lines: pending.slice(0, 20).map((item) => ({
+              label: `${item.contractNumber} · ${item.contractName}`,
+              value: item.readyToSign ? "Ready to sign" : "Needs manager sign",
+              detail: item.customerName,
+            })),
+          }}
+        />
+        <StatCard
+          label="Awaiting customer signature"
+          value={String(awaitingCustomerCount ?? 0)}
+          tone={(awaitingCustomerCount ?? 0) > 0 ? "info" : "default"}
+          explanation={{
+            title: "Awaiting customer signature",
+            result: String(awaitingCustomerCount ?? 0),
+            formula: "Current signature packets where status = awaiting_customer",
+            lines: [],
+          }}
+        />
+        <StatCard
+          label="Active contracts"
+          value={String(activeContractsCount ?? 0)}
+          explanation={{
+            title: "Active contracts",
+            result: String(activeContractsCount ?? 0),
+            formula: "Count of contracts where status = active",
+            lines: (activeContractRows ?? []).slice(0, 20).map((contract) => ({
+              label: contract.name,
+              value: contract.contract_number,
+              detail: formatCurrency(Number(contract.monthly_recurring_fee ?? 0)) + " MRR",
+            })),
+          }}
+        />
+        <StatCard
+          label="Active customers"
+          value={String(activeCustomersCount ?? 0)}
+          explanation={{
+            title: "Active customers",
+            result: String(activeCustomersCount ?? 0),
+            formula: "Count of customers where status = active",
+            lines: (activeCustomerRows ?? []).slice(0, 20).map((customer) => ({
+              label: customer.name ?? "Customer",
+              value: "Active",
+            })),
+          }}
+        />
+        <StatCard
+          label="Total accounts receivable"
+          value={formatCurrency(totalAr)}
+          tone={totalAr > 0 ? "warning" : "success"}
+          explanation={{
+            title: "Total accounts receivable",
+            result: formatCurrency(totalAr),
+            formula: "Sum of remaining_balance on invoices that are not draft, canceled, or paid and still have a balance",
+            lines: openInvoices.slice(0, 20).map((invoice) => {
+              const customer = Array.isArray(invoice.customers)
+                ? invoice.customers[0]
+                : invoice.customers;
+              return {
+                label: invoice.invoice_number,
+                value: formatCurrency(Number(invoice.remaining_balance)),
+                detail: customer?.name ?? "Customer",
+              };
+            }),
+          }}
+        />
+        <StatCard
+          label="Overdue AR"
+          value={formatCurrency(overdueAr)}
+          tone={overdueAr > 0 ? "error" : "success"}
+          explanation={{
+            title: "Overdue AR",
+            result: formatCurrency(overdueAr),
+            formula: "Sum of remaining_balance on open invoices with due_date before today",
+            lines: openInvoices
+              .filter((invoice) => invoice.due_date != null && invoice.due_date < todayStr)
+              .slice(0, 20)
+              .map((invoice) => {
+                const customer = Array.isArray(invoice.customers)
+                  ? invoice.customers[0]
+                  : invoice.customers;
+                return {
+                  label: invoice.invoice_number,
+                  value: formatCurrency(Number(invoice.remaining_balance)),
+                  detail: `${customer?.name ?? "Customer"} · due ${invoice.due_date}`,
+                };
+              }),
+          }}
+        />
+        <StatCard
+          label="Active contract MRR"
+          value={formatCurrency(mrr)}
+          explanation={{
+            title: "Active contract MRR",
+            result: formatCurrency(mrr),
+            formula: "Sum of monthly_recurring_fee on contracts where status = active",
+            lines: (activeContractRows ?? [])
+              .filter((contract) => Number(contract.monthly_recurring_fee ?? 0) > 0)
+              .slice(0, 20)
+              .map((contract) => ({
+                label: contract.name,
+                value: formatCurrency(Number(contract.monthly_recurring_fee ?? 0)),
+                detail: contract.contract_number,
+              })),
+          }}
+        />
+        <StatCard
+          label="Expiring in 90 days"
+          value={String(expiringSoon.length)}
+          tone={expiringSoon.length ? "warning" : "success"}
+          explanation={{
+            title: "Expiring in 90 days",
+            result: String(expiringSoon.length),
+            formula: "Active contracts with end_date between today and 90 days from now",
+            lines: expiringSoon.slice(0, 20).map((contract) => ({
+              label: contract.name,
+              value: contract.end_date ?? "—",
+              detail: contract.contract_number,
+            })),
+          }}
+        />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Link href="/contracts/awaiting-signature" className="btn btn-primary btn-sm">
+          Awaiting your signature
+        </Link>
+        <Link href="/contracts?status=pending_approval" className="btn btn-outline btn-sm">
+          View pending contracts
+        </Link>
+        <Link href="/contracts?status=active" className="btn btn-ghost btn-sm border border-base-300">
+          Active contracts
+        </Link>
+        <Link href="/customers" className="btn btn-ghost btn-sm border border-base-300">
+          Customers
+        </Link>
+        <Link href="/accounts-receivable" className="btn btn-ghost btn-sm border border-base-300">
+          Accounts receivable
+        </Link>
+      </div>
+
+      <section>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">
+            Awaiting executive signature
+          </h2>
+          {pending.length > 0 ? (
+            <Link href="/contracts/awaiting-signature" className="link link-hover text-sm">
+              View all
+            </Link>
+          ) : null}
+        </div>
+        {pending.length === 0 ? (
+          <p className="text-sm opacity-60">No contracts are waiting for your signature right now.</p>
+        ) : (
+          <div className="space-y-3">
+            {pending.slice(0, 5).map((item) => (
+              <div key={item.id} className="rounded-box border border-base-300 bg-base-100 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium">
+                      {item.contractNumber} · {item.contractName}
+                    </p>
+                    <p className="text-xs opacity-60">
+                      {item.customerName} ·{" "}
+                      {item.readyToSign ? `signed by ${item.managerName}` : `manager: ${item.managerName}`}
+                      {item.signedAt ? ` · ${new Date(item.signedAt).toLocaleString()}` : ""}
+                      {!item.readyToSign ? " · manager signature may still be needed" : ""}
+                    </p>
+                  </div>
+                  <Link href={`/contracts/${item.contractId}#pdf-signatures`} className="btn btn-primary btn-sm">
+                    {item.readyToSign ? "Review & sign" : "Open contract"}
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -352,7 +615,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
   return (
     <div>
       <PageHeader
-        title="Executive Dashboard"
+        title="Manager Dashboard"
         description={`Welcome back, ${profile.full_name}. Here's how ServiceSync is performing.`}
       />
 

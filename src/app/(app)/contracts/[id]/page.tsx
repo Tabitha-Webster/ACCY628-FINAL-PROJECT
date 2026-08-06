@@ -34,6 +34,11 @@ import {
   listContractServices,
   listContractVersions,
   recurringAmountForPeriod,
+  billedMonthlyRecurringFee,
+  billedHourlyRate,
+  WORK_LOCATION_LABELS,
+  workLocationAdjustmentLabel,
+  isWorkLocation,
   syncContractReminders,
   getContractPermissions,
   unwrapAssignedManager,
@@ -42,12 +47,14 @@ import {
   type ContractCustomerJoin,
   type ContractDetailRow,
 } from "@/lib/contracts";
+import type { ContractSignaturePacket } from "@/lib/contracts/signature-packets";
 import { ContractDocumentsPanel } from "@/components/ContractDocumentsPanel";
 import { ContractChangesPanel } from "@/components/ContractChangesPanel";
 import { ContractRenewalsPanel } from "@/components/ContractRenewalsPanel";
 import { ContractLifecycleActions } from "@/components/ContractLifecycleActions";
 import { EditContractButton } from "@/components/EditContractButton";
 import { ContractModificationsPanel } from "@/components/ContractModificationsPanel";
+import { ContractSignatureWorkflow } from "@/components/ContractSignatureWorkflow";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -123,7 +130,6 @@ export default async function ContractDetailPage({
   const createdBy = unwrapProfile(contract.created_by_profile);
   const updatedBy = unwrapProfile(contract.updated_by_profile);
   const status = contract.status as ContractStatus;
-  const statusLabelText = CONTRACT_STATUS_LABELS[status] ?? statusLabel(status);
   const permissions = getContractPermissions(profile.role);
   const managerCanEdit = permissions.edit;
   const allWarnings = getContractWarnings(contract);
@@ -150,7 +156,7 @@ export default async function ContractDetailPage({
   const renewalDate = getContractRenewalDate(contract);
   const autoRenew = (contract.renewal_type ?? "").toLowerCase() === "auto";
 
-  const [related, servicesResult, modificationsResult, documentsResult, versionsResult, changesResult] =
+  const [related, servicesResult, modificationsResult, documentsResult, versionsResult, changesResult, packetRes] =
     await Promise.all([
       getContractRelatedWork(supabase, id),
       listContractServices(supabase, [id]),
@@ -158,6 +164,12 @@ export default async function ContractDetailPage({
       listContractDocuments(supabase, id),
       listContractVersions(supabase, id),
       listContractChanges(supabase, id),
+      supabase
+        .from("contract_signature_packets")
+        .select("*")
+        .eq("contract_id", id)
+        .eq("is_current", true)
+        .maybeSingle(),
     ]);
 
   await syncContractReminders(supabase, {
@@ -184,6 +196,11 @@ export default async function ContractDetailPage({
   const documents = documentsResult.data ?? [];
   const versions = versionsResult.data ?? [];
   const changes = changesResult.data ?? [];
+  const signaturePacket = (packetRes.data as ContractSignaturePacket | null) ?? null;
+  const statusLabelText =
+    status === "pending_approval" && signaturePacket?.status === "awaiting_customer"
+      ? "Awaiting Customer Signature"
+      : (CONTRACT_STATUS_LABELS[status] ?? statusLabel(status));
   const reminders = remindersResult.data ?? [];
   const renewals = renewalsResult.data ?? [];
   const { tickets, projects, invoices, monthEntries } = related;
@@ -273,12 +290,28 @@ export default async function ContractDetailPage({
         />
         <StatCard
           label="Monthly Recurring Fee"
-          value={`$${Number(contract.monthly_recurring_fee ?? 0).toFixed(2)}`}
+          value={`$${billedMonthlyRecurringFee(contract).toFixed(2)}`}
           explanation={{
-            title: "Monthly Recurring Fee",
-            result: `$${Number(contract.monthly_recurring_fee ?? 0).toFixed(2)}`,
-            formula: "Value stored on the contract as monthly_recurring_fee",
-            lines: [{ label: contract.name, value: `$${Number(contract.monthly_recurring_fee ?? 0).toFixed(2)}` }],
+            title: "Billed monthly recurring fee",
+            result: `$${billedMonthlyRecurringFee(contract).toFixed(2)}`,
+            formula: "Base monthly_recurring_fee × work location multiplier (remote −8%, on-site +15%, unset 1.0)",
+            lines: [
+              {
+                label: "Base MRR",
+                value: `$${Number(contract.monthly_recurring_fee ?? 0).toFixed(2)}`,
+              },
+              {
+                label: "Work location",
+                value: isWorkLocation(contract.work_location)
+                  ? WORK_LOCATION_LABELS[contract.work_location]
+                  : "Unset (no adjustment)",
+                detail: workLocationAdjustmentLabel(contract.work_location),
+              },
+              {
+                label: "Billed MRR",
+                value: `$${billedMonthlyRecurringFee(contract).toFixed(2)}`,
+              },
+            ],
           }}
         />
         <StatCard
@@ -307,8 +340,9 @@ export default async function ContractDetailPage({
         }
       >
         <p className="text-sm opacity-70">
-          Status values: Draft, Pending Approval, Active, Suspended, Expired, Renewed, Cancelled.
-          Actions respect your role permissions (approve, renew, cancel, edit, delete).
+          Signature flow: Draft → Manager signs → Awaiting Executive Signature → Executive signs →
+          Customer signs &amp; accepts in My Contracts → Active. A pending contract cannot be
+          activated manually; it becomes Active only after the customer signs.
         </p>
         <ContractLifecycleActions
           contractId={id}
@@ -317,6 +351,45 @@ export default async function ContractDetailPage({
           profileId={profile.id}
         />
       </Section>
+
+      {(profile.role === "manager" ||
+        profile.role === "admin" ||
+        profile.role === "executive") &&
+      (status === "draft" ||
+        status === "pending_approval" ||
+        signaturePacket != null) ? (
+        <Section title="PDF Signatures" id="pdf-signatures">
+          <ContractSignatureWorkflow
+            contract={{
+              id: contract.id,
+              customer_id: contract.customer_id,
+              status: contract.status,
+              contract_number: contract.contract_number,
+              name: contract.name,
+              contract_type: contract.contract_type,
+              start_date: contract.start_date,
+              end_date: contract.end_date,
+              monthly_recurring_fee: contract.monthly_recurring_fee,
+              work_location: contract.work_location,
+              included_hours_per_month: contract.included_hours_per_month,
+              additional_hourly_rate: contract.additional_hourly_rate,
+              payment_terms: contract.payment_terms,
+              billing_frequency: contract.billing_frequency,
+              sla_response_hours: contract.sla_response_hours,
+              sla_resolution_hours: contract.sla_resolution_hours,
+              description: contract.description,
+              scope: contract.scope,
+              included_services: contract.included_services,
+            }}
+            customerName={customer?.name ?? "Customer"}
+            managerName={manager?.full_name ?? null}
+            profileId={profile.id}
+            profileName={profile.full_name}
+            role={profile.role}
+            initialPacket={signaturePacket}
+          />
+        </Section>
+      ) : null}
 
       <Section title="Overview">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -387,8 +460,24 @@ export default async function ContractDetailPage({
       <Section title="Billing Integration (Contract-to-Cash)">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field
-            label="Monthly Recurring Revenue (MRR)"
+            label="Work Location"
+            value={
+              isWorkLocation(contract.work_location)
+                ? WORK_LOCATION_LABELS[contract.work_location]
+                : "—"
+            }
+          />
+          <Field
+            label="Base Monthly Recurring Revenue"
             value={<Money value={Number(contract.monthly_recurring_fee ?? 0)} />}
+          />
+          <Field
+            label="Billed Monthly Recurring Revenue"
+            value={<Money value={billedMonthlyRecurringFee(contract)} />}
+          />
+          <Field
+            label="Location Pricing"
+            value={workLocationAdjustmentLabel(contract.work_location)}
           />
           <Field
             label="Billing Frequency"
@@ -420,7 +509,7 @@ export default async function ContractDetailPage({
             value={
               <Money
                 value={recurringAmountForPeriod(
-                  Number(contract.monthly_recurring_fee ?? 0),
+                  billedMonthlyRecurringFee(contract),
                   contract.billing_frequency
                 )}
               />
@@ -471,12 +560,24 @@ export default async function ContractDetailPage({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Included Support Hours" value={<Hours value={includedHours} />} />
           <Field
-            label="Overage Hourly Rate"
+            label="Base Overage Hourly Rate"
             value={<Money value={Number(contract.additional_hourly_rate ?? 0)} />}
+          />
+          <Field
+            label="Billed Overage Hourly Rate"
+            value={<Money value={billedHourlyRate(contract)} />}
           />
           <Field
             label="Overages Allowed"
             value={contract.overages_allowed === false ? "No" : "Yes"}
+          />
+          <Field
+            label="Work Location"
+            value={
+              isWorkLocation(contract.work_location)
+                ? WORK_LOCATION_LABELS[contract.work_location]
+                : "—"
+            }
           />
           <Field label="Remote Support" value={contract.remote_support ? "Included" : "Not included"} />
           <Field label="Onsite Support" value={contract.onsite_support ? "Included" : "Not included"} />

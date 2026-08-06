@@ -20,7 +20,7 @@ type TechnicalException = {
 };
 
 const EXPECTED_PERMISSION_ROWS = PAGE_PERMISSION_CATALOG.length;
-const ACCESS_ROLES: UserRole[] = ["admin", "manager", "technician", "billing", "customer", "hr"];
+const ACCESS_ROLES: UserRole[] = ["admin", "manager", "executive", "technician", "billing", "customer", "hr"];
 
 export default async function AdminExceptionsPage() {
   await requireAdmin();

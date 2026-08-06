@@ -21,7 +21,7 @@ export async function fetchContractReportMetrics(
     supabase
       .from("contracts")
       .select(
-        "id, contract_number, name, status, customer_id, start_date, end_date, renewal_type, monthly_recurring_fee, included_hours_per_month, billing_frequency"
+        "id, contract_number, name, status, customer_id, start_date, end_date, renewal_type, monthly_recurring_fee, work_location, included_hours_per_month, billing_frequency"
       )
       .order("name"),
     supabase

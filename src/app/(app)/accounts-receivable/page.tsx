@@ -30,7 +30,7 @@ export default async function AccountsReceivablePage({
 }) {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!["manager", "billing"].includes(profile.role)) redirect("/dashboard");
+  if (!["manager", "billing", "executive", "admin"].includes(profile.role)) redirect("/dashboard");
 
   const params = await searchParams;
   const period = resolveDashboardPeriod(params.view, params.period);

@@ -9,7 +9,7 @@ import { AdminEmployeesManager, type EmployeeRow } from "@/components/AdminEmplo
 export default async function AdminEmployeesPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!isAdminRole(profile.role) && profile.role !== "manager" && profile.role !== "hr") {
+  if (!isAdminRole(profile.role) && profile.role !== "manager" && profile.role !== "hr" && profile.role !== "executive") {
     redirect("/dashboard");
   }
 
@@ -27,7 +27,7 @@ export default async function AdminEmployeesPage() {
         <ErrorState message={employeesRes.error.message} />
         <p className="mt-3 text-sm opacity-70">
           If this is a missing-table or permission error, apply the employees migrations and confirm
-          select access for admin, manager, and HR.
+          select access for admin, manager, HR, and executive.
         </p>
       </div>
     );
@@ -43,8 +43,8 @@ export default async function AdminEmployeesPage() {
             : "View the ServiceSync staff directory. Only administrators can add, edit, or remove employees."
         }
         actions={
-          <Link href="/admin" className="btn btn-sm btn-outline">
-            Back to Admin Home
+          <Link href={canEdit ? "/admin" : "/dashboard"} className="btn btn-sm btn-outline">
+            {canEdit ? "Back to Admin Home" : "Back to Dashboard"}
           </Link>
         }
       />

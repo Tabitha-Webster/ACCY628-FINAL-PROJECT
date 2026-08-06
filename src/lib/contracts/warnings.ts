@@ -118,6 +118,15 @@ export function contractHighlightClass(highlight: ContractHighlight): string {
   return "";
 }
 
+/** Subtle row tint aligned with StatusBadge colors (not renewal/expiration dates). */
+export function contractStatusRowClass(status: string): string {
+  const s = status.toLowerCase();
+  if (s === "active" || s === "renewed") return "bg-success/10";
+  if (s === "draft" || s === "pending_approval" || s === "on_hold") return "bg-warning/10";
+  if (s === "expired" || s === "canceled") return "bg-error/10";
+  return "";
+}
+
 export function summarizeContractsByStatus(
   contracts: Array<{ status: ContractStatus }>
 ): Record<ContractStatus, number> {

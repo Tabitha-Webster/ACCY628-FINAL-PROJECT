@@ -4,19 +4,25 @@ import type {
   BillingTiming,
   Contract,
 } from "@/lib/types";
+import { billedHourlyRate, billedMonthlyRecurringFee } from "./locationPricing";
 
 /** Canonical contract terms consumed by Ready to Bill / invoice generation. */
 export type ContractBillingTerms = {
   contractId: string;
   customerId: string;
-  /** Monthly recurring revenue (MRR). */
+  /** Base monthly recurring revenue before work-location adjustment. */
+  baseMonthlyRecurringRevenue: number;
+  /** Monthly recurring revenue (MRR) billed after work-location adjustment. */
   monthlyRecurringRevenue: number;
+  workLocation: string | null;
   billingFrequency: BillingFrequency | string | null;
   billingMethod: string | null;
   billingTiming: BillingTiming | string | null;
   /** Invoice / payment terms (e.g. Net 30). */
   invoiceTerms: string | null;
   includedSupportHours: number;
+  /** Base overage hourly rate before work-location adjustment. */
+  baseOverageHourlyRate: number;
   overageHourlyRate: number;
   overagesAllowed: boolean;
   /** Accrued unbilled overage charges. */
@@ -39,6 +45,7 @@ export type ContractBillingInput = Pick<
   | "id"
   | "customer_id"
   | "monthly_recurring_fee"
+  | "work_location"
   | "billing_frequency"
   | "billing_method"
   | "billing_timing"
@@ -65,7 +72,7 @@ export type ContractBillingInput = Pick<
 
 /** Columns required for future contract-to-cash calculations. */
 export const CONTRACT_BILLING_SELECT =
-  "id, customer_id, contract_number, name, status, start_date, end_date, effective_date, monthly_recurring_fee, billing_frequency, billing_method, billing_timing, payment_terms, included_hours_per_month, additional_hourly_rate, overages_allowed, overage_charges, next_invoice_date, last_invoice_date, billing_status, one_time_setup_fee, deposit_amount, late_fee_terms, tax_status, software_markup_pct, equipment_markup_pct, reimbursable_cost_policy, billing_contact";
+  "id, customer_id, contract_number, name, status, start_date, end_date, effective_date, monthly_recurring_fee, work_location, billing_frequency, billing_method, billing_timing, payment_terms, included_hours_per_month, additional_hourly_rate, overages_allowed, overage_charges, next_invoice_date, last_invoice_date, billing_status, one_time_setup_fee, deposit_amount, late_fee_terms, tax_status, software_markup_pct, equipment_markup_pct, reimbursable_cost_policy, billing_contact";
 
 export const CONTRACT_BILLING_STATUSES: readonly BillingStatus[] = [
   "unbilled",
@@ -93,19 +100,23 @@ export const BILLING_METHOD_OPTIONS = [
  * Map a contract row into the billing-terms shape used by invoice / cash workflows.
  */
 export function getContractBillingTerms(contract: ContractBillingInput): ContractBillingTerms {
-  const overageRate = Number(contract.additional_hourly_rate ?? 0);
+  const baseOverageRate = Number(contract.additional_hourly_rate ?? 0);
+  const overageRate = billedHourlyRate(contract);
   const overagesAllowed =
     contract.overages_allowed ?? overageRate > 0;
 
   return {
     contractId: contract.id,
     customerId: contract.customer_id,
-    monthlyRecurringRevenue: Number(contract.monthly_recurring_fee ?? 0),
+    baseMonthlyRecurringRevenue: Number(contract.monthly_recurring_fee ?? 0),
+    monthlyRecurringRevenue: billedMonthlyRecurringFee(contract),
+    workLocation: contract.work_location ?? null,
     billingFrequency: contract.billing_frequency,
     billingMethod: contract.billing_method,
     billingTiming: contract.billing_timing,
     invoiceTerms: contract.payment_terms,
     includedSupportHours: Number(contract.included_hours_per_month ?? 0),
+    baseOverageHourlyRate: baseOverageRate,
     overageHourlyRate: overageRate,
     overagesAllowed: Boolean(overagesAllowed),
     overageCharges: Number(contract.overage_charges ?? 0),

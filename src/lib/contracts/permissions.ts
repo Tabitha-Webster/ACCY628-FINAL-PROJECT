@@ -15,13 +15,15 @@ export type ContractPermission =
   | "cancel"
   | "report";
 
-const ALL_INTERNAL: UserRole[] = ["manager", "admin", "billing", "technician"];
+const ALL_INTERNAL: UserRole[] = ["manager", "admin", "billing", "technician", "executive"];
 const MANAGER_ADMIN: UserRole[] = ["manager", "admin"];
+const MANAGER_ADMIN_EXEC: UserRole[] = ["manager", "admin", "executive"];
 
 /**
  * Role → allowed contract actions.
  *
  * Manager / Admin: full lifecycle + reporting
+ * Executive: view + report (signature workflow on detail)
  * Billing: view + reporting (billing terms / cash)
  * Technician: view operational agreements
  * Customer: own agreements via /my-contracts (view only)
@@ -31,10 +33,10 @@ export const CONTRACT_PERMISSIONS: Record<ContractPermission, readonly UserRole[
   create: MANAGER_ADMIN,
   edit: MANAGER_ADMIN,
   delete: MANAGER_ADMIN,
-  approve: MANAGER_ADMIN,
+  approve: MANAGER_ADMIN_EXEC,
   renew: MANAGER_ADMIN,
   cancel: MANAGER_ADMIN,
-  report: [...MANAGER_ADMIN, "billing"],
+  report: [...MANAGER_ADMIN_EXEC, "billing"],
 };
 
 export function hasContractPermission(role: UserRole, permission: ContractPermission): boolean {
@@ -56,7 +58,13 @@ export function getContractPermissions(role: UserRole): Record<ContractPermissio
 
 /** Internal Contracts & Agreements list/detail (not customer portal). */
 export function canViewContractsModule(role: UserRole): boolean {
-  return role === "manager" || role === "admin" || role === "billing" || role === "technician";
+  return (
+    role === "manager" ||
+    role === "admin" ||
+    role === "billing" ||
+    role === "technician" ||
+    role === "executive"
+  );
 }
 
 export function canCreateContracts(role: UserRole): boolean {
@@ -154,7 +162,7 @@ export const CONTRACT_PERMISSION_LABELS: Record<ContractPermission, string> = {
   create: "Create",
   edit: "Edit",
   delete: "Delete",
-  approve: "Approve",
+  approve: "Approve / Sign",
   renew: "Renew",
   cancel: "Cancel",
   report: "Reporting & Dashboard",

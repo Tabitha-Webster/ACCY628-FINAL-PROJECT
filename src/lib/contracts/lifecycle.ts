@@ -11,10 +11,12 @@ import {
 
 /**
  * Allowed status transitions for the contract lifecycle.
+ * Activation from pending is not a manual action — it happens only after
+ * Manager → Executive → Customer PDF signatures (finalize RPC).
  */
 export const CONTRACT_TRANSITIONS: Record<ContractStatus, readonly ContractStatus[]> = {
-  draft: ["pending_approval", "canceled"],
-  pending_approval: ["active", "draft", "canceled"],
+  draft: ["canceled"],
+  pending_approval: ["draft", "canceled"],
   active: ["on_hold", "expired", "canceled", "renewed"],
   on_hold: ["active", "canceled", "expired"],
   expired: ["renewed", "canceled"],
@@ -40,14 +42,17 @@ export type LifecycleAction = {
 };
 
 const ACTION_META: Partial<Record<ContractStatus, { label: string; description: string }>> = {
-  draft: { label: "Return to Draft", description: "Send back for edits before approval." },
+  draft: {
+    label: "Return to Draft",
+    description: "Send back for edits. The manager can restart the PDF signature packet afterward.",
+  },
   pending_approval: {
-    label: "Submit for Approval",
-    description: "Route the agreement for customer and/or manager approval.",
+    label: "Submit for Executive Signature",
+    description: "Use PDF Signatures: manager signs, then the executive, then the customer.",
   },
   active: {
-    label: "Activate / Approve",
-    description: "Approve and make the agreement live for support, billing, and technicians.",
+    label: "Reactivate",
+    description: "Return a suspended or renewed agreement to active service.",
   },
   on_hold: {
     label: "Place On Hold",

@@ -42,6 +42,12 @@ export function ContractLifecycleActions({
       setError("Enter a cancellation reason before canceling.");
       return;
     }
+    if (action.to === "active" && status === "pending_approval") {
+      setError(
+        "Pending contracts become Active only after the customer signs and accepts in My Contracts."
+      );
+      return;
+    }
 
     setBusy(action.to);
     try {

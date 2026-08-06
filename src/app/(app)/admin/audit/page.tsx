@@ -33,6 +33,7 @@ const FIELD_LABELS: Record<string, string> = {
   billing_frequency: "Billing frequency",
   payment_terms: "Payment terms",
   monthly_recurring_fee: "Monthly recurring fee",
+  work_location: "Work location",
   billing_status: "Billing status",
   contract_id: "Contract link",
   due_date: "Due date",
