@@ -1,16 +1,9 @@
 import type { NextConfig } from "next";
-import path from "path";
-import os from "os";
 
-// Desktop/iCloud sync can delete `.next` mid-run and crash the dev server.
-// Keep the build cache outside the project folder during local development.
-const distDir =
-  process.env.NODE_ENV === "production"
-    ? ".next"
-    : path.join(os.tmpdir(), "servicesync-msp-next");
-
+// Turbopack requires distDir to stay inside the project directory.
+// (Absolute or ../ paths crash the Windows/Turbopack dev server.)
 const nextConfig: NextConfig = {
-  distDir,
+  distDir: ".next",
   // Keep the dev indicator clear of the docked sidebar.
   devIndicators: {
     position: "bottom-right",

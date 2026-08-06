@@ -96,7 +96,7 @@ export function StatusBadge({
   className?: string;
 }) {
   return (
-    <span className={`badge ${statusBadgeClass(status)} ${className}`.trim()}>
+    <span className={`badge badge-outline ${statusBadgeClass(status)} ${className}`.trim()}>
       {label ?? statusLabel(status)}
     </span>
   );

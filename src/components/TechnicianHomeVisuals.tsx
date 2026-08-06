@@ -56,34 +56,34 @@ export type TechContractWarning = {
 
 const TONE_STYLES: Record<TechMetricTone, { card: string; icon: string; value: string; active: string }> = {
   sky: {
-    card: "border-sky-300/60 bg-gradient-to-br from-sky-50 to-sky-100/80",
-    icon: "bg-sky-500/15 text-sky-700",
-    value: "text-sky-900",
-    active: "ring-2 ring-sky-400/60",
+    card: "border-sky-400/30 bg-sky-500/10 text-base-content",
+    icon: "bg-sky-500/20 text-sky-300",
+    value: "text-base-content",
+    active: "ring-2 ring-sky-400/40",
   },
   violet: {
-    card: "border-violet-300/60 bg-gradient-to-br from-violet-50 to-violet-100/80",
-    icon: "bg-violet-500/15 text-violet-700",
-    value: "text-violet-900",
-    active: "ring-2 ring-violet-400/60",
+    card: "border-violet-400/30 bg-violet-500/10 text-base-content",
+    icon: "bg-violet-500/20 text-violet-300",
+    value: "text-base-content",
+    active: "ring-2 ring-violet-400/40",
   },
   amber: {
-    card: "border-amber-300/60 bg-gradient-to-br from-amber-50 to-amber-100/80",
-    icon: "bg-amber-500/15 text-amber-800",
-    value: "text-amber-950",
-    active: "ring-2 ring-amber-400/60",
+    card: "border-amber-400/30 bg-amber-500/10 text-base-content",
+    icon: "bg-amber-500/20 text-amber-300",
+    value: "text-base-content",
+    active: "ring-2 ring-amber-400/40",
   },
   rose: {
-    card: "border-rose-300/70 bg-gradient-to-br from-rose-50 to-rose-100/90",
-    icon: "bg-rose-500/15 text-rose-700",
-    value: "text-rose-900",
-    active: "ring-2 ring-rose-400/60",
+    card: "border-rose-400/30 bg-rose-500/10 text-base-content",
+    icon: "bg-rose-500/20 text-rose-300",
+    value: "text-base-content",
+    active: "ring-2 ring-rose-400/40",
   },
   emerald: {
-    card: "border-emerald-300/60 bg-gradient-to-br from-emerald-50 to-emerald-100/80",
-    icon: "bg-emerald-500/15 text-emerald-700",
-    value: "text-emerald-900",
-    active: "ring-2 ring-emerald-400/60",
+    card: "border-emerald-400/30 bg-emerald-500/10 text-base-content",
+    icon: "bg-emerald-500/20 text-emerald-300",
+    value: "text-base-content",
+    active: "ring-2 ring-emerald-400/40",
   },
 };
 
@@ -184,15 +184,15 @@ export function TechnicianHomeVisuals({
       </div>
 
       {contractWarnings.length > 0 ? (
-        <div className="rounded-2xl border border-amber-300/70 bg-gradient-to-r from-amber-50 to-rose-50/80 px-3 py-2.5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-950/80">
+        <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 px-3 py-2.5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-base-content/80">
             Contract-hour warnings
           </p>
           <ul className="mt-1.5 space-y-1">
             {contractWarnings.map((w) => (
               <li
                 key={w.contract_id}
-                className="flex flex-wrap items-center gap-2 text-xs text-amber-950/90"
+                className="flex flex-wrap items-center gap-2 text-xs text-base-content/90"
               >
                 <span className="font-medium">{w.label}</span>
                 <span className="tabular-nums opacity-70">
@@ -237,12 +237,12 @@ export function TechnicianHomeVisuals({
         <div className="lg:col-span-4">
           <SlaUrgencyChart sla={sla} />
         </div>
-        <div className="rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50/60 to-base-100 p-3 shadow-sm lg:col-span-8">
+        <div className="rounded-2xl border border-sky-400/25 bg-sky-500/10 p-3 shadow-sm lg:col-span-8">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-900/80">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-base-content/80">
               Schedule
             </h2>
-            <Link href="/assignments" className="text-[11px] font-medium text-sky-800/80 hover:underline">
+            <Link href="/assignments" className="text-[11px] font-medium text-base-content/70 hover:underline">
               Workbench
             </Link>
           </div>
