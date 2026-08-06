@@ -80,6 +80,7 @@ export function statusBadgeClass(status: string) {
     return "badge-success";
   if (["disputed", "overdue", "issued", "steady"].includes(s)) return "badge-ghost";
   if (s === "current" || s === "new") return "badge-info";
+  if (s === "pending_approval") return "badge-pending-approval";
   if (
     [
       "pending",

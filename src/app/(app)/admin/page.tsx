@@ -161,7 +161,7 @@ export default async function AdminHomePage() {
             <Link href="/customer-approvals" className="btn btn-sm btn-primary">
               Customer Approvals
               {pendingCount > 0 ? (
-                <span className="badge badge-warning badge-sm ml-1">{pendingCount}</span>
+                <span className="badge badge-pending-approval badge-sm ml-1">{pendingCount}</span>
               ) : null}
             </Link>
             <Link href="/admin/users" className="btn btn-sm btn-outline">

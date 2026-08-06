@@ -117,12 +117,13 @@ function filterStatusLabel(status: CustomerStatus) {
   return statusLabel(status);
 }
 
-/** Customer-list badge colors: active green, inactive red, on hold yellow. */
+/** Customer-list badge colors: active green, inactive red, on hold yellow, pending approval lime. */
 function customerStatusBadgeClass(status: string) {
   const s = status.toLowerCase();
   if (s === "active") return "badge-success";
   if (s === "inactive") return "badge-error";
   if (s === "on_hold") return "badge-warning";
+  if (s === "pending_approval") return "badge-pending-approval";
   return statusBadgeClass(s);
 }
 

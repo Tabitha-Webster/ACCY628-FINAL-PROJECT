@@ -513,6 +513,19 @@ pre {
   color: #000000;
 }
 
+/** Customer / signup Pending Approval — lime (not warning orange). */
+.badge.badge-pending-approval {
+  border-color: color-mix(in oklab, oklch(72% 0.19 130) 55%, transparent);
+  background-color: color-mix(in oklab, oklch(72% 0.19 130) 22%, var(--color-base-100));
+  color: oklch(28% 0.08 130);
+}
+
+[data-theme="servicesync-dark"] .badge.badge-pending-approval {
+  border-color: color-mix(in oklab, oklch(78% 0.18 130) 50%, transparent);
+  background-color: color-mix(in oklab, oklch(78% 0.18 130) 20%, var(--color-base-100));
+  color: oklch(92% 0.08 130);
+}
+
 .aging-current {
   border-color: color-mix(in oklab, var(--color-info) 55%, transparent);
   background-color: color-mix(in oklab, var(--color-info) 18%, var(--color-base-100));
