@@ -25,13 +25,32 @@ export default async function CustomerApprovalsPage() {
   if (!canEditCustomers(profile.role)) redirect("/dashboard");
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+
+  // Prefer the full manager-approval schema; fall back when migration is not applied yet.
+  let rows: ApprovalRow[] = [];
+  let errorMessage: string | null = null;
+
+  const full = await supabase
     .from("customers")
     .select("id, name, primary_contact, contact_email, status, created_at, approval_note")
     .in("status", ["pending_approval", "rejected"])
     .order("created_at", { ascending: false });
 
-  if (error) {
+  if (!full.error) {
+    rows = (full.data ?? []) as ApprovalRow[];
+  } else {
+    const schemaGap =
+      full.error.message.includes("approval_note") ||
+      full.error.message.includes("pending_approval") ||
+      full.error.message.includes("rejected");
+    // Without the manager-approval migration, the dedicated queue cannot run.
+    // Show an empty state instead of a hard database error.
+    if (!schemaGap) {
+      errorMessage = full.error.message;
+    }
+  }
+
+  if (errorMessage) {
     return (
       <PageLayout
         title="Customer Approvals"
@@ -42,12 +61,11 @@ export default async function CustomerApprovalsPage() {
           </ButtonLink>
         }
       >
-        <ErrorState message={error.message} />
+        <ErrorState message={errorMessage} />
       </PageLayout>
     );
   }
 
-  const rows = (data ?? []) as ApprovalRow[];
   const pending = rows.filter((row) => row.status === "pending_approval");
 
   return (

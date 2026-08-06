@@ -8,10 +8,10 @@ import { DemoRoleSwitcher } from "@/components/DemoRoleSwitcher";
 import { BillingStaffNavTree } from "@/components/BillingStaffNavTree";
 import { CompanyDirectoryNavTree } from "@/components/CompanyDirectoryNavTree";
 import { ContractsAgreementsNavTree } from "@/components/ContractsAgreementsNavTree";
-import { CustomerBillingNavTree } from "@/components/CustomerBillingNavTree";
 import { SystemNavTree } from "@/components/SystemNavTree";
 import { UserAccessNavTree } from "@/components/UserAccessNavTree";
 import { HeaderPageSearch } from "@/components/HeaderPageSearch";
+import { HelpChatBubble } from "@/components/HelpChatBubble";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { UserSettingsPanel } from "@/components/UserSettingsPanel";
 import { isManagerRole, ROLE_NAV, roleHomePath, type Profile, type UserRole } from "@/lib/constants";
@@ -44,7 +44,6 @@ function SideNav({
   const nav = restrictedCustomer
     ? [{ href: "/pending-approval", label: "Pending Approval" }]
     : (ROLE_NAV[profile.role as UserRole] ?? []);
-  const isCustomer = profile.role === "customer";
   const isBilling = profile.role === "billing";
   const isManager = isManagerRole(profile.role);
   const isTechnician = profile.role === "technician";
@@ -76,14 +75,14 @@ function SideNav({
             unoptimized
           />
         </Link>
-        <p className="mt-2 text-xs opacity-60">Contract-to-cash workspace</p>
+        <p className="mt-2 text-xs opacity-60">CONTRACT-TO-CASH WORKSPACE</p>
         <div className="mt-3">
           <span className="badge badge-primary badge-outline">{statusLabel(profile.role)}</span>
         </div>
       </div>
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3" aria-label="Main">
         {nav.map((item) => {
-          if (!canShowHref(item.href)) return null;
+          if (!restrictedCustomer && !canShowHref(item.href)) return null;
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Fragment key={item.href}>
@@ -96,7 +95,7 @@ function SideNav({
               >
                 {item.label}
               </Link>
-              {isAdmin && item.href === "/admin" ? (
+              {!restrictedCustomer && isAdmin && item.href === "/admin" ? (
                 <>
                   <UserAccessNavTree onNavigate={onNavigate} />
                   <CompanyDirectoryNavTree
@@ -106,10 +105,7 @@ function SideNav({
                   <SystemNavTree onNavigate={onNavigate} />
                 </>
               ) : null}
-              {isCustomer && item.href === "/my-contracts" ? (
-                <CustomerBillingNavTree onNavigate={onNavigate} allowedPageKeys={allowedPageKeys} />
-              ) : null}
-              {isManager && !isAdmin && item.href === "/customers" ? (
+              {!restrictedCustomer && isManager && !isAdmin && item.href === "/customers" ? (
                 <ContractsAgreementsNavTree
                   showReports
                   showNewContract
@@ -186,8 +182,7 @@ export function AppShell({
   }
 
   const restrictedCustomer =
-    profile.role === "customer" &&
-    (customerStatus === "pending_approval" || customerStatus === "rejected");
+    profile.role === "customer" && customerStatus !== "active";
 
   useEffect(() => {
     if (!restrictedCustomer) return;
@@ -354,6 +349,8 @@ export function AppShell({
       {settingsOpen ? (
         <UserSettingsPanel profile={profile} onClose={() => setSettingsOpen(false)} onLogout={logout} />
       ) : null}
+
+      {!restrictedCustomer ? <HelpChatBubble /> : null}
     </div>
   );
 }

@@ -23,7 +23,7 @@ export type LinkedCustomerSummary = {
   id: string;
   name: string;
   status: CustomerStatus;
-  approval_note: string | null;
+  approval_note?: string | null;
 };
 
 export async function getLinkedCustomer(
@@ -31,12 +31,21 @@ export async function getLinkedCustomer(
 ): Promise<LinkedCustomerSummary | null> {
   if (!profile.customer_id) return null;
   const supabase = await createClient();
-  const { data } = await supabase
+  // approval_note is optional (added by customer manager-approval migration).
+  const withNote = await supabase
     .from("customers")
     .select("id, name, status, approval_note")
     .eq("id", profile.customer_id)
     .maybeSingle();
-  return (data as LinkedCustomerSummary | null) ?? null;
+  if (!withNote.error) {
+    return (withNote.data as LinkedCustomerSummary | null) ?? null;
+  }
+  const { data } = await supabase
+    .from("customers")
+    .select("id, name, status")
+    .eq("id", profile.customer_id)
+    .maybeSingle();
+  return data ? ({ ...data, approval_note: null } as LinkedCustomerSummary) : null;
 }
 
 export function isCustomerApproved(status: CustomerStatus | null | undefined) {

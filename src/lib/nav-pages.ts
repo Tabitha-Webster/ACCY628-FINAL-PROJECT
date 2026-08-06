@@ -37,11 +37,6 @@ const BILLING_TREE_PAGES: SearchablePage[] = [
   { href: "/accounting", label: "Accounting Review", group: "Accounting" },
 ];
 
-const CUSTOMER_BILLING_PAGES: SearchablePage[] = [
-  { href: "/my-invoices", label: "View Invoices", group: "Invoices" },
-  { href: "/make-payment", label: "Make a Payment", group: "Invoices" },
-];
-
 function dedupePages(pages: SearchablePage[]) {
   const seen = new Set<string>();
   const result: SearchablePage[] = [];
@@ -88,7 +83,9 @@ export function pagesForRole(
   }
 
   if (role === "customer") {
-    pages.push(...CUSTOMER_BILLING_PAGES);
+    pages.push(
+      { href: "/make-payment", label: "Make a Payment", group: "My Invoices" }
+    );
   }
 
   const unique = dedupePages(pages);

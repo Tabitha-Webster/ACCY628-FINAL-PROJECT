@@ -352,7 +352,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
   },
   {
     key: "support_requests",
-    label: "Support Requests",
+    label: "Make a Request",
     description: "Customer portal support requests.",
     pathPrefixes: ["/support-requests"],
     defaultRoles: ["customer"],
@@ -360,7 +360,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
   },
   {
     key: "my_invoices",
-    label: "View Invoices",
+    label: "My Invoices",
     description: "Customer portal invoices.",
     pathPrefixes: ["/my-invoices"],
     defaultRoles: ["customer"],

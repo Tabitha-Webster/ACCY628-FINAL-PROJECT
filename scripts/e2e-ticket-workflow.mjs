@@ -27,7 +27,7 @@ const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 const ACCOUNTS = {
-  customer: { email: "customer@apexlegal.demo", password: "1234" },
+  customer: { email: "casey.ortiz@chadcorporation.demo", password: "1234" },
   manager: { email: "manager@servicesync.demo", password: "1234" },
   tech: { email: "tech@servicesync.demo", password: "1234" },
   otherTech: { email: "tech2@servicesync.demo", password: "1234" },

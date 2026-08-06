@@ -34,7 +34,7 @@ export default async function SupportRequestsPage() {
   if (ticketsRes.error) {
     return (
       <div>
-        <PageHeader title="Support Requests" />
+        <PageHeader title="Make a Request" />
         <ErrorState message={`We couldn't load your support requests. ${ticketsRes.error.message}`} />
       </div>
     );
@@ -96,7 +96,7 @@ export default async function SupportRequestsPage() {
   return (
     <div>
       <PageHeader
-        title="Support Requests"
+        title="Make a Request"
         description="Submit new requests and track tickets for your organization."
       />
 
