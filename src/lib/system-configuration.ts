@@ -63,7 +63,7 @@ export const DEFAULT_SYSTEM_CONFIGURATION: SystemConfiguration = {
     currency: "USD",
   },
   tax: {
-    defaultTaxRatePct: 0,
+    defaultTaxRatePct: 7,
     taxLabel: "Sales tax",
     taxId: "",
     pricesIncludeTax: false,

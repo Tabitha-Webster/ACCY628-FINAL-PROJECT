@@ -4,6 +4,7 @@ import { getCurrentProfile, getLinkedCustomer } from "@/lib/auth";
 import { isAdminRole, roleHomePath, type UserRole } from "@/lib/constants";
 import { pathAllowedByPageKeys } from "@/lib/role-permissions";
 import { loadAllowedPageKeysForRole } from "@/lib/role-permissions-data";
+import { loadSystemConfiguration } from "@/lib/system-configuration-data";
 import type { CustomerStatus } from "@/lib/types";
 
 export default async function AppLayout({
@@ -24,11 +25,14 @@ export default async function AppLayout({
     ? null
     : await loadAllowedPageKeysForRole(profile.role as UserRole);
 
+  const { config: systemConfig } = await loadSystemConfiguration();
+
   return (
     <AppShell
       profile={profile}
       customerStatus={customerStatus}
       allowedPageKeys={allowedPageKeys}
+      systemConfig={systemConfig}
     >
       {children}
     </AppShell>

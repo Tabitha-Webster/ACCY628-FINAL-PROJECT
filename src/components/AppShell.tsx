@@ -15,12 +15,15 @@ import { HeaderPageSearch } from "@/components/HeaderPageSearch";
 import { HelpChatBubble } from "@/components/HelpChatBubble";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { UserSettingsPanel } from "@/components/UserSettingsPanel";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { isManagerRole, ROLE_NAV, roleHomePath, type Profile, type UserRole } from "@/lib/constants";
 import { hrefAllowedByPageKeys } from "@/lib/role-permissions";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
 import { applyPreferencesToDom, loadPreferences } from "@/lib/user-preferences";
 import type { CustomerStatus } from "@/lib/types";
+import { SystemConfigProvider, useSystemConfig } from "@/components/SystemConfigProvider";
+import type { SystemConfiguration } from "@/lib/system-configuration";
 import { Fragment, useEffect, useId, useState } from "react";
 
 const SIDEBAR_COLLAPSED_KEY = "servicesync-sidebar-collapsed-v2";
@@ -33,6 +36,7 @@ function SideNav({
   onOpenSettings,
   restrictedCustomer = false,
   allowedPageKeys = null,
+  brandName,
 }: {
   profile: Profile;
   pathname: string;
@@ -41,6 +45,7 @@ function SideNav({
   onOpenSettings?: () => void;
   restrictedCustomer?: boolean;
   allowedPageKeys?: Set<string> | null;
+  brandName: string;
 }) {
   const nav = restrictedCustomer
     ? [{ href: "/pending-approval", label: "Pending Approval" }]
@@ -64,11 +69,11 @@ function SideNav({
           href={homeHref}
           className="block outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
           onClick={onNavigate}
-          aria-label="ServiceSync MSP home"
+          aria-label={`${brandName} home`}
         >
           <Image
             src="/images/servicesync-msp-logo.png?v=5"
-            alt="ServiceSync MSP"
+            alt={brandName}
             width={1160}
             height={700}
             className="sidebar-brand-logo h-auto w-full max-w-[11.5rem] object-contain object-left"
@@ -77,7 +82,8 @@ function SideNav({
             unoptimized
           />
         </Link>
-        <p className="mt-2 text-[0.65rem] font-semibold uppercase tracking-[0.14em] opacity-55">
+        <p className="mt-2 text-sm font-semibold tracking-tight">{brandName}</p>
+        <p className="mt-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.14em] opacity-55">
           Contract-to-cash workspace
         </p>
         <div className="mt-3">
@@ -176,6 +182,32 @@ export function AppShell({
   profile,
   customerStatus = null,
   allowedPageKeys = null,
+  systemConfig,
+  children,
+}: {
+  profile: Profile;
+  customerStatus?: CustomerStatus | null;
+  allowedPageKeys?: string[] | null;
+  systemConfig: SystemConfiguration;
+  children: React.ReactNode;
+}) {
+  return (
+    <SystemConfigProvider config={systemConfig}>
+      <AppShellInner
+        profile={profile}
+        customerStatus={customerStatus}
+        allowedPageKeys={allowedPageKeys}
+      >
+        {children}
+      </AppShellInner>
+    </SystemConfigProvider>
+  );
+}
+
+function AppShellInner({
+  profile,
+  customerStatus = null,
+  allowedPageKeys = null,
   children,
 }: {
   profile: Profile;
@@ -183,6 +215,9 @@ export function AppShell({
   allowedPageKeys?: string[] | null;
   children: React.ReactNode;
 }) {
+  const systemConfig = useSystemConfig();
+  const brandName = systemConfig.company.dbaName || systemConfig.company.legalName || "ServiceSync MSP";
+  const showDemoSwitcher = systemConfig.demo.roleSwitcherEnabled;
   const pathname = usePathname();
   const router = useRouter();
   const sidebarId = useId();
@@ -294,6 +329,7 @@ export function AppShell({
               pathname={pathname}
               restrictedCustomer={restrictedCustomer}
               allowedPageKeys={allowedSet}
+              brandName={brandName}
               showSettings
               onOpenSettings={() => setSettingsOpen(true)}
             />
@@ -322,7 +358,7 @@ export function AppShell({
               <div className="flex min-w-0 max-w-[14rem] items-center sm:max-w-[17rem] md:max-w-[20rem]">
                 <Image
                   src="/images/servicesync-msp-logo.png?v=5"
-                  alt="ServiceSync MSP"
+                  alt={brandName}
                   width={1160}
                   height={700}
                   className="header-brand-logo h-12 w-auto max-w-full object-contain object-left sm:h-14"
@@ -334,7 +370,7 @@ export function AppShell({
             ) : null}
           </div>
           <div className="order-3 flex w-full justify-center md:order-none md:w-auto md:flex-1">
-            <DemoRoleSwitcher currentRole={profile.role as UserRole} />
+            {showDemoSwitcher ? <DemoRoleSwitcher currentRole={profile.role as UserRole} /> : null}
           </div>
           <div className="ml-auto flex items-center gap-2">
             <HeaderPageSearch
@@ -342,6 +378,7 @@ export function AppShell({
               allowedPageKeys={allowedSet}
               restrictedCustomer={restrictedCustomer}
             />
+            <ThemeToggle />
             <button
               type="button"
               className="flex items-center gap-2 rounded-xl px-2.5 py-1.5 transition-colors hover:bg-base-200"

@@ -117,7 +117,21 @@ type Props = {
   customers: ContractFormOption[];
   managers: ContractFormOption[];
   technicians?: ContractFormOption[];
+  /** From Admin → Configurations → Numbering (defaults to CTR-). */
+  contractNumberPrefix?: string;
 };
+
+async function consumeContractNumber(contractNumber: string) {
+  try {
+    await fetch("/api/numbering/next", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "contract", consume: contractNumber }),
+    });
+  } catch {
+    // Non-blocking — contract is already saved.
+  }
+}
 
 const CREATE_STEPS = [
   { id: "details", label: "Details & dates" },
@@ -175,6 +189,7 @@ export function ContractForm({
   customers,
   managers,
   technicians = [],
+  contractNumberPrefix = "CTR-",
 }: Props) {
   const router = useRouter();
   const [values, setValues] = useState<ContractFormValues>(() =>
@@ -526,6 +541,8 @@ export function ContractForm({
         source: "create_wizard",
       });
 
+      await consumeContractNumber(valuesForSave.contract_number);
+
       setSaving(false);
       router.push("/contracts?status=draft");
       router.refresh();
@@ -658,6 +675,8 @@ export function ContractForm({
         return;
       }
       targetContractId = data.id;
+
+      await consumeContractNumber(valuesForSave.contract_number);
 
       await supabase.from("contract_versions").insert({
         contract_id: targetContractId,
@@ -1022,7 +1041,7 @@ export function ContractForm({
             className={`${fieldControlClass} ${fieldErrors.contract_number ? "input-error" : ""}`}
             value={values.contract_number}
             onChange={(e) => update("contract_number", e.target.value)}
-            placeholder="CTR-1001"
+            placeholder={`${contractNumberPrefix}1001`}
           />
         </FormField>
         <FormField label="Contract name *" error={fieldErrors.name} className="sm:col-span-2">

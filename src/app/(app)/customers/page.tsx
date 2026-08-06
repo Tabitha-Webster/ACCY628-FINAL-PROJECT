@@ -93,7 +93,11 @@ async function CustomerListContent({ role, profileId }: { role: UserRole; profil
   return (
     <div className="space-y-4">
       {schemaIncomplete ? <CustomerSchemaNotice /> : null}
-      <CustomerListSearch customers={customers} role={role} />
+      <CustomerListSearch
+        key={`${customers.length}-${customers[0]?.id ?? "empty"}-${customers[customers.length - 1]?.id ?? ""}`}
+        customers={customers}
+        role={role}
+      />
     </div>
   );
 }

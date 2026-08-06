@@ -17,7 +17,6 @@ const ADMIN_EXTRA_PAGES: SearchablePage[] = [
   { href: "/admin/system", label: "Platform Status", group: "System" },
   { href: "/admin/exceptions", label: "Exception Log", group: "System" },
   { href: "/admin/exports", label: "Data Exports", group: "System" },
-  { href: "/admin/search", label: "Global Search", group: "System" },
 ];
 
 const CONTRACTS_PAGES: SearchablePage[] = [

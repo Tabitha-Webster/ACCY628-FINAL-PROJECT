@@ -3,14 +3,16 @@
 import { useRef, useState } from "react";
 import { DEMO_ACCOUNTS, type UserRole } from "@/lib/constants";
 import { isDemoModeEnabled } from "@/lib/demo-mode";
-
-/** Public class-demo password shown in README; used when Demo Mode API is off. */
-const FALLBACK_DEMO_PASSWORD = "1234";
+import { switchDemoRole } from "@/lib/demo-switch";
 
 type Props = {
-  onSelect: (email: string, password: string) => void;
+  /** Legacy autofill callback when Demo Mode API is unavailable. */
+  onSelect?: (email: string, password: string) => void;
 };
 
+/**
+ * One-click demo login. With Demo Mode on, signs in and navigates without typing a password.
+ */
 export function DemoLoginSelector({ onSelect }: Props) {
   const demoMode = isDemoModeEnabled();
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
@@ -32,31 +34,38 @@ export function DemoLoginSelector({ onSelect }: Props) {
       return;
     }
 
+    setSelectedEmail(account.email);
+
     try {
       if (demoMode) {
-        const res = await fetch("/api/demo/autofill", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role }),
-        });
-        const data = (await res.json().catch(() => ({}))) as {
-          email?: string;
-          password?: string;
-          error?: string;
-        };
-
-        if (res.ok && data.email && data.password) {
-          setSelectedEmail(data.email);
-          onSelect(data.email, data.password);
+        const result = await switchDemoRole(role);
+        if (!result.ok) {
+          setError(result.error);
           return;
         }
+        window.location.assign(result.homePath);
+        return;
       }
 
-      setSelectedEmail(account.email);
-      onSelect(account.email, FALLBACK_DEMO_PASSWORD);
+      // Fallback when Demo Mode is off: autofill the form (password still required to submit).
+      const res = await fetch("/api/demo/autofill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        email?: string;
+        password?: string;
+      };
+
+      if (res.ok && data.email && data.password && onSelect) {
+        onSelect(data.email, data.password);
+        return;
+      }
+
+      onSelect?.(account.email, "1234");
     } catch {
-      setSelectedEmail(account.email);
-      onSelect(account.email, FALLBACK_DEMO_PASSWORD);
+      setError("Could not start demo login. Try again.");
     } finally {
       inFlightRef.current = false;
       setLoadingRole(null);
@@ -66,6 +75,11 @@ export function DemoLoginSelector({ onSelect }: Props) {
   return (
     <div className="login-demo-panel rounded-2xl border border-slate-200/90 bg-slate-50/80 p-4 sm:p-5">
       <p className="text-sm font-semibold tracking-tight">Demo Login Selector</p>
+      <p className="mt-1 text-xs text-slate-500">
+        {demoMode
+          ? "Click a role to sign in instantly — no password needed."
+          : "Click a role to fill the form, then sign in."}
+      </p>
       <div className="mt-3.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
         {DEMO_ACCOUNTS.map((account) => {
           const selected = selectedEmail === account.email;
@@ -83,7 +97,7 @@ export function DemoLoginSelector({ onSelect }: Props) {
               ].join(" ")}
               onClick={() => void onPick(account.role)}
             >
-              {loading ? "Loading…" : account.label}
+              {loading ? "Signing in…" : account.label}
             </button>
           );
         })}

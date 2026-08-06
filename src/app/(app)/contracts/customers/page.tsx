@@ -10,11 +10,10 @@ import {
   StatCard,
   StatusBadge,
 } from "@/components/ui";
-import { formatCurrency, formatPercent } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import {
   canViewCustomerContractData,
   buildCustomerContractMetrics,
-  formatTenureMonths,
   loyaltyLabel,
 } from "@/lib/contracts";
 
@@ -120,21 +119,17 @@ export default async function ContractCustomersPage() {
               "Customer",
               "Loyalty",
               "Active contracts",
-              "MRR",
-              "Tenure",
               "Renewals",
-              "On-time pay",
-              "Outstanding AR",
               "Overdue",
               "Collected",
-              "Terms",
-              "",
             ]}
           >
             {rows.map((row) => (
               <tr key={row.id}>
                 <td>
-                  <div className="font-medium">{row.name}</div>
+                  <Link href={`/customers/${row.id}`} className="link link-hover font-medium">
+                    {row.name}
+                  </Link>
                   <div className="text-xs opacity-60">
                     {row.industry ?? "—"}
                     {row.primary_contact ? ` · ${row.primary_contact}` : ""}
@@ -147,16 +142,7 @@ export default async function ContractCustomersPage() {
                   <StatusBadge status={row.loyalty} label={loyaltyLabel(row.loyalty)} />
                 </td>
                 <td className="tabular-nums">{row.activeContracts}</td>
-                <td className="tabular-nums text-sm">{formatCurrency(row.mrr)}</td>
-                <td className="text-sm whitespace-nowrap">{formatTenureMonths(row.tenureMonths)}</td>
                 <td className="tabular-nums">{row.renewalCount}</td>
-                <td className="text-sm tabular-nums">
-                  {row.onTimePct == null ? "—" : formatPercent(row.onTimePct)}
-                  {row.paymentCount > 0 ? (
-                    <div className="text-xs opacity-60">{row.paymentCount} payments</div>
-                  ) : null}
-                </td>
-                <td className="tabular-nums text-sm">{formatCurrency(row.outstandingAr)}</td>
                 <td className="tabular-nums text-sm">
                   {row.overdueAr > 0 ? (
                     <span className="text-error font-medium">{formatCurrency(row.overdueAr)}</span>
@@ -168,12 +154,6 @@ export default async function ContractCustomersPage() {
                   ) : null}
                 </td>
                 <td className="tabular-nums text-sm">{formatCurrency(row.lifetimeCollected)}</td>
-                <td className="text-sm">{row.credit_terms ?? "—"}</td>
-                <td className="text-right">
-                  <Link href={`/customers/${row.id}`} className="btn btn-ghost btn-xs">
-                    View
-                  </Link>
-                </td>
               </tr>
             ))}
           </DataTable>

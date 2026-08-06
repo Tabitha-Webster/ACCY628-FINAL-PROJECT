@@ -22,10 +22,12 @@ import {
   reminderKindLabel,
   syncRemindersForContracts,
   unwrapProfile,
+  buildContractCalendarEvents,
   type ContractListRow,
   type ReminderKind,
 } from "@/lib/contracts";
 import { RenewalsActionsClient } from "@/components/RenewalsActionsClient";
+import { ContractRenewalCalendar } from "@/components/ContractRenewalCalendar";
 
 function unwrapJoin<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
@@ -64,6 +66,7 @@ export default async function ContractRenewalsPage() {
   const openReminders = remindersResult.data ?? [];
   const recentRenewals = renewalsResult.data ?? [];
   const error = contractsError ?? remindersResult.error ?? renewalsResult.error;
+  const calendarEvents = buildContractCalendarEvents(contracts, openReminders);
 
   const autoDue = contracts.filter((c) =>
     isEligibleForAutoRenew({
@@ -115,90 +118,105 @@ export default async function ContractRenewalsPage() {
         />
       ) : null}
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">
-          Open reminders & warnings
-        </h2>
-        {openReminders.length === 0 ? (
-          <EmptyState
-            title="No open reminders"
-            description="Reminders generate when active contracts enter the 90, 60, or 30-day windows, or approach expiration."
-          />
-        ) : (
-          <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
-            <table className="table table-sm text-center">
-              <thead>
-                <tr>
-                  <th className="text-center">Contract</th>
-                  <th className="text-center">Customer</th>
-                  <th className="text-center">Status</th>
-                  <th className="text-center">Days left</th>
-                  <th className="text-center">Message</th>
-                  <th className="text-center">End date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {openReminders.map((row) => {
-                  const contract = unwrapJoin(
-                    row.contracts as
-                      | {
-                          id: string;
-                          contract_number: string;
-                          name: string;
-                          end_date: string | null;
-                          customers: { name: string } | { name: string }[] | null;
-                        }
-                      | {
-                          id: string;
-                          contract_number: string;
-                          name: string;
-                          end_date: string | null;
-                          customers: { name: string } | { name: string }[] | null;
-                        }[]
-                      | null
-                  );
-                  const customer = unwrapJoin(contract?.customers ?? null);
-                  const daysLeft = daysUntilDate(contract?.end_date ?? row.anchor_date);
-                  return (
-                    <tr key={row.id}>
-                      <td>
-                        {contract ? (
-                          <Link
-                            href={`/contracts/${contract.id}`}
-                            className="link link-hover font-medium"
-                          >
-                            {contract.contract_number}
-                          </Link>
-                        ) : (
-                          "—"
-                        )}
-                        {contract?.name ? (
-                          <div className="text-xs opacity-60">{contract.name}</div>
-                        ) : null}
-                      </td>
-                      <td className="text-sm">{customer?.name ?? "—"}</td>
-                      <td>
-                        <span
-                          className={`badge h-auto min-h-6 whitespace-nowrap px-2.5 py-1.5 leading-none ${reminderBadgeClass(row.reminder_kind as ReminderKind)}`}
-                        >
-                          {reminderKindLabel(row.reminder_kind as ReminderKind)}
-                        </span>
-                      </td>
-                      <td className="text-sm tabular-nums">
-                        {daysLeft == null ? "—" : daysLeft}
-                      </td>
-                      <td className="text-sm max-w-md">{row.message}</td>
-                      <td className="text-xs whitespace-nowrap">
-                        {formatDate(contract?.end_date ?? row.anchor_date)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      <ContractRenewalCalendar events={calendarEvents} variant="large" />
+
+      <details
+        className="group rounded-box border border-base-300 bg-base-100 open:shadow-sm"
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">
+              Open reminders &amp; warnings
+            </h2>
+            <span className="badge badge-sm badge-ghost tabular-nums">
+              {openReminders.length}
+            </span>
           </div>
-        )}
-      </section>
+          <span className="text-xs font-medium opacity-60 group-open:hidden">Show</span>
+          <span className="hidden text-xs font-medium opacity-60 group-open:inline">Hide</span>
+        </summary>
+        <div className="space-y-3 border-t border-base-300 px-4 py-4">
+          {openReminders.length === 0 ? (
+            <EmptyState
+              title="No open reminders"
+              description="Reminders generate when active contracts enter the 90, 60, or 30-day windows, or approach expiration."
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="table table-sm text-center">
+                <thead>
+                  <tr>
+                    <th className="text-center">Contract</th>
+                    <th className="text-center">Customer</th>
+                    <th className="text-center">Status</th>
+                    <th className="text-center">Days left</th>
+                    <th className="text-center">Message</th>
+                    <th className="text-center">End date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {openReminders.map((row) => {
+                    const contract = unwrapJoin(
+                      row.contracts as
+                        | {
+                            id: string;
+                            contract_number: string;
+                            name: string;
+                            end_date: string | null;
+                            customers: { name: string } | { name: string }[] | null;
+                          }
+                        | {
+                            id: string;
+                            contract_number: string;
+                            name: string;
+                            end_date: string | null;
+                            customers: { name: string } | { name: string }[] | null;
+                          }[]
+                        | null
+                    );
+                    const customer = unwrapJoin(contract?.customers ?? null);
+                    const daysLeft = daysUntilDate(contract?.end_date ?? row.anchor_date);
+                    return (
+                      <tr key={row.id}>
+                        <td>
+                          {contract ? (
+                            <Link
+                              href={`/contracts/${contract.id}`}
+                              className="link link-hover font-medium"
+                            >
+                              {contract.contract_number}
+                            </Link>
+                          ) : (
+                            "—"
+                          )}
+                          {contract?.name ? (
+                            <div className="text-xs opacity-60">{contract.name}</div>
+                          ) : null}
+                        </td>
+                        <td className="text-sm">{customer?.name ?? "—"}</td>
+                        <td>
+                          <span
+                            className={`badge h-auto min-h-6 whitespace-nowrap px-2.5 py-1.5 leading-none ${reminderBadgeClass(row.reminder_kind as ReminderKind)}`}
+                          >
+                            {reminderKindLabel(row.reminder_kind as ReminderKind)}
+                          </span>
+                        </td>
+                        <td className="text-sm tabular-nums">
+                          {daysLeft == null ? "—" : daysLeft}
+                        </td>
+                        <td className="text-sm max-w-md">{row.message}</td>
+                        <td className="text-xs whitespace-nowrap">
+                          {formatDate(contract?.end_date ?? row.anchor_date)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </details>
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide opacity-60">
