@@ -17,10 +17,13 @@ cp .env.local.example .env.local
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://icymsjpkfddfrbbazxss.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_or_publishable_key_here
+NEXT_PUBLIC_DEMO_MODE=true
 ```
 
 Find the Project URL and anon/publishable key in Supabase → Project Settings → API Keys.  
 Never put a service-role key or database password in this file or in GitHub.
+
+Demo Mode (password-free role switching) is on by default. Set `NEXT_PUBLIC_DEMO_MODE=false` only if you want normal password prompts.
 
 3. Install and run:
 

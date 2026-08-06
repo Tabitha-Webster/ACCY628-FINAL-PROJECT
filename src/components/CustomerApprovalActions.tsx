@@ -13,21 +13,14 @@ type Props = {
 
 export function CustomerApprovalActions({ customerId, managerId, currentStatus }: Props) {
   const router = useRouter();
-  const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<"approve" | "reject" | null>(null);
 
   async function decide(decision: "approve" | "reject") {
     setError(null);
-    const trimmedNote = note.trim();
-    if (!trimmedNote) {
-      setError("Please enter a short approval or rejection note.");
-      return;
-    }
     setLoading(decision);
     const supabase = createClient();
     const approved = decision === "approve";
-
     const nextStatus = approved ? "active" : "rejected";
     const reviewedAt = new Date().toISOString();
 
@@ -36,7 +29,7 @@ export function CustomerApprovalActions({ customerId, managerId, currentStatus }
       .update({
         status: nextStatus,
         customer_status: nextStatus,
-        approval_note: trimmedNote,
+        approval_note: null,
         reviewed_at: reviewedAt,
         reviewed_by: managerId,
       })
@@ -45,13 +38,11 @@ export function CustomerApprovalActions({ customerId, managerId, currentStatus }
 
     if (updateError) {
       // Fallback when manager-approval columns / rejected enum are not applied yet.
-      // Prefer rejected when possible; only use inactive if rejected is unavailable.
       const preferRejected = await supabase
         .from("customers")
         .update({
           status: nextStatus,
           customer_status: nextStatus,
-          notes: `${approved ? "Approved" : "Rejected"}: ${trimmedNote}`,
         })
         .eq("id", customerId)
         .eq("status", "pending_approval");
@@ -63,7 +54,6 @@ export function CustomerApprovalActions({ customerId, managerId, currentStatus }
           .update({
             status: "inactive",
             customer_status: "inactive",
-            notes: `Rejected: ${trimmedNote}`,
           })
           .eq("id", customerId)
           .eq("status", "pending_approval");
@@ -78,7 +68,6 @@ export function CustomerApprovalActions({ customerId, managerId, currentStatus }
     }
 
     setLoading(null);
-    setNote("");
     router.refresh();
   }
 
@@ -88,16 +77,6 @@ export function CustomerApprovalActions({ customerId, managerId, currentStatus }
 
   return (
     <div className="space-y-2">
-      <label className="form-control w-full">
-        <span className="label-text mb-1 text-xs">Approval / rejection note</span>
-        <textarea
-          className="textarea textarea-bordered textarea-sm w-full"
-          rows={2}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Short note required"
-        />
-      </label>
       {error ? <p className="text-xs text-error">{error}</p> : null}
       <div className="flex flex-wrap gap-2">
         <Button

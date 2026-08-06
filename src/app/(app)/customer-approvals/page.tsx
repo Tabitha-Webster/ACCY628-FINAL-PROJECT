@@ -121,9 +121,6 @@ export default async function CustomerApprovalsPage() {
               <td className="text-sm">{formatDate(row.signup_at ?? row.created_at)}</td>
               <td>
                 <StatusBadge status={row.status} />
-                {row.approval_note ? (
-                  <p className="mt-1 max-w-xs text-xs opacity-60">Note: {row.approval_note}</p>
-                ) : null}
               </td>
               <td className="min-w-56">
                 <CustomerApprovalActions

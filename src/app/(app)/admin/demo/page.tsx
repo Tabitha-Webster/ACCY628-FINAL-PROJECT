@@ -30,10 +30,13 @@ export default async function AdminDemoSettingsPage() {
             in.
           </li>
           <li>
-            With <code>NEXT_PUBLIC_DEMO_MODE=true</code>, the header Demo Role Switcher signs in to
-            demo accounts without typing a password.
+            Demo Mode is on by default: the header Demo Role Switcher signs in to demo accounts
+            without typing a password.
           </li>
-          <li>When Demo Mode is off, the login demo buttons are hidden and normal login remains.</li>
+          <li>
+            Set <code>NEXT_PUBLIC_DEMO_MODE=false</code> in <code>.env.local</code> (then restart
+            the server) to require passwords again.
+          </li>
           <li>Mark demo accounts with <code>is_demo_user = true</code> in User Access.</li>
         </ul>
       </div>
