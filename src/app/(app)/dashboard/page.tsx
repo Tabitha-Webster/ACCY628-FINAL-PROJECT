@@ -14,7 +14,7 @@ import {
   DateText,
 } from "@/components/ui";
 import { ManagerCharts, type MonthlyFinancials, type TicketsByStatus } from "@/components/ManagerCharts";
-import { CustomerSupportStatusChart } from "@/components/CustomerSupportStatusChart";
+import { CustomerHomeVisuals } from "@/components/CustomerHomeVisuals";
 import { ContractMetricsWidgets } from "@/components/ContractMetricsWidgets";
 import {
   TechnicianWorkspaceClient,
@@ -1826,7 +1826,7 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
   const year = new Date().getFullYear();
   const yearStart = `${year}-01-01T00:00:00.000Z`;
 
-  const [contractsRes, ticketsRes, yearTicketsRes, projectsRes, invoicesRes, paymentsRes, disputesRes, timeEntriesRes, revenueRes] =
+  const [contractsRes, ticketsRes, yearTicketsRes, projectsRes, invoicesRes, disputesRes, timeEntriesRes, revenueRes] =
     await Promise.all([
       supabase.from("contracts").select("id, name, contract_number, status, included_hours_per_month").eq("customer_id", customerId).eq("status", "active"),
       supabase.from("support_tickets").select("id, ticket_number, title, priority, status").eq("customer_id", customerId).in("status", OPEN_TICKET_STATUSES),
@@ -1838,14 +1838,8 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
       supabase.from("projects").select("id, name, status").eq("customer_id", customerId),
       supabase
         .from("invoices")
-        .select("id, invoice_number, remaining_balance, status, due_date, amount_paid, dispute_status")
+        .select("id, invoice_number, remaining_balance, status, due_date, amount_paid, total_amount, dispute_status")
         .eq("customer_id", customerId),
-      supabase
-        .from("payments")
-        .select("id, payment_number, payment_amount, payment_date, payment_method")
-        .eq("customer_id", customerId)
-        .order("payment_date", { ascending: false })
-        .limit(5),
       supabase.from("disputes").select("id, dispute_reason, disputed_amount, resolution_status").eq("customer_id", customerId),
       supabase
         .from("time_entries")
@@ -1863,7 +1857,6 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
   const yearTickets = (yearTicketsRes.data ?? []) as Pick<SupportTicket, "id" | "status" | "submitted_at">[];
   const projects = (projectsRes.data ?? []) as Pick<Project, "id" | "name" | "status">[];
   const invoices = (invoicesRes.data ?? []).map((invoice) => withDerivedInvoiceStatus(invoice));
-  const payments = (paymentsRes.data ?? []) as (Pick<Payment, "payment_number" | "payment_amount" | "payment_date" | "payment_method"> & { id: string })[];
   const disputes = (disputesRes.data ?? []) as Pick<Dispute, "id" | "dispute_reason" | "disputed_amount" | "resolution_status">[];
   const timeEntries = (timeEntriesRes.data ?? []) as Pick<TimeEntry, "contract_id" | "hours_worked" | "classification" | "work_date">[];
   const revenue = (revenueRes.data ?? []) as Pick<RevenueRecord, "amount" | "recognition" | "period_month">[];
@@ -1899,187 +1892,78 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
     .map(([status, count]) => ({ status, count }))
     .sort((a, b) => b.count - a.count || a.status.localeCompare(b.status));
 
+  const billableInvoices = invoices.filter((i) => !["draft", "canceled"].includes(i.status));
+  let invoicePaid = 0;
+  let invoiceTotalBilled = 0;
+  for (const invoice of billableInvoices) {
+    const paid = Number(invoice.amount_paid ?? 0);
+    const remaining = Number(invoice.remaining_balance ?? 0);
+    const listedTotal = Number(
+      (invoice as { total_amount?: number | string | null }).total_amount ?? 0
+    );
+    const total = listedTotal > 0 ? listedTotal : paid + remaining;
+    invoicePaid += Math.max(0, paid);
+    invoiceTotalBilled += Math.max(0, total);
+  }
+  // Prefer sum of line totals; fall back so the bar never divides by zero when paid > 0
+  if (invoiceTotalBilled < invoicePaid) {
+    invoiceTotalBilled = invoicePaid;
+  }
+  const invoiceRemaining = Math.max(0, invoiceTotalBilled - invoicePaid);
+
   return (
-    <div>
-      <PageHeader
-        title="Customer Home"
-        description={`Welcome back, ${profile.full_name}. Here's your account at a glance.`}
-        actions={
-          <Link
-            href="/my-invoices"
-            className="block min-w-[12rem] rounded-box border border-error/50 bg-error/10 px-4 py-3 text-right shadow-sm transition hover:border-error hover:bg-error/15"
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide text-error">Invoice Balance Due</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums text-error">{formatCurrency(invoiceBalance)}</p>
-            <p className="mt-1 text-xs text-error/80">
-              {invoiceBalance > 0 ? "View invoices to pay" : "You are all caught up"}
-            </p>
-          </Link>
-        }
-      />
-
-      <div className="grid gap-4 xl:grid-cols-12">
-        <div className="grid gap-4 sm:grid-cols-2 xl:col-span-7">
-          <StatCard
-            label="Active Contracts"
-            value={String(contracts.length)}
-            href="/my-contracts"
-            explanation={{
-              title: "Active Contracts",
-              result: String(contracts.length),
-              formula: "Count of your contracts with status = active",
-              lines: contracts.map((contract) => ({ label: contract.name, value: contract.contract_number })),
-            }}
-          />
-          <StatCard
-            label="Active Projects"
-            value={String(activeProjects.length)}
-            href="/my-projects"
-            explanation={{
-              title: "Active Projects",
-              result: String(activeProjects.length),
-              formula: "Count of your projects that are not closed or canceled",
-              lines: activeProjects.map((project) => ({
-                label: project.name,
-                value: project.status.replace(/_/g, " "),
-              })),
-            }}
-          />
-          <StatCard
-            label="Open Disputes"
-            value={String(openDisputes.length)}
-            tone={openDisputes.length > 0 ? "error" : "default"}
-            explanation={{
-              title: "Open Disputes",
-              result: String(openDisputes.length),
-              formula: "Count of your disputes that are not resolved or rejected",
-              lines: openDisputes.map((dispute) => ({
-                label: dispute.dispute_reason,
-                value: formatCurrency(Number(dispute.disputed_amount)),
-                detail: dispute.resolution_status.replace(/_/g, " "),
-              })),
-            }}
-          />
-          <StatCard
-            label="This Month's Service Charges"
-            value={formatCurrency(monthlyAmount)}
-            explanation={{
-              title: "This Month's Service Charges",
-              result: formatCurrency(monthlyAmount),
-              formula: `Sum of earned revenue records for ${monthLabel(currentMonthKey)}`,
-              lines: revenue
-                .filter((row) => row.recognition === "earned" && monthKey(row.period_month) === currentMonthKey)
-                .map((row) => ({ label: row.period_month, value: formatCurrency(Number(row.amount)) })),
-            }}
-          />
-        </div>
-
-        <div className="xl:col-span-5">
-          <CustomerSupportStatusChart data={supportStatusSlices} year={year} />
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Contract Hours This Month</h2>
-          {contractsWithUsage.length === 0 ? (
-            <EmptyState title="No active contracts" description="Contact your account manager to set up a service agreement." />
-          ) : (
-            <DataTable headers={["Contract", "Used / Included", "Remaining", "Status"]}>
-              {contractsWithUsage.map((c) => (
-                <tr key={c.id}>
-                  <td>
-                    <Link className="link link-hover" href="/my-contracts">
-                      {c.name}
-                    </Link>
-                  </td>
-                  <td>
-                    <Hours value={c.used} /> / <Hours value={c.included_hours_per_month} />
-                  </td>
-                  <td>
-                    <Hours value={Math.max(c.remaining, 0)} />
-                  </td>
-                  <td>
-                    <StatusBadge status={c.status} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Open Support Requests</h2>
-          {tickets.length === 0 ? (
-            <EmptyState title="No open requests" description="Submit a new support request any time you need help." />
-          ) : (
-            <DataTable headers={["Ticket", "Priority", "Status"]}>
-              {tickets.slice(0, 8).map((t) => (
-                <tr key={t.id}>
-                  <td>
-                    <Link className="link link-hover" href={`/tickets/${t.id}`}>
-                      {t.ticket_number} | {t.title}
-                    </Link>
-                  </td>
-                  <td>
-                    <StatusBadge status={t.priority} />
-                  </td>
-                  <td>
-                    <StatusBadge status={t.status} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Recent Payments</h2>
-          {payments.length === 0 ? (
-            <EmptyState title="No payments recorded yet" />
-          ) : (
-            <DataTable headers={["Payment #", "Amount", "Method", "Date"]}>
-              {payments.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.payment_number}</td>
-                  <td>
-                    <Money value={Number(p.payment_amount)} />
-                  </td>
-                  <td>
-                    <StatusBadge status={p.payment_method} />
-                  </td>
-                  <td>
-                    <DateText value={p.payment_date} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Disputes</h2>
-          {disputes.length === 0 ? (
-            <EmptyState title="No disputes on file" />
-          ) : (
-            <DataTable headers={["Reason", "Amount", "Status"]}>
-              {disputes.map((d) => (
-                <tr key={d.id}>
-                  <td className="max-w-xs truncate">{d.dispute_reason}</td>
-                  <td>
-                    <Money value={Number(d.disputed_amount)} />
-                  </td>
-                  <td>
-                    <StatusBadge status={d.resolution_status} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-      </div>
-    </div>
+    <CustomerHomeVisuals
+      fullName={profile.full_name}
+      invoiceBalance={invoiceBalance}
+      year={year}
+      metrics={[
+        {
+          label: "Active Contracts",
+          value: String(contracts.length),
+          href: "/my-contracts",
+          tone: "sky",
+        },
+        {
+          label: "Active Projects",
+          value: String(activeProjects.length),
+          href: "/my-projects",
+          tone: "violet",
+        },
+        {
+          label: "Open Disputes",
+          value: String(openDisputes.length),
+          tone: openDisputes.length > 0 ? "rose" : "emerald",
+        },
+        {
+          label: "Service Charges",
+          value: formatCurrency(monthlyAmount),
+          hint: "This month",
+          tone: "amber",
+        },
+      ]}
+      supportStatusSlices={supportStatusSlices}
+      contracts={contractsWithUsage.map((c) => ({
+        id: c.id,
+        name: c.name,
+        used: c.used,
+        included: Number(c.included_hours_per_month ?? 0),
+        remaining: c.remaining,
+        pct: c.pct,
+        status: c.status,
+      }))}
+      requests={tickets.slice(0, 5).map((t) => ({
+        id: t.id,
+        ticketNumber: t.ticket_number,
+        title: t.title,
+        priority: t.priority,
+        status: t.status,
+      }))}
+      invoicePayment={{
+        total: invoiceTotalBilled,
+        paid: invoicePaid,
+        remaining: invoiceRemaining,
+        invoiceCount: billableInvoices.length,
+      }}
+    />
   );
 }

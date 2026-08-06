@@ -2,10 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile, requireApprovedCustomer } from "@/lib/auth";
-import { PageHeader, DataTable, EmptyState, StatusBadge, Money, DateText, ErrorState, StatCard } from "@/components/ui";
+import { PageHeader, DataTable, EmptyState, StatusBadge, Money, DateText, ErrorState } from "@/components/ui";
+import { ExplainNumber } from "@/components/ExplainNumber";
 import { formatCurrency } from "@/lib/format";
 import { withDerivedInvoiceStatus } from "@/lib/billing";
 import type { Dispute } from "@/lib/types";
+
 export default async function MyInvoicesPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
@@ -63,51 +65,51 @@ export default async function MyInvoicesPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard
-          label="Balance Due"
-          value={formatCurrency(balanceDue)}
-          tone={balanceDue > 0 ? "warning" : "success"}
-          explanation={{
-            title: "Balance Due",
-            result: formatCurrency(balanceDue),
-            formula: "Sum of remaining_balance on your open invoices that are not draft, canceled, or paid",
-            lines: openInvoices.map((invoice) => ({
-              label: invoice.invoice_number,
-              value: formatCurrency(invoice.remaining_balance),
-              detail: invoice.status.replace(/_/g, " "),
-            })),
-          }}
-        />
-        <StatCard
-          label="Total Invoices"
-          value={String(invoices.length)}
-          explanation={{
-            title: "Total Invoices",
-            result: String(invoices.length),
-            formula: "Count of all invoices issued to your account",
-            lines: invoices.map((invoice) => ({
-              label: invoice.invoice_number,
-              value: formatCurrency(Number(invoice.total_amount ?? 0)),
-              detail: invoice.status.replace(/_/g, " "),
-            })),
-          }}
-        />
-        <StatCard
-          label="Total Paid to Date"
-          value={formatCurrency(totalPaid)}
-          tone="success"
-          explanation={{
-            title: "Total Paid to Date",
-            result: formatCurrency(totalPaid),
-            formula: "Sum of all payment_amount values recorded for your account",
-            lines: payments.map((payment) => ({
-              label: payment.payment_number,
-              value: formatCurrency(Number(payment.payment_amount)),
-              detail: `${payment.payment_method.replace(/_/g, " ")} · ${payment.payment_date}`,
-            })),
-          }}
-        />
+      <div className="flex flex-wrap items-start justify-between gap-x-10 gap-y-4">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide opacity-60">Total Invoices</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{invoices.length}</p>
+          <ExplainNumber
+            explanation={{
+              title: "Total Invoices",
+              result: String(invoices.length),
+              formula: "Count of all invoices issued to your account",
+              description: `Amount paid to date across all payments: ${formatCurrency(totalPaid)}.`,
+              lines: invoices.map((invoice) => ({
+                label: invoice.invoice_number,
+                value: formatCurrency(Number(invoice.total_amount ?? 0)),
+                detail: `${invoice.status.replace(/_/g, " ")} · amount paid ${formatCurrency(Number(invoice.amount_paid ?? 0))}`,
+              })),
+            }}
+          />
+        </div>
+
+        <div className="text-right">
+          <p className="text-xs font-medium uppercase tracking-wide opacity-60">Balance Due</p>
+          <p
+            className={`mt-1 text-2xl font-semibold tabular-nums ${
+              balanceDue > 0 ? "text-warning" : "text-success"
+            }`}
+          >
+            {formatCurrency(balanceDue)}
+          </p>
+          <div className="flex justify-end">
+            <ExplainNumber
+              explanation={{
+                title: "Balance Due",
+                result: formatCurrency(balanceDue),
+                formula:
+                  "Sum of remaining_balance on your open invoices that are not draft, canceled, or paid",
+                description: `Amount paid to date across all payments: ${formatCurrency(totalPaid)}.`,
+                lines: openInvoices.map((invoice) => ({
+                  label: invoice.invoice_number,
+                  value: formatCurrency(invoice.remaining_balance),
+                  detail: `${invoice.status.replace(/_/g, " ")} · amount paid ${formatCurrency(Number(invoice.amount_paid ?? 0))}`,
+                })),
+              }}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="mt-6">
@@ -115,7 +117,7 @@ export default async function MyInvoicesPage() {
         {invoices.length === 0 ? (
           <EmptyState title="No invoices yet" description="Invoices for your account will appear here once issued." />
         ) : (
-          <DataTable headers={["Invoice", "Period", "Total", "Paid", "Balance", "Due", "Status", ""]}>
+          <DataTable headers={["Invoice", "Period", "Total", "Balance", "Due", "Status", ""]}>
             {invoices.map((i) => (
               <tr key={i.id}>
                 <td>{i.invoice_number}</td>
@@ -130,9 +132,6 @@ export default async function MyInvoicesPage() {
                 </td>
                 <td>
                   <Money value={Number(i.total_amount)} />
-                </td>
-                <td>
-                  <Money value={Number(i.amount_paid)} />
                 </td>
                 <td>
                   <Money value={Number(i.remaining_balance)} />

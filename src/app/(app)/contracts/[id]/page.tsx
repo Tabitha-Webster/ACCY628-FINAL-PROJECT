@@ -307,7 +307,7 @@ export default async function ContractDetailPage({
         }
       >
         <p className="text-sm opacity-70">
-          Status values: Draft, Pending Approval, Active, Suspended, Expired, Renewed, Cancelled.
+          Status values: Draft, Pending Approval, Active, Suspended, Completed, Renewed, Cancelled.
           Actions respect your role permissions (approve, renew, cancel, edit, delete).
         </p>
         <ContractLifecycleActions

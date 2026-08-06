@@ -312,9 +312,9 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/dashboard", label: "Customer Home" },
     { href: "/support-requests", label: "Make a Request" },
     { href: "/my-contracts", label: "My Contracts" },
+    { href: "/service-usage", label: "Service Usage" },
     { href: "/my-invoices", label: "My Invoices" },
     { href: "/my-projects", label: "My Projects" },
-    { href: "/service-usage", label: "Service Usage" },
   ],
 };
 
@@ -356,7 +356,7 @@ export const CONTRACTS_NAV_COPY: Record<
     href: "/my-contracts",
     title: "My Contracts",
     description:
-      "View the service agreements for your organization, including fees, included hours, and covered services.",
+      "Your service agreements — terms, included hours, and covered services. Open Service Usage to see this month's hour breakdown.",
   },
 };
 
