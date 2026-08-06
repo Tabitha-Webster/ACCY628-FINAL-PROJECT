@@ -7,8 +7,10 @@ import {
   canEditContracts,
   canViewContractsModule,
   getContractById,
+  pdfContractFromRow,
   unwrapAssignedManager,
   unwrapCustomer,
+  unwrapProfile,
   type ContractDetailRow,
 } from "@/lib/contracts";
 import type { ContractSignaturePacket } from "@/lib/contracts/signature-packets";
@@ -42,6 +44,7 @@ export default async function ContractPdfViewPage({
   const contract = contractData as ContractDetailRow;
   const customer = unwrapCustomer(contract);
   const manager = unwrapAssignedManager(contract);
+  const technician = unwrapProfile(contract.assigned_technician);
   const packet = (packetRes.data as ContractSignaturePacket | null) ?? null;
   const canEdit = canEditContracts(profile.role);
   const backHref =
@@ -54,26 +57,11 @@ export default async function ContractPdfViewPage({
       contract={{
         id: contract.id,
         customer_id: contract.customer_id,
-        contract_number: contract.contract_number,
-        name: contract.name,
-        status: contract.status,
-        contract_type: contract.contract_type,
-        start_date: contract.start_date,
-        end_date: contract.end_date,
-        monthly_recurring_fee: contract.monthly_recurring_fee,
-        included_hours_per_month: contract.included_hours_per_month,
-        additional_hourly_rate: contract.additional_hourly_rate,
-        payment_terms: contract.payment_terms,
-        billing_frequency: contract.billing_frequency,
-        sla_response_hours: contract.sla_response_hours,
-        sla_resolution_hours: contract.sla_resolution_hours,
-        description: contract.description,
-        scope: contract.scope,
-        included_services: contract.included_services,
-        work_location: contract.work_location,
+        ...pdfContractFromRow(contract),
       }}
       customerName={customer?.name ?? "Customer"}
       managerName={manager?.full_name ?? null}
+      technicianName={technician?.full_name ?? null}
       packet={packet}
       backHref={backHref}
       editHref={canEdit ? `/contracts/${id}/edit` : null}

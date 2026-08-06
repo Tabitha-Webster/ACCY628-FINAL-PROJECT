@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { StatusBadge } from "@/components/ui";
 import { SignaturePad } from "@/components/SignaturePad";
 import { buildContractPdfBlob, downloadPdfBlob } from "@/lib/contracts/build-contract-pdf";
+import { pdfContractFromRow } from "@/lib/contracts/pdf-payload";
 import {
   SIGNATURE_PACKET_STATUS_LABELS,
   packetSignaturesForPdf,
@@ -16,12 +18,13 @@ import {
 import type { UserRole } from "@/lib/constants";
 import type { Contract } from "@/lib/types";
 
-type ContractForPdf = ContractPdfInput["contract"];
+type ContractForPdf = ContractPdfInput["contract"] & Pick<Contract, "id" | "customer_id" | "status">;
 
 type Props = {
-  contract: ContractForPdf & Pick<Contract, "id" | "customer_id" | "status">;
+  contract: ContractForPdf;
   customerName: string;
   managerName: string | null;
+  technicianName?: string | null;
   profileId: string;
   profileName: string;
   role: UserRole;
@@ -32,6 +35,7 @@ export function ContractSignatureWorkflow({
   contract,
   customerName,
   managerName,
+  technicianName = null,
   profileId,
   profileName,
   role,
@@ -53,12 +57,13 @@ export function ContractSignatureWorkflow({
 
   const pdfInput = useMemo<ContractPdfInput>(
     () => ({
-      contract,
+      contract: pdfContractFromRow(contract),
       customerName,
       managerName,
+      technicianName,
       signatures: packetSignaturesForPdf(packet),
     }),
-    [contract, customerName, managerName, packet]
+    [contract, customerName, managerName, technicianName, packet]
   );
 
   useEffect(() => {
@@ -133,9 +138,10 @@ export function ContractSignatureWorkflow({
 
   async function uploadPdfVersion(nextPacket: ContractSignaturePacket) {
     const blob = await buildContractPdfBlob({
-      contract,
+      contract: pdfContractFromRow(contract),
       customerName,
       managerName,
+      technicianName,
       signatures: packetSignaturesForPdf(nextPacket),
     });
     const path = `${contract.id}/signature-packets/${nextPacket.id}-${Date.now()}.pdf`;
@@ -153,6 +159,22 @@ export function ContractSignatureWorkflow({
       .single();
     if (updateError) throw new Error(updateError.message);
     setPacket(data as ContractSignaturePacket);
+  }
+
+  async function regenerateStoredPdf() {
+    if (!packet || !isManager) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await uploadPdfVersion(packet);
+      setMessage("PDF regenerated from the latest contract terms.");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not regenerate PDF.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function managerSignAndSend() {
@@ -261,9 +283,10 @@ export function ContractSignatureWorkflow({
       // Build + upload PDF first, then persist signature + storage_path in one update
       // so RLS cannot block a follow-up write after status flips to awaiting_customer.
       const blob = await buildContractPdfBlob({
-        contract,
+        contract: pdfContractFromRow(contract),
         customerName,
         managerName,
+        technicianName,
         signatures: packetSignaturesForPdf(optimisticPacket),
       });
       const path = `${contract.id}/signature-packets/${packet.id}-${Date.now()}.pdf`;
@@ -381,6 +404,9 @@ export function ContractSignatureWorkflow({
           )}
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href={`/contracts/${contract.id}/view`} className="btn btn-ghost btn-sm border border-base-300">
+            View updated PDF
+          </Link>
           {canStart && !packet ? (
             <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={createPacket}>
               {busy ? "Creating…" : "Create PDF for signatures"}
@@ -389,6 +415,16 @@ export function ContractSignatureWorkflow({
           {packet?.status === "rejected" && isManager ? (
             <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={createPacket}>
               Start new signature packet
+            </button>
+          ) : null}
+          {packet && isManager ? (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              disabled={busy}
+              onClick={() => void regenerateStoredPdf()}
+            >
+              {busy ? "Updating…" : "Regenerate PDF"}
             </button>
           ) : null}
           {previewUrl ? (

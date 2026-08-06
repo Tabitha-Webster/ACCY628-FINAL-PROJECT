@@ -1,20 +1,57 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { isManagerRole } from "@/lib/constants";
-import { DataTable, EmptyState, ErrorState, Hours, PageHeader, StatCard, StatusBadge } from "@/components/ui";
-import { formatDate, statusLabel } from "@/lib/format";
-import { slaStatus, usagePercentage, usageStatus } from "@/lib/calculations";
+import { EmptyState, ErrorState, PageHeader } from "@/components/ui";
+import {
+  ContractDeliveryBoard,
+  type DeliveryContractCard,
+} from "@/components/ContractDeliveryBoard";
+import { projectCompletionPercent } from "@/components/ProjectProgressCard";
+import {
+  isIncompleteProjectStatus,
+  isOpenTicketStatus,
+} from "@/lib/contracts/delivery-completion";
+import type { ContractStatus } from "@/lib/types";
 
-const OPEN_TICKET_STATUSES = ["new", "assigned", "in_progress", "waiting_on_customer", "waiting_on_approval"];
+type CustomerJoin = { name: string } | { name: string }[] | null;
 
-function slaBadgeClass(status: "met" | "at_risk" | "missed" | "pending") {
-  if (status === "missed") return "badge-error";
-  if (status === "at_risk") return "badge-warning";
-  if (status === "met") return "badge-success";
-  return "badge-ghost";
+function unwrapName(value: CustomerJoin): string | null {
+  if (!value) return null;
+  const row = Array.isArray(value) ? value[0] : value;
+  return row?.name ?? null;
 }
+
+type ContractRow = {
+  id: string;
+  contract_number: string;
+  name: string;
+  status: ContractStatus;
+  customers: CustomerJoin;
+};
+
+type TicketRow = {
+  id: string;
+  contract_id: string | null;
+  ticket_number: string;
+  title: string;
+  status: string;
+  priority: string;
+  assigned_technician_id: string | null;
+};
+
+type ProjectRow = {
+  id: string;
+  contract_id: string | null;
+  name: string;
+  status: string;
+};
+
+type MilestoneRow = {
+  project_id: string;
+  completed: boolean | null;
+  approval_status: string | null;
+};
 
 export default async function OperationsPage() {
   const profile = await getCurrentProfile();
@@ -23,255 +60,148 @@ export default async function OperationsPage() {
 
   const supabase = await createClient();
 
-  const now = new Date();
-  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
-
   const [
-    { data: openTickets, error: ticketsError },
-    { data: pendingWork, error: workError },
-    { data: activeContracts, error: contractsError },
-    { data: monthEntries, error: entriesError },
+    { data: contractsData, error: contractsError },
+    { data: ticketsData, error: ticketsError },
+    { data: projectsData, error: projectsError },
+    { data: milestonesData, error: milestonesError },
   ] = await Promise.all([
     supabase
-      .from("support_tickets")
-      .select("id, ticket_number, title, status, priority, target_resolution_at, completed_at, customers(name)")
-      .in("status", OPEN_TICKET_STATUSES)
-      .order("target_resolution_at", { ascending: true }),
-    supabase
-      .from("additional_work_requests")
-      .select("id, title, estimated_hours, estimated_amount, created_at, customers(name), contracts(name)")
-      .eq("approval_status", "pending")
-      .order("created_at", { ascending: true }),
-    supabase
       .from("contracts")
-      .select("id, name, contract_number, included_hours_per_month, customers(name)")
-      .eq("status", "active"),
+      .select("id, contract_number, name, status, customers(name)")
+      .in("status", ["active", "on_hold"])
+      .order("contract_number", { ascending: true }),
     supabase
-      .from("time_entries")
-      .select("contract_id, hours_worked")
-      .eq("classification", "included")
-      .gte("work_date", monthStart)
-      .lt("work_date", monthEnd),
+      .from("support_tickets")
+      .select(
+        "id, contract_id, ticket_number, title, status, priority, assigned_technician_id"
+      )
+      .not("status", "eq", "canceled")
+      .order("ticket_number", { ascending: true }),
+    supabase
+      .from("projects")
+      .select("id, contract_id, name, status")
+      .order("name", { ascending: true }),
+    supabase.from("project_milestones").select("project_id, completed, approval_status"),
   ]);
 
-  const error = ticketsError || workError || contractsError || entriesError;
+  const error = contractsError || ticketsError || projectsError || milestonesError;
+  const contracts = (contractsData ?? []) as ContractRow[];
+  const tickets = (ticketsData ?? []) as TicketRow[];
+  const projects = (projectsData ?? []) as ProjectRow[];
+  const milestones = (milestonesData ?? []) as MilestoneRow[];
 
-  const ticketsWithSla = (openTickets ?? []).map((t) => ({
-    ...t,
-    sla: slaStatus(t.target_resolution_at, t.completed_at, now),
-  }));
-  const atRiskOrMissed = ticketsWithSla.filter((t) => t.sla === "at_risk" || t.sla === "missed");
+  const technicianIds = Array.from(
+    new Set(tickets.map((t) => t.assigned_technician_id).filter((v): v is string => Boolean(v)))
+  );
+  const { data: techProfiles } = technicianIds.length
+    ? await supabase.from("profiles").select("id, full_name").in("id", technicianIds)
+    : { data: [] as { id: string; full_name: string }[] };
+  const techName = new Map((techProfiles ?? []).map((p) => [p.id, p.full_name]));
 
-  const hoursByContract = new Map<string, number>();
-  for (const entry of monthEntries ?? []) {
-    if (!entry.contract_id) continue;
-    hoursByContract.set(entry.contract_id, (hoursByContract.get(entry.contract_id) ?? 0) + Number(entry.hours_worked ?? 0));
+  const milestonesByProject = new Map<string, { total: number; completed: number }>();
+  for (const m of milestones) {
+    const cur = milestonesByProject.get(m.project_id) ?? { total: 0, completed: 0 };
+    cur.total += 1;
+    if (m.completed || m.approval_status === "approved") cur.completed += 1;
+    milestonesByProject.set(m.project_id, cur);
   }
 
-  const contractsOverHours = (activeContracts ?? [])
-    .map((c) => {
-      const used = hoursByContract.get(c.id) ?? 0;
-      const included = Number(c.included_hours_per_month ?? 0);
-      const pct = usagePercentage(used, included);
-      return { ...c, used, included, pct, status: usageStatus(pct) };
-    })
-    .filter((c) => c.status === "over_limit")
-    .sort((a, b) => b.pct - a.pct);
+  const ticketsByContract = new Map<string, TicketRow[]>();
+  const unlinkedTickets: TicketRow[] = [];
+  for (const t of tickets) {
+    if (!t.contract_id) {
+      unlinkedTickets.push(t);
+      continue;
+    }
+    const list = ticketsByContract.get(t.contract_id) ?? [];
+    list.push(t);
+    ticketsByContract.set(t.contract_id, list);
+  }
+
+  const projectsByContract = new Map<string, ProjectRow[]>();
+  const unlinkedProjects: ProjectRow[] = [];
+  for (const p of projects) {
+    if (!p.contract_id) {
+      unlinkedProjects.push(p);
+      continue;
+    }
+    const list = projectsByContract.get(p.contract_id) ?? [];
+    list.push(p);
+    projectsByContract.set(p.contract_id, list);
+  }
+
+  const boardContracts: DeliveryContractCard[] = contracts.map((contract) => {
+    const linkedTickets = ticketsByContract.get(contract.id) ?? [];
+    const linkedProjects = projectsByContract.get(contract.id) ?? [];
+    const openTicketCount = linkedTickets.filter((t) => isOpenTicketStatus(t.status)).length;
+    const incompleteProjectCount = linkedProjects.filter((p) =>
+      isIncompleteProjectStatus(p.status)
+    ).length;
+
+    return {
+      id: contract.id,
+      contract_number: contract.contract_number,
+      name: contract.name,
+      status: contract.status,
+      customerName: unwrapName(contract.customers) ?? "Unknown customer",
+      ready: openTicketCount === 0 && incompleteProjectCount === 0,
+      openTicketCount,
+      incompleteProjectCount,
+      tickets: linkedTickets.map((t) => ({
+        id: t.id,
+        ticket_number: t.ticket_number,
+        title: t.title,
+        status: t.status,
+        priority: t.priority,
+        technicianName: t.assigned_technician_id
+          ? techName.get(t.assigned_technician_id) ?? null
+          : null,
+      })),
+      projects: linkedProjects.map((p) => {
+        const ms = milestonesByProject.get(p.id) ?? { total: 0, completed: 0 };
+        return {
+          id: p.id,
+          name: p.name,
+          status: p.status,
+          progressPercent: projectCompletionPercent(p.status, ms.completed, ms.total),
+        };
+      }),
+    };
+  });
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Service Operations"
-        description="Ticket load, SLA exposure, pending work requests, and hour usage across active contracts."
+        title="Ticket & Project Completion"
+        description="Match tickets and projects to their contracts. Mark a contract completed only when linked delivery work is finished."
       />
 
       {error ? <ErrorState message={error.message} /> : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Open Tickets"
-          value={String(openTickets?.length ?? 0)}
-          explanation={{
-            title: "Open Tickets",
-            result: String(openTickets?.length ?? 0),
-            formula: "Count of tickets in new, assigned, in progress, waiting on customer, or waiting on approval",
-            lines: (openTickets ?? []).map((ticket) => {
-              const customer = Array.isArray(ticket.customers) ? ticket.customers[0] : ticket.customers;
-              return {
-                label: ticket.ticket_number,
-                value: ticket.status.replace(/_/g, " "),
-                detail: `${customer?.name ?? "Unknown customer"} · ${ticket.title}`,
-              };
-            }),
-          }}
+      {!error && contracts.length === 0 ? (
+        <EmptyState
+          title="No active contracts"
+          description="Active and on-hold agreements will appear here with their linked tickets and projects."
         />
-        <StatCard
-          label="SLA At Risk / Missed"
-          value={String(atRiskOrMissed.length)}
-          tone={atRiskOrMissed.length > 0 ? "error" : "default"}
-          explanation={{
-            title: "SLA At Risk / Missed",
-            result: String(atRiskOrMissed.length),
-            formula: "Count of open tickets whose resolution SLA is at risk or already missed",
-            lines: atRiskOrMissed.map((ticket) => {
-              const customer = Array.isArray(ticket.customers) ? ticket.customers[0] : ticket.customers;
-              return {
-                label: ticket.ticket_number,
-                value: ticket.sla.replace(/_/g, " "),
-                detail: `${customer?.name ?? "Unknown customer"} · ${ticket.title}`,
-              };
-            }),
-          }}
+      ) : null}
+
+      {!error && contracts.length > 0 ? (
+        <ContractDeliveryBoard
+          profileId={profile.id}
+          contracts={boardContracts}
+          unlinkedTickets={unlinkedTickets.map((t) => ({
+            id: t.id,
+            ticket_number: t.ticket_number,
+            title: t.title,
+          }))}
+          unlinkedProjects={unlinkedProjects.map((p) => ({
+            id: p.id,
+            name: p.name,
+            status: p.status,
+          }))}
         />
-        <StatCard
-          label="Pending Work Requests"
-          value={String(pendingWork?.length ?? 0)}
-          tone={(pendingWork?.length ?? 0) > 0 ? "warning" : "default"}
-          explanation={{
-            title: "Pending Work Requests",
-            result: String(pendingWork?.length ?? 0),
-            formula: "Count of additional work requests where approval_status = pending",
-            lines: (pendingWork ?? []).map((request) => {
-              const customer = Array.isArray(request.customers) ? request.customers[0] : request.customers;
-              return {
-                label: request.title,
-                value: request.estimated_amount ? `$${Number(request.estimated_amount).toFixed(2)}` : "—",
-                detail: customer?.name ?? "Unknown customer",
-              };
-            }),
-          }}
-        />
-        <StatCard
-          label="Contracts Over Hours"
-          value={String(contractsOverHours.length)}
-          tone={contractsOverHours.length > 0 ? "error" : "default"}
-          explanation={{
-            title: "Contracts Over Hours",
-            result: String(contractsOverHours.length),
-            formula: "Count of active contracts where included hours used this month exceed included hours per month",
-            lines: contractsOverHours.map((contract) => {
-              const customer = Array.isArray(contract.customers) ? contract.customers[0] : contract.customers;
-              return {
-                label: contract.name,
-                value: `${contract.used.toFixed(1)} / ${contract.included.toFixed(1)} hrs`,
-                detail: `${customer?.name ?? "Unknown customer"} · ${contract.pct.toFixed(0)}% used`,
-              };
-            }),
-          }}
-        />
-      </div>
-
-      <div>
-        <h2 className="mb-2 text-lg font-semibold">SLA At Risk or Missed</h2>
-        {atRiskOrMissed.length > 0 ? (
-          <DataTable headers={["Ticket", "Customer", "Priority", "Target Resolution", "SLA"]}>
-            {atRiskOrMissed.map((ticket) => {
-              const customer = Array.isArray(ticket.customers) ? ticket.customers[0] : ticket.customers;
-              return (
-                <tr key={ticket.id}>
-                  <td>
-                    <div className="font-medium">{ticket.title}</div>
-                    <div className="text-xs opacity-60">{ticket.ticket_number}</div>
-                  </td>
-                  <td>{customer?.name ?? "—"}</td>
-                  <td className="text-xs capitalize">{ticket.priority}</td>
-                  <td className="text-xs">{formatDate(ticket.target_resolution_at)}</td>
-                  <td>
-                    <span className={`badge ${slaBadgeClass(ticket.sla)}`}>{statusLabel(ticket.sla)}</span>
-                  </td>
-                </tr>
-              );
-            })}
-          </DataTable>
-        ) : (
-          <EmptyState title="No tickets are at risk of missing their SLA" />
-        )}
-      </div>
-
-      <div>
-        <h2 className="mb-2 text-lg font-semibold">All Open Tickets</h2>
-        {openTickets && openTickets.length > 0 ? (
-          <DataTable headers={["Ticket", "Customer", "Priority", "Status", "Target Resolution"]}>
-            {ticketsWithSla.map((ticket) => {
-              const customer = Array.isArray(ticket.customers) ? ticket.customers[0] : ticket.customers;
-              return (
-                <tr key={ticket.id}>
-                  <td className="font-medium">{ticket.title}</td>
-                  <td>{customer?.name ?? "—"}</td>
-                  <td className="text-xs capitalize">{ticket.priority}</td>
-                  <td>
-                    <StatusBadge status={ticket.status} />
-                  </td>
-                  <td className="text-xs">{formatDate(ticket.target_resolution_at)}</td>
-                </tr>
-              );
-            })}
-          </DataTable>
-        ) : (
-          <EmptyState title="No open tickets" description="All support tickets are resolved, closed, or canceled." />
-        )}
-      </div>
-
-      <div>
-        <h2 className="mb-2 text-lg font-semibold">Pending Additional Work Requests</h2>
-        {pendingWork && pendingWork.length > 0 ? (
-          <DataTable headers={["Request", "Customer", "Contract", "Est. Hours", "Est. Amount", "Requested"]}>
-            {pendingWork.map((req) => {
-              const customer = Array.isArray(req.customers) ? req.customers[0] : req.customers;
-              const contract = Array.isArray(req.contracts) ? req.contracts[0] : req.contracts;
-              return (
-                <tr key={req.id}>
-                  <td className="font-medium">{req.title}</td>
-                  <td>{customer?.name ?? "—"}</td>
-                  <td>{contract?.name ?? "—"}</td>
-                  <td>
-                    <Hours value={Number(req.estimated_hours ?? 0)} />
-                  </td>
-                  <td>{req.estimated_amount ? `$${Number(req.estimated_amount).toFixed(2)}` : "—"}</td>
-                  <td className="text-xs">{formatDate(req.created_at)}</td>
-                </tr>
-              );
-            })}
-          </DataTable>
-        ) : (
-          <EmptyState title="No additional work requests are awaiting review" />
-        )}
-      </div>
-
-      <div>
-        <h2 className="mb-2 text-lg font-semibold">Contracts Over Included Hours (This Month)</h2>
-        {contractsOverHours.length > 0 ? (
-          <DataTable headers={["Contract", "Customer", "Used", "Included", "% Used"]}>
-            {contractsOverHours.map((contract) => {
-              const customer = Array.isArray(contract.customers) ? contract.customers[0] : contract.customers;
-              return (
-                <tr key={contract.id}>
-                  <td>
-                    <Link href={`/contracts/${contract.id}`} className="link link-hover font-medium">
-                      {contract.name}
-                    </Link>
-                    <div className="text-xs opacity-60">{contract.contract_number}</div>
-                  </td>
-                  <td>{customer?.name ?? "—"}</td>
-                  <td>
-                    <Hours value={contract.used} />
-                  </td>
-                  <td>
-                    <Hours value={contract.included} />
-                  </td>
-                  <td>
-                    <span className="badge badge-error">{contract.pct.toFixed(0)}%</span>
-                  </td>
-                </tr>
-              );
-            })}
-          </DataTable>
-        ) : (
-          <EmptyState title="No active contracts are over their included hours this month" />
-        )}
-      </div>
+      ) : null}
     </div>
   );
 }

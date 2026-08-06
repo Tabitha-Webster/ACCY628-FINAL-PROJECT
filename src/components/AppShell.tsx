@@ -113,6 +113,7 @@ function SideNav({
                   showNewContract
                   showCustomerContractData
                   showViewEditContracts
+                  showAssignedContracts
                   onNavigate={onNavigate}
                   allowedPageKeys={allowedPageKeys}
                 />

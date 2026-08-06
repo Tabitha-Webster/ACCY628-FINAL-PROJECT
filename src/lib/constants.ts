@@ -79,8 +79,8 @@ export const ROLE_ACCESS_MATRIX: {
     customerData: true,
   },
   {
-    area: "Service Operations",
-    description: "SLA monitoring, open work, hour usage",
+    area: "Ticket & Project Completion",
+    description: "Match tickets and projects to contracts and mark delivery complete",
     roles: ["admin", "manager"],
     financial: false,
     customerData: true,
@@ -267,7 +267,7 @@ const MANAGER_NAV: NavItem[] = [
   { href: "/admin/employees", label: "Employees" },
   // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
   { href: "/projects", label: "Projects" },
-  { href: "/operations", label: "Service Operations" },
+  { href: "/operations", label: "Ticket & Project Completion" },
   { href: "/time-cost-approvals", label: "Approve Time & Costs" },
   { href: "/profitability", label: "Profitability" },
   { href: "/billing-collections", label: "Billing and Collections" },

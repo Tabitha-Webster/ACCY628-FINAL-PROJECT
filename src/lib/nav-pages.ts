@@ -24,6 +24,7 @@ const CONTRACTS_PAGES: SearchablePage[] = [
   { href: "/contracts/reports", label: "Contracts Dashboard", group: "Contracts & Agreements" },
   { href: "/contracts", label: "Manage Contracts", group: "Contracts & Agreements" },
   { href: "/contracts/view-edit", label: "View and Edit Contracts", group: "Contracts & Agreements" },
+  { href: "/contracts/assigned", label: "Assigned Contracts", group: "Contracts & Agreements" },
   { href: "/contracts/awaiting-signature", label: "Awaiting Your Signature", group: "Contracts & Agreements" },
   { href: "/contracts/new", label: "New Contract", group: "Contracts & Agreements" },
   { href: "/contracts/renewals", label: "Renewal & Expiration", group: "Contracts & Agreements" },
@@ -79,6 +80,7 @@ export function pagesForRole(
         if (page.href === "/contracts/customers") return role === "admin" || role === "manager";
         if (page.href === "/contracts/awaiting-signature") return role === "executive" || role === "admin";
         if (page.href === "/contracts/view-edit") return role === "admin" || role === "manager";
+        if (page.href === "/contracts/assigned") return role === "manager";
         if (page.href === "/contracts/renewals")
           return role === "admin" || role === "manager" || role === "billing" || role === "technician";
         return true;

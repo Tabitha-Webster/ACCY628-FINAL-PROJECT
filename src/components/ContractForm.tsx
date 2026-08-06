@@ -5,6 +5,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { SignaturePad } from "@/components/SignaturePad";
+import { buildContractPdfBlob, downloadPdfBlob } from "@/lib/contracts/build-contract-pdf";
+import { formatCurrency } from "@/lib/format";
+import {
+  formatTechnicianOptionLabel,
+  rankTechniciansForContract,
+  skillLevelLabel,
+  type TechnicianSkillProfile,
+} from "@/lib/technicians/skills";
 import {
   BILLING_FREQUENCIES,
   BILLING_METHOD_OPTIONS,
@@ -29,11 +37,10 @@ import {
   locationAdjustedAmount,
   workLocationAdjustmentLabel,
   packetSignaturesForPdf,
+  pdfContractFromFormValues,
   type ContractFormFieldErrors,
   type ContractFormValues,
 } from "@/lib/contracts";
-import { buildContractPdfBlob } from "@/lib/contracts/build-contract-pdf";
-import { formatCurrency } from "@/lib/format";
 
 export type ContractFormOption = { id: string; label: string };
 
@@ -116,7 +123,7 @@ type Props = {
   initialValues?: Partial<ContractFormValues>;
   customers: ContractFormOption[];
   managers: ContractFormOption[];
-  technicians?: ContractFormOption[];
+  technicians?: TechnicianSkillProfile[];
 };
 
 const CREATE_STEPS = [
@@ -196,6 +203,7 @@ export function ContractForm({
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [signatureAck, setSignatureAck] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [pdfRefreshKey, setPdfRefreshKey] = useState(0);
 
   const title =
     mode === "create"
@@ -234,44 +242,33 @@ export function ContractForm({
   const managerLabel =
     managers.find((m) => m.id === values.assigned_manager_id)?.label ?? profileName;
 
+  const rankedTechnicians = useMemo(
+    () =>
+      rankTechniciansForContract(technicians, {
+        contract_type: values.contract_type || null,
+        included_services: values.included_services || null,
+        work_location: values.work_location || null,
+      }),
+    [technicians, values.contract_type, values.included_services, values.work_location]
+  );
+  const recommendedTechnician = rankedTechnicians[0]?.tech ?? null;
+  const recommendedFit = rankedTechnicians[0]?.fit ?? 0;
+  const selectedTechnician =
+    technicians.find((t) => t.id === values.assigned_technician_id) ?? null;
+
   useEffect(() => {
     if (wizardStep !== 3) return;
     let revoked: string | null = null;
     let cancelled = false;
     (async () => {
       const blob = await buildContractPdfBlob({
-        contract: {
-          contract_number: values.contract_number,
-          name: values.name,
-          status: (values.status || "draft") as
-            | "draft"
-            | "pending_approval"
-            | "active"
-            | "on_hold"
-            | "expired"
-            | "canceled"
-            | "renewed",
-          contract_type: values.contract_type,
-          start_date: values.start_date,
-          end_date: values.end_date || null,
-          monthly_recurring_fee: Number(values.monthly_recurring_fee || 0),
-          included_hours_per_month: Number(values.included_hours_per_month || 0),
-          additional_hourly_rate: Number(values.additional_hourly_rate || 0),
-          payment_terms: values.payment_terms || null,
-          billing_frequency: values.billing_frequency || null,
-          sla_response_hours: values.sla_response_hours
-            ? Number(values.sla_response_hours)
-            : null,
-          sla_resolution_hours: values.sla_resolution_hours
-            ? Number(values.sla_resolution_hours)
-            : null,
-          description: values.description || null,
-          scope: values.scope || null,
-          included_services: values.included_services || null,
-          work_location: values.work_location || null,
-        },
+        contract: pdfContractFromFormValues(
+          values,
+          isDraftWorkflow ? "draft" : "pending_approval"
+        ),
         customerName: customerLabel,
         managerName: managerLabel,
+        technicianName: selectedTechnician?.full_name ?? null,
         signatures: packetSignaturesForPdf(
           mode === "create" && signatureData
             ? {
@@ -304,7 +301,38 @@ export function ContractForm({
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               }
-            : null
+            : mode === "edit"
+              ? {
+                  id: "preview-edit",
+                  contract_id: contractId ?? "preview",
+                  status: "draft",
+                  is_current: true,
+                  storage_path: null,
+                  document_id: null,
+                  manager_signed_by: null,
+                  manager_signed_at: null,
+                  manager_signature_data: buildDemoSignatureDataUrl(profileName || "Emilie Pierson"),
+                  manager_signer_name: profileName || "Emilie Pierson",
+                  executive_signed_by: null,
+                  executive_signed_at: null,
+                  executive_signature_data: null,
+                  executive_signer_name: null,
+                  admin_signed_by: null,
+                  admin_signed_at: null,
+                  admin_signature_data: null,
+                  admin_signer_name: null,
+                  customer_signed_by: null,
+                  customer_signed_at: null,
+                  customer_signature_data: null,
+                  customer_signer_name: null,
+                  rejection_reason: null,
+                  rejected_by: null,
+                  rejected_at: null,
+                  created_by: profileId,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }
+              : null
         ),
       });
       if (cancelled) return;
@@ -326,10 +354,14 @@ export function ContractForm({
     values,
     customerLabel,
     managerLabel,
+    selectedTechnician,
     signatureData,
     profileName,
     profileId,
     mode,
+    contractId,
+    isDraftWorkflow,
+    pdfRefreshKey,
   ]);
 
   function update<K extends keyof ContractFormValues>(key: K, value: ContractFormValues[K]) {
@@ -747,31 +779,11 @@ export function ContractForm({
 
     try {
       const blob = await buildContractPdfBlob({
-        contract: {
-          contract_number: valuesForSave.contract_number,
-          name: valuesForSave.name,
-          status: "pending_approval",
-          contract_type: valuesForSave.contract_type,
-          start_date: valuesForSave.start_date,
-          end_date: valuesForSave.end_date || null,
-          monthly_recurring_fee: Number(valuesForSave.monthly_recurring_fee || 0),
-          included_hours_per_month: Number(valuesForSave.included_hours_per_month || 0),
-          additional_hourly_rate: Number(valuesForSave.additional_hourly_rate || 0),
-          payment_terms: valuesForSave.payment_terms || null,
-          billing_frequency: valuesForSave.billing_frequency || null,
-          sla_response_hours: valuesForSave.sla_response_hours
-            ? Number(valuesForSave.sla_response_hours)
-            : null,
-          sla_resolution_hours: valuesForSave.sla_resolution_hours
-            ? Number(valuesForSave.sla_resolution_hours)
-            : null,
-          description: valuesForSave.description || null,
-          scope: valuesForSave.scope || null,
-          included_services: valuesForSave.included_services || null,
-          work_location: valuesForSave.work_location || null,
-        },
+        contract: pdfContractFromFormValues(valuesForSave, "pending_approval"),
         customerName: customerLabel,
         managerName: managerLabel,
+        technicianName:
+          technicians.find((t) => t.id === valuesForSave.assigned_technician_id)?.full_name ?? null,
         signatures: packetSignaturesForPdf(packet),
       });
       const path = `${targetContractId}/signature-packets/${packet.id}-${Date.now()}.pdf`;
@@ -945,31 +957,11 @@ export function ContractForm({
 
     try {
       const blob = await buildContractPdfBlob({
-        contract: {
-          contract_number: values.contract_number,
-          name: values.name,
-          status: "pending_approval",
-          contract_type: values.contract_type,
-          start_date: values.start_date,
-          end_date: values.end_date || null,
-          monthly_recurring_fee: Number(values.monthly_recurring_fee || 0),
-          included_hours_per_month: Number(values.included_hours_per_month || 0),
-          additional_hourly_rate: Number(values.additional_hourly_rate || 0),
-          payment_terms: values.payment_terms || null,
-          billing_frequency: values.billing_frequency || null,
-          sla_response_hours: values.sla_response_hours
-            ? Number(values.sla_response_hours)
-            : null,
-          sla_resolution_hours: values.sla_resolution_hours
-            ? Number(values.sla_resolution_hours)
-            : null,
-          description: values.description || null,
-          scope: values.scope || null,
-          included_services: values.included_services || null,
-          work_location: values.work_location || null,
-        },
+        contract: pdfContractFromFormValues(values, "pending_approval"),
         customerName: customerLabel,
         managerName: managerLabel,
+        technicianName:
+          technicians.find((t) => t.id === values.assigned_technician_id)?.full_name ?? null,
         signatures: packetSignaturesForPdf(packet),
       });
       const path = `${contractId}/signature-packets/${packet.id}-${Date.now()}.pdf`;
@@ -1007,7 +999,7 @@ export function ContractForm({
       .eq("approval_status", "pending");
 
     setSaving(false);
-    router.push("/contracts/view-edit");
+    router.push(`/contracts/${contractId}/view`);
     router.refresh();
   }
 
@@ -1286,21 +1278,57 @@ export function ContractForm({
       </h2>
       <div className={fieldGridClass}>
         <FormField label="Assigned technician" className="sm:col-span-2 lg:col-span-3">
-            <div className="w-full">
+            <div className="w-full space-y-2">
+              {recommendedTechnician ? (
+                <div className="rounded-box border border-sky-200 bg-sky-50/80 px-3 py-2 text-sm dark:border-sky-800 dark:bg-sky-950/40">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-200">
+                        Recommended based on specialty &amp; skill level
+                      </p>
+                      <p className="mt-0.5 font-medium">
+                        {recommendedTechnician.full_name}
+                        <span className="font-normal opacity-70">
+                          {" "}
+                          — {recommendedTechnician.primary_specialty ?? "General support"} ·{" "}
+                          {skillLevelLabel(recommendedTechnician.skill_level)}
+                        </span>
+                      </p>
+                      <p className="text-xs opacity-60">Fit score {recommendedFit}%</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-xs shrink-0"
+                      onClick={() => update("assigned_technician_id", recommendedTechnician.id)}
+                      disabled={values.assigned_technician_id === recommendedTechnician.id}
+                    >
+                      {values.assigned_technician_id === recommendedTechnician.id
+                        ? "Selected"
+                        : "Use recommended"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               <select
                 className={selectControlClass}
                 value={values.assigned_technician_id}
                 onChange={(e) => update("assigned_technician_id", e.target.value)}
               >
                 <option value="">Unassigned</option>
-                {technicians.map((tech) => (
+                {rankedTechnicians.map(({ tech, fit }) => (
                   <option key={tech.id} value={tech.id}>
-                    {tech.label}
+                    {fit > 0 ? `★ ${fit}% · ` : ""}
+                    {formatTechnicianOptionLabel(tech)}
+                    {recommendedTechnician?.id === tech.id ? " (recommended)" : ""}
                   </option>
                 ))}
               </select>
               <p className="mt-1 text-xs opacity-60">
-                Optional. Assigns the primary technician who will support this agreement.
+                Optional. Technicians are ranked by how well their specialty and skill level match
+                this contract&apos;s type, work location, and covered services
+                {selectedTechnician
+                  ? `. Currently selected: ${formatTechnicianOptionLabel(selectedTechnician)}.`
+                  : "."}
               </p>
             </div>
           </FormField>
@@ -1606,7 +1634,7 @@ export function ContractForm({
       <p className="text-center text-sm opacity-70">
         {isDraftWorkflow
           ? "Save an incomplete draft for later, or sign and send only when the contract is complete. Drafts appear under Manage Contracts."
-          : "Preview the updated agreement PDF, then save. Changes are sent to the executive for approval, then to the customer to accept."}
+          : "Preview the updated agreement PDF below (regenerated from your edits), then save. Changes are resent to the executive for approval, then to the customer."}
       </p>
 
       <div className="rounded-box border border-base-300 bg-base-200/40 p-4 text-sm">
@@ -1624,7 +1652,9 @@ export function ContractForm({
           <div>
             <dt className="opacity-60">Technician</dt>
             <dd className="font-medium">
-              {technicians.find((t) => t.id === values.assigned_technician_id)?.label ?? "Unassigned"}
+              {selectedTechnician
+                ? formatTechnicianOptionLabel(selectedTechnician)
+                : "Unassigned"}
             </dd>
           </div>
           <div>
@@ -1636,6 +1666,46 @@ export function ContractForm({
             </dd>
           </div>
         </dl>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium">Updated contract PDF</p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            disabled={!previewUrl || saving}
+            onClick={() => {
+              if (!previewUrl) return;
+              void (async () => {
+                const blob = await buildContractPdfBlob({
+                  contract: pdfContractFromFormValues(
+                    values,
+                    isDraftWorkflow ? "draft" : "pending_approval"
+                  ),
+                  customerName: customerLabel,
+                  managerName: managerLabel,
+                  technicianName: selectedTechnician?.full_name ?? null,
+                  signatures: packetSignaturesForPdf(null),
+                });
+                downloadPdfBlob(blob, `${values.contract_number || "contract"}-agreement.pdf`);
+              })();
+            }}
+          >
+            Download PDF
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={saving}
+            onClick={() => {
+              setPreviewUrl(null);
+              setPdfRefreshKey((key) => key + 1);
+            }}
+          >
+            Regenerate PDF
+          </button>
+        </div>
       </div>
 
       {previewUrl ? (

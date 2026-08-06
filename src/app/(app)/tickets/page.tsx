@@ -135,7 +135,7 @@ export default async function TicketsPage({
       headerAction={
         profile.role === "manager" ? (
           <Link href="/operations" className="btn btn-sm btn-outline">
-            Service Operations
+            Ticket & Project Completion
           </Link>
         ) : null
       }

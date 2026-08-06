@@ -20,6 +20,7 @@ import {
   CONTRACT_STATUS_LABELS,
   CONTRACT_TYPE_LABELS,
   CONTRACT_BILLING_STATUS_LABELS,
+  canMarkContractCompleted,
   canViewContractsModule,
   getContractById,
   getContractRelatedWork,
@@ -41,6 +42,7 @@ import {
   isWorkLocation,
   syncContractReminders,
   getContractPermissions,
+  pdfContractFromRow,
   unwrapAssignedManager,
   unwrapCustomer,
   unwrapProfile,
@@ -157,7 +159,7 @@ export default async function ContractDetailPage({
   const renewalDate = getContractRenewalDate(contract);
   const autoRenew = (contract.renewal_type ?? "").toLowerCase() === "auto";
 
-  const [related, servicesResult, modificationsResult, documentsResult, versionsResult, changesResult, packetRes] =
+  const [related, servicesResult, modificationsResult, documentsResult, versionsResult, changesResult, packetRes, openTicketsRes, incompleteProjectsRes] =
     await Promise.all([
       getContractRelatedWork(supabase, id),
       listContractServices(supabase, [id]),
@@ -171,6 +173,16 @@ export default async function ContractDetailPage({
         .eq("contract_id", id)
         .eq("is_current", true)
         .maybeSingle(),
+      supabase
+        .from("support_tickets")
+        .select("id", { count: "exact", head: true })
+        .eq("contract_id", id)
+        .in("status", ["new", "assigned", "in_progress", "waiting_on_customer", "waiting_on_approval"]),
+      supabase
+        .from("projects")
+        .select("id", { count: "exact", head: true })
+        .eq("contract_id", id)
+        .not("status", "in", "(completed,billed,closed,canceled)"),
     ]);
 
   await syncContractReminders(supabase, {
@@ -239,6 +251,9 @@ export default async function ContractDetailPage({
         {permissions.edit ? (
           <EditContractButton href={`/contracts/${id}/edit`} isActive={status === "active"} />
         ) : null}
+        <Link href={`/contracts/${id}/view`} className="btn btn-outline btn-sm">
+          View / Download PDF
+        </Link>
       </div>
 
       <PageHeader
@@ -350,6 +365,14 @@ export default async function ContractDetailPage({
           status={status}
           role={profile.role}
           profileId={profile.id}
+          completeBlockedReason={
+            canMarkContractCompleted(status, {
+              openTicketCount: openTicketsRes.count ?? 0,
+              totalTicketCount: openTicketsRes.count ?? 0,
+              incompleteProjectCount: incompleteProjectsRes.count ?? 0,
+              totalProjectCount: incompleteProjectsRes.count ?? 0,
+            }).reason
+          }
         />
       </Section>
 
@@ -364,26 +387,11 @@ export default async function ContractDetailPage({
             contract={{
               id: contract.id,
               customer_id: contract.customer_id,
-              status: contract.status,
-              contract_number: contract.contract_number,
-              name: contract.name,
-              contract_type: contract.contract_type,
-              start_date: contract.start_date,
-              end_date: contract.end_date,
-              monthly_recurring_fee: contract.monthly_recurring_fee,
-              work_location: contract.work_location,
-              included_hours_per_month: contract.included_hours_per_month,
-              additional_hourly_rate: contract.additional_hourly_rate,
-              payment_terms: contract.payment_terms,
-              billing_frequency: contract.billing_frequency,
-              sla_response_hours: contract.sla_response_hours,
-              sla_resolution_hours: contract.sla_resolution_hours,
-              description: contract.description,
-              scope: contract.scope,
-              included_services: contract.included_services,
+              ...pdfContractFromRow(contract),
             }}
             customerName={customer?.name ?? "Customer"}
             managerName={manager?.full_name ?? null}
+            technicianName={technician?.full_name ?? null}
             profileId={profile.id}
             profileName={profile.full_name}
             role={profile.role}

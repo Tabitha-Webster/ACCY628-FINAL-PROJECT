@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { SignaturePad } from "@/components/SignaturePad";
 import { StatusBadge } from "@/components/ui";
 import { buildContractPdfBlob } from "@/lib/contracts/build-contract-pdf";
+import { pdfContractFromRow } from "@/lib/contracts/pdf-payload";
 import {
   SIGNATURE_PACKET_STATUS_LABELS,
   packetSignaturesForPdf,
@@ -17,6 +18,7 @@ type Props = {
   contract: ContractPdfInput["contract"] & { id: string; customer_id: string };
   customerName: string;
   managerName: string | null;
+  technicianName?: string | null;
   profileId: string;
   profileName: string;
   packet: ContractSignaturePacket;
@@ -26,6 +28,7 @@ export function CustomerContractSignaturePanel({
   contract,
   customerName,
   managerName,
+  technicianName = null,
   profileId,
   profileName,
   packet: initialPacket,
@@ -42,12 +45,13 @@ export function CustomerContractSignaturePanel({
 
   const pdfInput = useMemo<ContractPdfInput>(
     () => ({
-      contract,
+      contract: pdfContractFromRow(contract),
       customerName,
       managerName,
+      technicianName,
       signatures: packetSignaturesForPdf(packet),
     }),
-    [contract, customerName, managerName, packet]
+    [contract, customerName, managerName, technicianName, packet]
   );
 
   useEffect(() => {
@@ -113,9 +117,10 @@ export function CustomerContractSignaturePanel({
 
     try {
       const blob = await buildContractPdfBlob({
-        contract,
+        contract: pdfContractFromRow(contract),
         customerName,
         managerName,
+        technicianName,
         signatures: packetSignaturesForPdf(nextPacket),
       });
       const path = `${contract.id}/signature-packets/${nextPacket.id}-executed.pdf`;

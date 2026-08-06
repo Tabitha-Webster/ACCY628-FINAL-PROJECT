@@ -18,6 +18,8 @@ type Props = {
   status: ContractStatus;
   role: UserRole;
   profileId: string;
+  /** When set, disables Mark Completed (active → expired) with this reason. */
+  completeBlockedReason?: string | null;
 };
 
 export function ContractLifecycleActions({
@@ -25,6 +27,7 @@ export function ContractLifecycleActions({
   status,
   role,
   profileId,
+  completeBlockedReason = null,
 }: Props) {
   const router = useRouter();
   const actions = getLifecycleActionsForRole(status, role);
@@ -40,6 +43,10 @@ export function ContractLifecycleActions({
     setMessage(null);
     if (action.to === "canceled" && !cancelReason.trim()) {
       setError("Enter a cancellation reason before canceling.");
+      return;
+    }
+    if (action.to === "expired" && completeBlockedReason) {
+      setError(completeBlockedReason);
       return;
     }
     if (action.to === "active" && status === "pending_approval") {
@@ -142,7 +149,11 @@ export function ContractLifecycleActions({
             className="rounded-box border border-base-300 bg-base-200/40 p-3 flex flex-col gap-2"
           >
             <p className="text-sm font-medium">{action.label}</p>
-            <p className="text-xs opacity-60 flex-1">{action.description}</p>
+            <p className="text-xs opacity-60 flex-1">
+              {action.to === "expired" && completeBlockedReason
+                ? completeBlockedReason
+                : action.description}
+            </p>
             <button
               type="button"
               className={`btn btn-sm ${
@@ -152,7 +163,9 @@ export function ContractLifecycleActions({
                     ? "btn-primary"
                     : "btn-outline"
               }`}
-              disabled={busy != null}
+              disabled={
+                busy != null || (action.to === "expired" && Boolean(completeBlockedReason))
+              }
               onClick={() => applyTransition(action)}
             >
               {busy === action.to ? "Working…" : action.label}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Download, Printer } from "lucide-react";
 import { buildContractPdfBlob, downloadPdfBlob, printPdfBlob } from "@/lib/contracts/build-contract-pdf";
+import { pdfContractFromRow } from "@/lib/contracts/pdf-payload";
 import {
   packetSignaturesForPdf,
   type ContractPdfInput,
@@ -13,6 +14,7 @@ type Props = {
   contract: ContractPdfInput["contract"] & { contract_number: string };
   customerName: string;
   managerName?: string | null;
+  technicianName?: string | null;
   packet?: ContractSignaturePacket | null;
   className?: string;
 };
@@ -24,6 +26,7 @@ export function CustomerContractPdfActions({
   contract,
   customerName,
   managerName = null,
+  technicianName = null,
   packet = null,
   className = "",
 }: Props) {
@@ -32,9 +35,10 @@ export function CustomerContractPdfActions({
 
   async function buildBlob() {
     return buildContractPdfBlob({
-      contract,
+      contract: pdfContractFromRow(contract),
       customerName,
       managerName,
+      technicianName,
       signatures: packetSignaturesForPdf(packet),
     });
   }

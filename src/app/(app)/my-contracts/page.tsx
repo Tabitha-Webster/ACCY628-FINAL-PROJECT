@@ -8,6 +8,7 @@ import type { Contract, ContractService, ContractStatus } from "@/lib/types";
 import {
   listContractServices,
   listCustomerContracts,
+  pdfContractFromRow,
   unwrapAssignedManager,
   billedMonthlyRecurringFee,
 } from "@/lib/contracts";
@@ -19,23 +20,7 @@ function toPdfContract(c: Contract) {
   return {
     id: c.id,
     customer_id: c.customer_id,
-    contract_number: c.contract_number,
-    name: c.name,
-    status: c.status,
-    contract_type: c.contract_type,
-    start_date: c.start_date,
-    end_date: c.end_date,
-    monthly_recurring_fee: c.monthly_recurring_fee,
-    work_location: c.work_location,
-    included_hours_per_month: c.included_hours_per_month,
-    additional_hourly_rate: c.additional_hourly_rate,
-    payment_terms: c.payment_terms,
-    billing_frequency: c.billing_frequency,
-    sla_response_hours: c.sla_response_hours,
-    sla_resolution_hours: c.sla_resolution_hours,
-    description: c.description,
-    scope: c.scope,
-    included_services: c.included_services,
+    ...pdfContractFromRow(c),
   };
 }
 

@@ -196,11 +196,12 @@ export const CONTROLS_CATALOG: ControlItem[] = [
     category: "Work",
     risk: "a customer could be missed or receive degraded service without management awareness",
     control:
-      "service operations tracks every open ticket against its SLA target and highlights any ticket at risk of, or already past, its resolution deadline",
-    whatIf: "What if an SLA deadline is about to be missed?",
+      "Ticket & Project Completion rolls up open tickets and incomplete projects under each active contract so managers cannot Mark Completed until linked delivery work is finished",
+    whatIf: "What if a manager tries to close a contract while tickets or projects are still open?",
     where: [
-      { href: "/operations", label: "Service Operations" },
+      { href: "/operations", label: "Ticket & Project Completion" },
       { href: "/tickets", label: "Support tickets" },
+      { href: "/projects", label: "Projects" },
     ],
   },
   {
