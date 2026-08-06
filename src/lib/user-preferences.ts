@@ -78,6 +78,12 @@ export function applyPreferencesToDom(preferences: UserPreferences) {
 const EXTRA_LANDING_OPTIONS: Partial<Record<UserRole, NavItem[]>> = {
   admin: [{ href: "/customer-approvals", label: "Customer Approvals" }],
   manager: [{ href: "/contracts", label: "Manage Contracts" }],
+  technician: [
+    { href: "/tickets", label: "Support Tickets" },
+    { href: "/projects", label: "Project Tasks" },
+    { href: "/time-costs", label: "Submit Time and Costs" },
+    { href: "/additional-work", label: "Additional Work Requests" },
+  ],
   billing: [
     { href: "/contracts", label: "Manage Contracts" },
     { href: "/billing-review", label: "Overview" },
