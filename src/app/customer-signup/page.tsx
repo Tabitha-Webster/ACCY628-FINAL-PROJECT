@@ -117,7 +117,7 @@ async function linkCustomerRecord(
     return { errorMessage: null };
   }
 
-  // Fallback if the RPC migration has not been applied yet.
+  // Fallback if the RPC migration has not been applied yet — always pending_approval only.
   const customerInsert = await supabase
     .from("customers")
     .insert({
@@ -131,6 +131,7 @@ async function linkCustomerRecord(
       customer_status: "pending_approval",
       primary_contact_name: payload.p_primary_contact_name,
       primary_contact_email: payload.p_email,
+      signup_at: new Date().toISOString(),
     })
     .select("id")
     .single();
@@ -138,21 +139,22 @@ async function linkCustomerRecord(
   let customerId = customerInsert.data?.id as string | undefined;
   let insertError = customerInsert.error;
 
-  if (insertError) {
-    const prospectInsert = await supabase
+  // Retry without optional columns if the live schema is missing them.
+  if (insertError && /signup_at|customer_status|customer_name|primary_contact/i.test(insertError.message)) {
+    const retry = await supabase
       .from("customers")
       .insert({
         name: payload.p_customer_name,
         industry: payload.p_industry,
         primary_contact: payload.p_primary_contact_name,
         contact_email: payload.p_email,
-        status: "prospect",
-        notes: payload.p_phone ? `Phone: ${payload.p_phone}` : null,
+        primary_contact_phone: payload.p_phone,
+        status: "pending_approval",
       })
       .select("id")
       .single();
-    customerId = prospectInsert.data?.id;
-    insertError = prospectInsert.error;
+    customerId = retry.data?.id;
+    insertError = retry.error;
   }
 
   if (insertError || !customerId) {
@@ -160,7 +162,7 @@ async function linkCustomerRecord(
       errorMessage:
         insertError?.message ||
         rpcError.message ||
-        "Account was created, but the customer profile could not be saved. Ask your administrator to apply the customer signup migration.",
+        "Account was created, but the customer profile could not be saved as Pending Approval. Ask your administrator to apply the customer onboarding migration.",
     };
   }
 

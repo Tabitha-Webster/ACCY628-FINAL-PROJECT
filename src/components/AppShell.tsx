@@ -303,7 +303,7 @@ export function AppShell({
         <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-base-300 bg-base-100 px-4 py-2">
           <div className={`flex min-w-0 items-center gap-2 ${collapsed ? "pl-10" : "pl-3"}`}>
             {collapsed ? (
-              <div className="flex min-w-0 max-w-[14rem] flex-col gap-1 sm:max-w-[17rem] md:max-w-[20rem]">
+              <div className="flex min-w-0 max-w-[14rem] items-center sm:max-w-[17rem] md:max-w-[20rem]">
                 <Image
                   src="/images/servicesync-msp-logo.png?v=5"
                   alt="ServiceSync MSP"
@@ -314,9 +314,6 @@ export function AppShell({
                   priority
                   unoptimized
                 />
-                <p className="hidden text-xs leading-snug opacity-60 sm:block sm:whitespace-normal">
-                  From service agreement to support, billing, and collection.
-                </p>
               </div>
             ) : null}
           </div>
