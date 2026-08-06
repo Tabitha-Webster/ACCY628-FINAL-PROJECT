@@ -29,7 +29,7 @@ export default async function AdminDemoSettingsPage() {
             instantly — no password.
           </li>
           <li>
-            Demo Mode is on by default: the header Demo Role Switcher signs in to demo accounts
+            Demo Mode is on by default: the header Demo Role control signs in to demo accounts
             without typing a password.
           </li>
           <li>

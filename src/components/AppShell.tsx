@@ -84,8 +84,7 @@ function SideNav({
             unoptimized
           />
         </Link>
-        <p className="mt-2 text-sm font-semibold tracking-tight">{brandName}</p>
-        <p className="mt-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.14em] opacity-55">
+        <p className="mt-2 text-[0.65rem] font-semibold uppercase tracking-[0.14em] opacity-55">
           Contract-to-cash workspace
         </p>
         <div className="mt-3">

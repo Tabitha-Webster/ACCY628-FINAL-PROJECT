@@ -43,11 +43,11 @@ export function DemoRoleSwitcher({ currentRole }: { currentRole: UserRole }) {
     <div className="flex min-w-0 flex-col items-center">
       <label className="flex items-center gap-2">
         <span className="hidden text-xs font-semibold uppercase tracking-wide opacity-60 xl:inline">
-          Demo Role Switcher
+          Demo Role
         </span>
         <select
           className="select select-bordered select-sm w-44 sm:w-56"
-          aria-label="Demo Role Switcher"
+          aria-label="Demo Role"
           value={currentRole}
           disabled={switching}
           onChange={(e) => onSelectRole(e.target.value)}
@@ -60,15 +60,11 @@ export function DemoRoleSwitcher({ currentRole }: { currentRole: UserRole }) {
         </select>
       </label>
 
-      <p className="mt-1 text-[11px] opacity-60">
-        {switching ? "Switching demo role…" : `Demo Mode · ${labelForRole(currentRole)}`}
-      </p>
+      {switching ? (
+        <p className="mt-1 text-[11px] opacity-60">Switching demo role…</p>
+      ) : null}
 
       {error ? <p className="mt-1 max-w-xs text-center text-xs text-error">{error}</p> : null}
     </div>
   );
-}
-
-function labelForRole(role: UserRole) {
-  return DEMO_ACCOUNTS.find((account) => account.role === role)?.label ?? role;
 }
