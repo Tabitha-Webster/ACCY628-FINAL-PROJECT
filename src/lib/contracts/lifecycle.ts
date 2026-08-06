@@ -59,7 +59,7 @@ const ACTION_META: Partial<Record<ContractStatus, { label: string; description: 
     description: "Pause service delivery without canceling the agreement.",
   },
   expired: {
-    label: "Mark Expired",
+    label: "Mark Completed",
     description: "Close the term after the end date without renewal.",
   },
   canceled: {

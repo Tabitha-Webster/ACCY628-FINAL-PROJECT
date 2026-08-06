@@ -10,11 +10,12 @@ import {
   DataTable,
   StatusBadge,
   Money,
-  Hours,
   DateText,
 } from "@/components/ui";
-import { ManagerCharts, type MonthlyFinancials, type TicketsByStatus } from "@/components/ManagerCharts";
-import { CustomerSupportStatusChart } from "@/components/CustomerSupportStatusChart";
+import { type MonthlyFinancials } from "@/components/ManagerCharts";
+import { CustomerHomeVisuals } from "@/components/CustomerHomeVisuals";
+import { ExecutiveDashboardVisuals } from "@/components/ExecutiveDashboardVisuals";
+import { HrHomeVisuals } from "@/components/HrHomeVisuals";
 import { ContractMetricsWidgets } from "@/components/ContractMetricsWidgets";
 import {
   TechnicianWorkspaceClient,
@@ -43,6 +44,7 @@ import {
 import { PeriodViewControls } from "@/components/PeriodViewControls";
 import { ExplainNumber } from "@/components/ExplainNumber";
 import { DashboardCollapse, DashboardMetricAccordion, DashboardSection } from "@/components/DashboardAccordion";
+import { loadContractHoursForMatch, rankDemoApplicants } from "@/lib/hr-applicants";
 import type {
   AdditionalWorkRequest,
   Contract,
@@ -386,44 +388,80 @@ async function ExecutiveDashboard({ profile }: { profile: Profile }) {
 
 async function HrDashboard({ profile }: { profile: Profile }) {
   const supabase = await createClient();
-  const [{ data: contractors }, { data: positions }] = await Promise.all([
+  const [
+    { data: contractors },
+    { data: positions },
+    { data: departments },
+    contractHours,
+  ] = await Promise.all([
     supabase.from("hr_contractors").select("id, status"),
-    supabase.from("hr_positions").select("id, status"),
+    supabase.from("hr_positions").select("id, title, status, department_id"),
+    supabase.from("hr_departments").select("id, name"),
+    loadContractHoursForMatch(supabase),
   ]);
 
   const activeCount = (contractors ?? []).filter((c) => c.status === "active").length;
-  const openCount = (positions ?? []).filter((p) => p.status === "open").length;
-  const filledCount = (positions ?? []).filter((p) => p.status === "filled").length;
+  const openPositions = (positions ?? []).filter((p) => p.status === "open");
+  const openCount = openPositions.length;
+  const deptName = new Map((departments ?? []).map((d) => [d.id, d.name]));
+  const openTitles = openPositions.map((p) => p.title);
+
+  const rankedApplicants = rankDemoApplicants({
+    contractHours,
+    openPositionTitles: openTitles,
+  });
+  const topApplicants = rankedApplicants.slice(0, 5);
+  const topMatch = rankedApplicants[0]?.matchPercent ?? 0;
+  const strongMatches = rankedApplicants.filter((a) => a.matchPercent >= 72).length;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="HR Home"
-        description={`Welcome, ${profile.full_name}. Review applicants, open roles, and workforce analytics.`}
-      />
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Active contractors" value={String(activeCount)} />
-        <StatCard
-          label="Open positions"
-          value={String(openCount)}
-          tone={openCount > 0 ? "warning" : "default"}
-        />
-        <StatCard label="Filled positions" value={String(filledCount)} />
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        <Link href="/hr-applicants" className="btn btn-primary">
-          Applicants
-        </Link>
-        <Link href="/hr-analytics" className="btn btn-outline">
-          HR Analytics
-        </Link>
-        <Link href="/hr-positions" className="btn btn-outline">
-          Positions
-        </Link>
-      </div>
-    </div>
+    <HrHomeVisuals
+      fullName={profile.full_name}
+      pipeline={{
+        openRoles: openCount,
+        applicants: rankedApplicants.length,
+        strongMatches,
+        activeContractors: activeCount,
+      }}
+      metrics={[
+        {
+          label: "Active contractors",
+          value: String(activeCount),
+          tone: "sky",
+          href: "/admin/hr",
+        },
+        {
+          label: "Open positions",
+          value: String(openCount),
+          tone: openCount > 0 ? "amber" : "emerald",
+          href: "/hr-positions",
+        },
+        {
+          label: "Applicants",
+          value: String(rankedApplicants.length),
+          tone: "violet",
+          href: "/hr-applicants",
+        },
+        {
+          label: "Top match",
+          value: `${topMatch}%`,
+          tone: topMatch >= 72 ? "emerald" : "rose",
+          href: "/hr-applicants",
+        },
+      ]}
+      applicants={topApplicants.map((a) => ({
+        id: a.id,
+        fullName: a.fullName,
+        appliedFor: a.appliedFor,
+        matchPercent: a.matchPercent,
+        stars: a.stars,
+      }))}
+      openRoles={openPositions.map((p) => ({
+        id: p.id,
+        title: p.title,
+        department: deptName.get(p.department_id) ?? "—",
+      }))}
+    />
   );
 }
 
@@ -592,11 +630,6 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
     return { month: monthLabel(key), revenue: rev, cost, profit: rev - cost };
   });
 
-  const ticketsByStatus: TicketsByStatus[] = OPEN_TICKET_STATUSES.map((status) => ({
-    status: status.replace(/_/g, " "),
-    count: tickets.filter((t) => t.status === status).length,
-  })).filter((row) => row.count > 0);
-
   const ar = invoices
     .filter((i) => !["draft", "canceled", "paid"].includes(i.status) && Number(i.remaining_balance) > 0)
     .reduce((sum, i) => sum + Number(i.remaining_balance), 0);
@@ -609,417 +642,95 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
         i.due_date < todayStr
     )
     .reduce((sum, i) => sum + Number(i.remaining_balance), 0);
-  const deferred = revenue.filter((r) => r.recognition === "deferred").reduce((sum, r) => sum + Number(r.amount), 0);
-  const unbilled = revenue.filter((r) => r.recognition === "unbilled").reduce((sum, r) => sum + Number(r.amount), 0);
+
+  const ticketStatusSlices = OPEN_TICKET_STATUSES.map((status) => ({
+    status,
+    count: tickets.filter((t) => t.status === status).length,
+  })).filter((row) => row.count > 0);
+
+  const approvalChips = [
+    ...additionalWork.slice(0, 4).map((w) => ({
+      id: `aw-${w.id}`,
+      label: w.title,
+      detail: customerName.get(w.customer_id) ?? "Additional work",
+      href: w.project_id ? `/projects/${w.project_id}` : "/additional-work",
+    })),
+    ...projectsNeedingCustomerAction.slice(0, 4).map((p) => ({
+      id: `proj-${p.id}`,
+      label: p.name,
+      detail: customerName.get(p.customer_id) ?? "Project approval",
+      href: `/projects/${p.id}`,
+    })),
+    ...pendingMilestones.slice(0, 4).map((m) => {
+      const project = Array.isArray(m.projects) ? m.projects[0] : m.projects;
+      return {
+        id: `ms-${m.id}`,
+        label: m.name,
+        detail: project?.name ?? "Milestone",
+        href: `/projects/${m.project_id}`,
+      };
+    }),
+  ].slice(0, 4);
 
   return (
-    <div>
-      <PageHeader
-        title="Manager Dashboard"
-        description={`Welcome back, ${profile.full_name}. Here's how ServiceSync is performing.`}
-      />
+    <ExecutiveDashboardVisuals
+      fullName={profile.full_name}
+      overdueBalance={overdue}
+      year={new Date().getFullYear()}
+      metrics={[
+        {
+          label: "Active Customers",
+          value: String(customersCountRes.count ?? 0),
+          href: "/customers",
+          tone: "sky",
+        },
+        {
+          label: "Active Contracts",
+          value: String(contractsCountRes.count ?? 0),
+          href: "/contracts?status=active",
+          tone: "violet",
+          hint:
+            contractMetrics.monthlyRecurringRevenue > 0
+              ? `${formatCurrency(contractMetrics.monthlyRecurringRevenue)} MRR`
+              : undefined,
+        },
+        {
+          label: "Open Tickets",
+          value: String(tickets.length),
+          href: "/tickets",
+          tone: "rose",
+          hint: `${slaMissed.length} missed · ${slaAtRisk.length} at risk`,
+        },
+        {
+          label: "Monthly Profit",
+          value: formatCurrency(profitThisMonth),
+          href: "/profitability",
+          tone: profitThisMonth >= 0 ? "emerald" : "amber",
+          hint: `Rev ${formatCurrency(revenueThisMonth)} · AR ${formatCurrency(ar)}`,
+        },
+      ]}
+      ticketStatusSlices={ticketStatusSlices}
+      monthlyFinancials={monthlyFinancials}
+      attentionTickets={ticketsNeedingAttention.slice(0, 5).map((t) => ({
+        id: t.id,
+        ticketNumber: t.ticket_number,
+        title: t.title,
+        customer: customerName.get(t.customer_id) ?? "Customer",
+        priority: t.priority,
+        sla: ticketSlaSeverity(t),
+      }))}
+      hoursAtRisk={contractsOverHours.slice(0, 3).map((c) => ({
+        id: c.id,
+        name: c.name,
+        customer: customerName.get(c.customer_id) ?? "Customer",
+        used: c.used,
+        included: Number(c.included_hours_per_month),
+        pct: c.pct,
+      }))}
+      approvals={approvalChips}
+      pendingApprovalsTotal={pendingApprovalsTotal}
+    />
 
-      <div className="mb-6">
-        <ContractMetricsWidgets
-          metrics={contractMetrics}
-          showTables={false}
-          title="Contracts portfolio"
-        />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Active Customers"
-          value={String(customersCountRes.count ?? 0)}
-          explanation={{
-            title: "Active Customers",
-            result: String(customersCountRes.count ?? 0),
-            formula: "Count of customers where status = active",
-            lines: (customersRes.data ?? [])
-              .filter((customer) => customer.status === "active" && customer.name)
-              .map((customer) => ({ label: customer.name as string, value: "Active" })),
-          }}
-        />
-        <StatCard
-          label="Active Contracts"
-          value={String(contractsCountRes.count ?? 0)}
-          explanation={{
-            title: "Active Contracts",
-            result: String(contractsCountRes.count ?? 0),
-            formula: "Count of contracts where status = active",
-            lines: activeContracts.map((contract) => ({
-              label: contract.name,
-              value: contract.contract_number,
-              detail: customerName.get(contract.customer_id) ?? "Unknown customer",
-            })),
-          }}
-        />
-        <StatCard
-          label="Open Tickets"
-          value={String(tickets.length)}
-          explanation={{
-            title: "Open Tickets",
-            result: String(tickets.length),
-            formula: "Count of support tickets in new, assigned, in progress, waiting on customer, or waiting on approval",
-            lines: tickets.slice(0, 20).map((ticket) => ({
-              label: ticket.ticket_number,
-              value: ticket.status.replace(/_/g, " "),
-              detail: ticket.title,
-            })),
-          }}
-        />
-        <StatCard
-          label="SLA At Risk / Missed"
-          value={`${slaAtRisk.length} / ${slaMissed.length}`}
-          tone={slaMissed.length > 0 ? "error" : slaAtRisk.length > 0 ? "warning" : "success"}
-          explanation={{
-            title: "SLA At Risk / Missed",
-            result: `${slaAtRisk.length} / ${slaMissed.length}`,
-            formula: "At-risk tickets + missed tickets among currently open tickets",
-            description: "At risk means a response or resolution deadline is close. Missed means a deadline has already passed.",
-            lines: [
-              ...slaMissed.map((ticket) => ({ label: ticket.ticket_number, value: "Missed", detail: ticket.title })),
-              ...slaAtRisk.map((ticket) => ({ label: ticket.ticket_number, value: "At risk", detail: ticket.title })),
-            ],
-          }}
-        />
-        <StatCard
-          label="Critical Open Tickets"
-          value={String(criticalTickets.length)}
-          tone={criticalTickets.length > 0 ? "error" : "success"}
-        />
-        <StatCard
-          label="Contracts Over Included Hours"
-          value={String(contractsOverHours.length)}
-          tone={contractsOverHours.length > 0 ? "warning" : "success"}
-          explanation={{
-            title: "Contracts Over Included Hours",
-            result: String(contractsOverHours.length),
-            formula: "Count of active contracts where included hours used this month > included hours per month",
-            lines: contractsOverHours.map((contract) => ({
-              label: contract.name,
-              value: `${contract.used.toFixed(1)} / ${Number(contract.included_hours_per_month).toFixed(1)} hrs`,
-              detail: `${contract.pct.toFixed(0)}% of included hours`,
-            })),
-          }}
-        />
-        <StatCard
-          label="Pending Approvals"
-          value={String(pendingApprovalsTotal)}
-          tone={pendingApprovalsTotal > 0 ? "warning" : "default"}
-          hint="Projects, change requests, milestones"
-          explanation={{
-            title: "Pending Approvals",
-            result: String(pendingApprovalsTotal),
-            formula: "Pending additional work + proposed projects + awaiting customer approval + pending milestones",
-            lines: [
-              ...additionalWork.map((request) => ({
-                label: request.title,
-                value: formatCurrency(Number(request.estimated_amount ?? 0)),
-                detail: customerName.get(request.customer_id) ?? "Unknown customer",
-              })),
-              ...proposedProjects.map((project) => ({
-                label: project.name,
-                value: "Proposed",
-                detail: customerName.get(project.customer_id) ?? "Unknown customer",
-              })),
-              ...awaitingCustomerProjects.map((project) => ({
-                label: project.name,
-                value: "Awaiting customer",
-                detail: customerName.get(project.customer_id) ?? "Unknown customer",
-              })),
-              ...pendingMilestones.map((milestone) => ({
-                label: milestone.name,
-                value: "Milestone",
-                detail: "Pending approval",
-              })),
-            ],
-          }}
-        />
-        <StatCard
-          label="Monthly Revenue"
-          value={formatCurrency(revenueThisMonth)}
-          hint="Earned this month"
-          explanation={{
-            title: "Monthly Revenue",
-            result: formatCurrency(revenueThisMonth),
-            formula: `Sum of revenue_records.amount where recognition = earned and period is ${monthLabel(currentMonthKey)}`,
-            lines: revenue
-              .filter((row) => row.recognition === "earned" && monthKey(row.period_month) === currentMonthKey)
-              .map((row) => ({
-                label: row.period_month,
-                value: formatCurrency(Number(row.amount)),
-                detail: "Earned revenue",
-              })),
-          }}
-        />
-        <StatCard
-          label="Monthly Profit"
-          value={formatCurrency(profitThisMonth)}
-          tone={profitThisMonth >= 0 ? "success" : "error"}
-          hint={`Cost: ${formatCurrency(costThisMonth)}`}
-          explanation={{
-            title: "Monthly Profit",
-            result: formatCurrency(profitThisMonth),
-            formula: "Earned revenue this month -> (labor cost this month + direct cost this month)",
-            lines: [
-              { label: "Earned revenue", value: formatCurrency(revenueThisMonth) },
-              { label: "Labor cost", value: formatCurrency(laborCostThisMonth), detail: "Internal labor cost on time entries this month" },
-              { label: "Direct cost", value: formatCurrency(directCostThisMonth), detail: "Internal cost on direct cost entries this month" },
-              { label: "Total cost", value: formatCurrency(costThisMonth) },
-              { label: "Profit", value: formatCurrency(profitThisMonth), detail: "Revenue minus total cost" },
-            ],
-          }}
-        />
-      </div>
-
-      {criticalTickets.length > 0 ? (
-        <div className="alert alert-error mt-4 text-sm" role="alert">
-          <div>
-            <p className="font-semibold">
-              {criticalTickets.length} critical ticket{criticalTickets.length === 1 ? "" : "s"} need immediate attention
-            </p>
-            <p className="mt-1 opacity-90">
-              {criticalTickets
-                .slice(0, 4)
-                .map((t) => t.ticket_number)
-                .join(", ")}
-              {criticalTickets.length > 4 ? ` +${criticalTickets.length - 4} more` : ""}. Open them from Tickets or the
-              list below.
-            </p>
-          </div>
-          <Link href="/tickets?priority=critical" className="btn btn-sm">
-            View critical tickets
-          </Link>
-        </div>
-      ) : null}
-
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Accounts Receivable"
-          value={formatCurrency(ar)}
-          explanation={{
-            title: "Accounts Receivable",
-            result: formatCurrency(ar),
-            formula: "Sum of remaining_balance on invoices that are not draft, canceled, or paid and still have a balance",
-            lines: invoices
-              .filter((invoice) => !["draft", "canceled", "paid"].includes(invoice.status) && Number(invoice.remaining_balance) > 0)
-              .map((invoice) => ({
-                label: invoice.invoice_number,
-                value: formatCurrency(Number(invoice.remaining_balance)),
-                detail: customerName.get(invoice.customer_id) ?? "Unknown customer",
-              })),
-          }}
-        />
-        <StatCard
-          label="Overdue Balance"
-          value={formatCurrency(overdue)}
-          tone={overdue > 0 ? "error" : "success"}
-          explanation={{
-            title: "Overdue Balance",
-            result: formatCurrency(overdue),
-            formula: "Sum of remaining_balance on open invoices with due date before today",
-            lines: invoices
-              .filter(
-                (invoice) =>
-                  !["draft", "canceled", "paid"].includes(invoice.status) &&
-                  Number(invoice.remaining_balance) > 0 &&
-                  invoice.due_date < todayStr
-              )
-              .map((invoice) => ({
-                label: invoice.invoice_number,
-                value: formatCurrency(Number(invoice.remaining_balance)),
-                detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} | due ${invoice.due_date}`,
-              })),
-          }}
-        />
-        <StatCard
-          label="Deferred Revenue"
-          value={formatCurrency(deferred)}
-          explanation={{
-            title: "Deferred Revenue",
-            result: formatCurrency(deferred),
-            formula: "Sum of revenue_records.amount where recognition = deferred",
-            lines: revenue
-              .filter((row) => row.recognition === "deferred")
-              .map((row) => ({ label: row.period_month, value: formatCurrency(Number(row.amount)) })),
-          }}
-        />
-        <StatCard
-          label="Unbilled Revenue"
-          value={formatCurrency(unbilled)}
-          explanation={{
-            title: "Unbilled Revenue",
-            result: formatCurrency(unbilled),
-            formula: "Sum of revenue_records.amount where recognition = unbilled",
-            lines: revenue
-              .filter((row) => row.recognition === "unbilled")
-              .map((row) => ({ label: row.period_month, value: formatCurrency(Number(row.amount)) })),
-          }}
-        />
-      </div>
-
-      <div className="mt-6">
-        <ManagerCharts monthlyFinancials={monthlyFinancials} ticketsByStatus={ticketsByStatus} />
-      </div>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Tickets Needing Attention</h2>
-          {ticketsNeedingAttention.length === 0 ? (
-            <EmptyState title="No urgent tickets" description="No critical, at-risk, or missed-SLA tickets right now." />
-          ) : (
-            <DataTable headers={["Ticket", "Customer", "Priority", "SLA"]}>
-              {ticketsNeedingAttention.slice(0, 8).map((t) => (
-                <tr key={t.id} className={t.priority === "critical" ? "bg-error/5" : undefined}>
-                  <td>
-                    <Link className="link link-hover" href={`/tickets/${t.id}`}>
-                      {t.ticket_number}
-                    </Link>
-                  </td>
-                  <td>{customerName.get(t.customer_id) ?? "-"}</td>
-                  <td>
-                    {t.priority === "critical" ? (
-                      <span className="inline-flex items-center gap-1 rounded-box border border-error/40 bg-error/10 px-2 py-0.5 text-xs font-semibold text-error">
-                        Critical
-                      </span>
-                    ) : (
-                      <StatusBadge status={t.priority} />
-                    )}
-                  </td>
-                  <td>
-                    <StatusBadge status={ticketSlaSeverity(t)} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Contracts Over Included Hours</h2>
-          {contractsOverHours.length === 0 ? (
-            <EmptyState title="All contracts within limits" description="No active contract has exceeded its included hours this month." />
-          ) : (
-            <DataTable headers={["Contract", "Customer", "Used / Included", "Usage"]}>
-              {contractsOverHours.map((c) => (
-                <tr key={c.id}>
-                  <td>{c.contract_number}</td>
-                  <td>{customerName.get(c.customer_id) ?? "-"}</td>
-                  <td>
-                    <Hours value={c.used} /> / <Hours value={c.included_hours_per_month} />
-                  </td>
-                  <td>
-                    <StatusBadge status={c.status} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-6">
-        <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-semibold">Pending Approvals</h2>
-            <p className="text-xs opacity-70">
-              {pendingApprovalsTotal} item{pendingApprovalsTotal === 1 ? "" : "s"} waiting - manage actions on Projects
-            </p>
-          </div>
-          <Link href="/projects" className="btn btn-outline btn-sm">
-            Open approval queue
-          </Link>
-        </div>
-
-        {pendingApprovalsTotal === 0 ? (
-          <EmptyState title="Nothing to review" description="No projects, change requests, or milestones are waiting on approval." />
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div>
-              <h3 className="mb-2 text-xs font-medium uppercase tracking-wide opacity-60">Change requests / additional work</h3>
-              {additionalWork.length === 0 ? (
-                <EmptyState title="No pending change requests" />
-              ) : (
-                <DataTable headers={["Request", "Customer", "Est. Hours", "Est. Amount", "Submitted"]}>
-                  {additionalWork.slice(0, 8).map((w) => (
-                    <tr key={w.id}>
-                      <td>
-                        <Link className="link link-hover" href={w.project_id ? `/projects/${w.project_id}` : "/additional-work"}>
-                          {w.title}
-                        </Link>
-                      </td>
-                      <td>{customerName.get(w.customer_id) ?? "-"}</td>
-                      <td>{w.estimated_hours != null ? <Hours value={Number(w.estimated_hours)} /> : "-"}</td>
-                      <td>{w.estimated_amount != null ? <Money value={Number(w.estimated_amount)} /> : "-"}</td>
-                      <td>
-                        <DateText value={w.created_at} />
-                      </td>
-                    </tr>
-                  ))}
-                </DataTable>
-              )}
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide opacity-60">Projects to send / waiting on customer</h3>
-                {projectsNeedingCustomerAction.length === 0 ? (
-                  <EmptyState title="No project approvals pending" />
-                ) : (
-                  <DataTable headers={["Project", "Customer", "Status"]}>
-                    {projectsNeedingCustomerAction.slice(0, 8).map((p) => (
-                      <tr key={p.id}>
-                        <td>
-                          <Link className="link link-hover" href={`/projects/${p.id}`}>
-                            {p.name}
-                          </Link>
-                        </td>
-                        <td>{customerName.get(p.customer_id) ?? "-"}</td>
-                        <td>
-                          <StatusBadge
-                            status={
-                              p.status === "proposed"
-                                ? "proposed"
-                                : p.customer_approval_status === "pending" || p.status === "awaiting_customer_approval"
-                                  ? "pending"
-                                  : p.status
-                            }
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </DataTable>
-                )}
-              </div>
-
-              <div>
-                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide opacity-60">Milestone approvals</h3>
-                {pendingMilestones.length === 0 ? (
-                  <EmptyState title="No milestone approvals pending" />
-                ) : (
-                  <DataTable headers={["Milestone", "Project"]}>
-                    {pendingMilestones.map((m) => {
-                      const project = Array.isArray(m.projects) ? m.projects[0] : m.projects;
-                      return (
-                        <tr key={m.id}>
-                          <td>{m.name}</td>
-                          <td>
-                            <Link className="link link-hover" href={`/projects/${m.project_id}`}>
-                              {project?.name ?? "View project"}
-                            </Link>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </DataTable>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -1317,22 +1028,19 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
   };
 
   return (
-    <div>
-      <PageHeader title="My Assignments" />
-      <TechnicianWorkspaceClient
-        technicianId={profile.id}
-        technicianName={profile.full_name}
-        internalCostRate={Number(profile.internal_cost_rate ?? 65)}
-        tickets={workspaceTickets}
-        pendingTimeEntries={pendingTimeEntries}
-        pendingAdditionalWork={pendingAdditionalWork}
-        allAdditionalWork={allAdditionalWork}
-        contractWarnings={contractWarnings}
-        summary={summary}
-        completedTodayIds={completedTodayTickets.map((t) => t.id)}
-        timezoneLabel={Intl.DateTimeFormat().resolvedOptions().timeZone || "local time"}
-      />
-    </div>
+    <TechnicianWorkspaceClient
+      technicianId={profile.id}
+      technicianName={profile.full_name}
+      internalCostRate={Number(profile.internal_cost_rate ?? 65)}
+      tickets={workspaceTickets}
+      pendingTimeEntries={pendingTimeEntries}
+      pendingAdditionalWork={pendingAdditionalWork}
+      allAdditionalWork={allAdditionalWork}
+      contractWarnings={contractWarnings}
+      summary={summary}
+      completedTodayIds={completedTodayTickets.map((t) => t.id)}
+      timezoneLabel={Intl.DateTimeFormat().resolvedOptions().timeZone || "local time"}
+    />
   );
 }
 
@@ -2089,7 +1797,7 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
   const year = new Date().getFullYear();
   const yearStart = `${year}-01-01T00:00:00.000Z`;
 
-  const [contractsRes, ticketsRes, yearTicketsRes, projectsRes, invoicesRes, paymentsRes, disputesRes, timeEntriesRes, revenueRes] =
+  const [contractsRes, ticketsRes, yearTicketsRes, projectsRes, invoicesRes, disputesRes, timeEntriesRes, revenueRes] =
     await Promise.all([
       supabase.from("contracts").select("id, name, contract_number, status, included_hours_per_month").eq("customer_id", customerId).eq("status", "active"),
       supabase.from("support_tickets").select("id, ticket_number, title, priority, status").eq("customer_id", customerId).in("status", OPEN_TICKET_STATUSES),
@@ -2101,14 +1809,8 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
       supabase.from("projects").select("id, name, status").eq("customer_id", customerId),
       supabase
         .from("invoices")
-        .select("id, invoice_number, remaining_balance, status, due_date, amount_paid, dispute_status")
+        .select("id, invoice_number, remaining_balance, status, due_date, amount_paid, total_amount, dispute_status")
         .eq("customer_id", customerId),
-      supabase
-        .from("payments")
-        .select("id, payment_number, payment_amount, payment_date, payment_method")
-        .eq("customer_id", customerId)
-        .order("payment_date", { ascending: false })
-        .limit(5),
       supabase.from("disputes").select("id, dispute_reason, disputed_amount, resolution_status").eq("customer_id", customerId),
       supabase
         .from("time_entries")
@@ -2126,7 +1828,6 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
   const yearTickets = (yearTicketsRes.data ?? []) as Pick<SupportTicket, "id" | "status" | "submitted_at">[];
   const projects = (projectsRes.data ?? []) as Pick<Project, "id" | "name" | "status">[];
   const invoices = (invoicesRes.data ?? []).map((invoice) => withDerivedInvoiceStatus(invoice));
-  const payments = (paymentsRes.data ?? []) as (Pick<Payment, "payment_number" | "payment_amount" | "payment_date" | "payment_method"> & { id: string })[];
   const disputes = (disputesRes.data ?? []) as Pick<Dispute, "id" | "dispute_reason" | "disputed_amount" | "resolution_status">[];
   const timeEntries = (timeEntriesRes.data ?? []) as Pick<TimeEntry, "contract_id" | "hours_worked" | "classification" | "work_date">[];
   const revenue = (revenueRes.data ?? []) as Pick<RevenueRecord, "amount" | "recognition" | "period_month">[];
@@ -2162,187 +1863,78 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
     .map(([status, count]) => ({ status, count }))
     .sort((a, b) => b.count - a.count || a.status.localeCompare(b.status));
 
+  const billableInvoices = invoices.filter((i) => !["draft", "canceled"].includes(i.status));
+  let invoicePaid = 0;
+  let invoiceTotalBilled = 0;
+  for (const invoice of billableInvoices) {
+    const paid = Number(invoice.amount_paid ?? 0);
+    const remaining = Number(invoice.remaining_balance ?? 0);
+    const listedTotal = Number(
+      (invoice as { total_amount?: number | string | null }).total_amount ?? 0
+    );
+    const total = listedTotal > 0 ? listedTotal : paid + remaining;
+    invoicePaid += Math.max(0, paid);
+    invoiceTotalBilled += Math.max(0, total);
+  }
+  // Prefer sum of line totals; fall back so the bar never divides by zero when paid > 0
+  if (invoiceTotalBilled < invoicePaid) {
+    invoiceTotalBilled = invoicePaid;
+  }
+  const invoiceRemaining = Math.max(0, invoiceTotalBilled - invoicePaid);
+
   return (
-    <div>
-      <PageHeader
-        title="Customer Home"
-        description={`Welcome back, ${profile.full_name}. Here's your account at a glance.`}
-        actions={
-          <Link
-            href="/my-invoices"
-            className="block min-w-[12rem] rounded-box border border-error/50 bg-error/10 px-4 py-3 text-right shadow-sm transition hover:border-error hover:bg-error/15"
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide text-error">Invoice Balance Due</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums text-error">{formatCurrency(invoiceBalance)}</p>
-            <p className="mt-1 text-xs text-error/80">
-              {invoiceBalance > 0 ? "View invoices to pay" : "You are all caught up"}
-            </p>
-          </Link>
-        }
-      />
-
-      <div className="grid gap-4 xl:grid-cols-12">
-        <div className="grid gap-4 sm:grid-cols-2 xl:col-span-7">
-          <StatCard
-            label="Active Contracts"
-            value={String(contracts.length)}
-            href="/my-contracts"
-            explanation={{
-              title: "Active Contracts",
-              result: String(contracts.length),
-              formula: "Count of your contracts with status = active",
-              lines: contracts.map((contract) => ({ label: contract.name, value: contract.contract_number })),
-            }}
-          />
-          <StatCard
-            label="Active Projects"
-            value={String(activeProjects.length)}
-            href="/my-projects"
-            explanation={{
-              title: "Active Projects",
-              result: String(activeProjects.length),
-              formula: "Count of your projects that are not closed or canceled",
-              lines: activeProjects.map((project) => ({
-                label: project.name,
-                value: project.status.replace(/_/g, " "),
-              })),
-            }}
-          />
-          <StatCard
-            label="Open Disputes"
-            value={String(openDisputes.length)}
-            tone={openDisputes.length > 0 ? "error" : "default"}
-            explanation={{
-              title: "Open Disputes",
-              result: String(openDisputes.length),
-              formula: "Count of your disputes that are not resolved or rejected",
-              lines: openDisputes.map((dispute) => ({
-                label: dispute.dispute_reason,
-                value: formatCurrency(Number(dispute.disputed_amount)),
-                detail: dispute.resolution_status.replace(/_/g, " "),
-              })),
-            }}
-          />
-          <StatCard
-            label="This Month's Service Charges"
-            value={formatCurrency(monthlyAmount)}
-            explanation={{
-              title: "This Month's Service Charges",
-              result: formatCurrency(monthlyAmount),
-              formula: `Sum of earned revenue records for ${monthLabel(currentMonthKey)}`,
-              lines: revenue
-                .filter((row) => row.recognition === "earned" && monthKey(row.period_month) === currentMonthKey)
-                .map((row) => ({ label: row.period_month, value: formatCurrency(Number(row.amount)) })),
-            }}
-          />
-        </div>
-
-        <div className="xl:col-span-5">
-          <CustomerSupportStatusChart data={supportStatusSlices} year={year} />
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Contract Hours This Month</h2>
-          {contractsWithUsage.length === 0 ? (
-            <EmptyState title="No active contracts" description="Contact your account manager to set up a service agreement." />
-          ) : (
-            <DataTable headers={["Contract", "Used / Included", "Remaining", "Status"]}>
-              {contractsWithUsage.map((c) => (
-                <tr key={c.id}>
-                  <td>
-                    <Link className="link link-hover" href="/my-contracts">
-                      {c.name}
-                    </Link>
-                  </td>
-                  <td>
-                    <Hours value={c.used} /> / <Hours value={c.included_hours_per_month} />
-                  </td>
-                  <td>
-                    <Hours value={Math.max(c.remaining, 0)} />
-                  </td>
-                  <td>
-                    <StatusBadge status={c.status} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Open Support Requests</h2>
-          {tickets.length === 0 ? (
-            <EmptyState title="No open requests" description="Submit a new support request any time you need help." />
-          ) : (
-            <DataTable headers={["Ticket", "Priority", "Status"]}>
-              {tickets.slice(0, 8).map((t) => (
-                <tr key={t.id}>
-                  <td>
-                    <Link className="link link-hover" href={`/tickets/${t.id}`}>
-                      {t.ticket_number} | {t.title}
-                    </Link>
-                  </td>
-                  <td>
-                    <StatusBadge status={t.priority} />
-                  </td>
-                  <td>
-                    <StatusBadge status={t.status} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Recent Payments</h2>
-          {payments.length === 0 ? (
-            <EmptyState title="No payments recorded yet" />
-          ) : (
-            <DataTable headers={["Payment #", "Amount", "Method", "Date"]}>
-              {payments.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.payment_number}</td>
-                  <td>
-                    <Money value={Number(p.payment_amount)} />
-                  </td>
-                  <td>
-                    <StatusBadge status={p.payment_method} />
-                  </td>
-                  <td>
-                    <DateText value={p.payment_date} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Disputes</h2>
-          {disputes.length === 0 ? (
-            <EmptyState title="No disputes on file" />
-          ) : (
-            <DataTable headers={["Reason", "Amount", "Status"]}>
-              {disputes.map((d) => (
-                <tr key={d.id}>
-                  <td className="max-w-xs truncate">{d.dispute_reason}</td>
-                  <td>
-                    <Money value={Number(d.disputed_amount)} />
-                  </td>
-                  <td>
-                    <StatusBadge status={d.resolution_status} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-      </div>
-    </div>
+    <CustomerHomeVisuals
+      fullName={profile.full_name}
+      invoiceBalance={invoiceBalance}
+      year={year}
+      metrics={[
+        {
+          label: "Active Contracts",
+          value: String(contracts.length),
+          href: "/my-contracts",
+          tone: "sky",
+        },
+        {
+          label: "Active Projects",
+          value: String(activeProjects.length),
+          href: "/my-projects",
+          tone: "violet",
+        },
+        {
+          label: "Open Disputes",
+          value: String(openDisputes.length),
+          tone: openDisputes.length > 0 ? "rose" : "emerald",
+        },
+        {
+          label: "Service Charges",
+          value: formatCurrency(monthlyAmount),
+          hint: "This month",
+          tone: "amber",
+        },
+      ]}
+      supportStatusSlices={supportStatusSlices}
+      contracts={contractsWithUsage.map((c) => ({
+        id: c.id,
+        name: c.name,
+        used: c.used,
+        included: Number(c.included_hours_per_month ?? 0),
+        remaining: c.remaining,
+        pct: c.pct,
+        status: c.status,
+      }))}
+      requests={tickets.slice(0, 5).map((t) => ({
+        id: t.id,
+        ticketNumber: t.ticket_number,
+        title: t.title,
+        priority: t.priority,
+        status: t.status,
+      }))}
+      invoicePayment={{
+        total: invoiceTotalBilled,
+        paid: invoicePaid,
+        remaining: invoiceRemaining,
+        invoiceCount: billableInvoices.length,
+      }}
+    />
   );
 }

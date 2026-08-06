@@ -93,7 +93,7 @@ export const CONTRACT_STATUS_LABELS: Record<ContractStatus, string> = {
   pending_approval: "Awaiting Executive Signature",
   active: "Active",
   on_hold: "Suspended",
-  expired: "Expired",
+  expired: "Completed",
   canceled: "Cancelled",
   renewed: "Renewed",
 };

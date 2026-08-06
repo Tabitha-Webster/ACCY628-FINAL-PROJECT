@@ -12,6 +12,7 @@ import {
 } from "@/lib/billing";
 import {
   isApprovedForBilling,
+  isAdditionalWorkBlockingBilling,
   isOpenBillingStatus,
   isTimeEntryAlreadyInvoiced,
   pendingAdditionalWorkBlockReason,
@@ -116,16 +117,24 @@ export async function POST(request: Request) {
         .eq("projects.contract_id", contract.id),
       supabase
         .from("additional_work_requests")
-        .select("id, project_id, support_ticket_id")
+        .select("id, project_id, support_ticket_id, approval_status, customer_approval_status")
         .eq("contract_id", contract.id)
-        .eq("approval_status", "pending"),
+        .or("approval_status.eq.pending,customer_approval_status.eq.pending"),
     ]);
 
+    const blockingAw = (pendingAw ?? []).filter((r) =>
+      isAdditionalWorkBlockingBilling({
+        approval_status: r.approval_status,
+        customer_approval_status: r.customer_approval_status,
+        project_id: r.project_id,
+      })
+    );
+
     const pendingAwByProject = new Set(
-      (pendingAw ?? []).map((r) => r.project_id).filter((id): id is string => Boolean(id))
+      blockingAw.map((r) => r.project_id).filter((id): id is string => Boolean(id))
     );
     const pendingAwByTicket = new Set(
-      (pendingAw ?? []).map((r) => r.support_ticket_id).filter((id): id is string => Boolean(id))
+      blockingAw.map((r) => r.support_ticket_id).filter((id): id is string => Boolean(id))
     );
 
     const usage = computeMonthlyUsage(

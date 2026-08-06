@@ -13,8 +13,9 @@ import {
   CONTRACT_TYPE_LABELS,
   CONTRACT_TYPES,
   billedMonthlyRecurringFee,
-  contractStatusRowClass,
+  contractHighlightClass,
   daysUntilDate,
+  getContractHighlight,
   getContractRenewalDate,
   getContractWarnings,
   unwrapAssignedManager,
@@ -128,7 +129,6 @@ export function ContractsListClient({
   const [renewalPreset, setRenewalPreset] = useState<DatePreset>("");
   const [renewalFrom, setRenewalFrom] = useState("");
   const [renewalTo, setRenewalTo] = useState("");
-  const [filtersOpen, setFiltersOpen] = useState(Boolean(initialStatus));
   const [sortKey, setSortKey] = useState<SortKey>("end_date");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
@@ -167,6 +167,7 @@ export function ContractsListClient({
       const customer = unwrapCustomer(row);
       const manager = unwrapAssignedManager(row);
       const renewalDate = getContractRenewalDate(row);
+      const highlight = getContractHighlight(row, now);
       const warnings = getContractWarnings(row, now).filter((w) =>
         [
           "ends_soon",
@@ -178,7 +179,6 @@ export function ContractsListClient({
           "expiration_warning",
         ].includes(w.code)
       );
-      // Prefer specific reminder badges over the generic renewal_soon duplicate
       const displayWarnings = warnings.filter((w) => {
         if (w.code === "renewal_soon") {
           return !warnings.some((x) =>
@@ -197,6 +197,7 @@ export function ContractsListClient({
         manager,
         renewalDate,
         warnings: displayWarnings,
+        highlight,
         daysUntilEnd: endDays,
         mrr: billedMonthlyRecurringFee(row),
       };
@@ -298,12 +299,31 @@ export function ContractsListClient({
     now,
   ]);
 
+  const highlightCounts = useMemo(() => {
+    const counts = {
+      renewal_90: 0,
+      renewal_60: 0,
+      renewal_30: 0,
+      ends_soon: 0,
+      past_end_date: 0,
+    };
+    for (const item of filtered) {
+      if (item.highlight === "renewal_90") counts.renewal_90 += 1;
+      else if (item.highlight === "renewal_60" || item.highlight === "renewal_soon") {
+        counts.renewal_60 += 1;
+      } else if (item.highlight === "renewal_30") counts.renewal_30 += 1;
+      else if (item.highlight === "ends_soon") counts.ends_soon += 1;
+      else if (item.highlight === "past_end_date") counts.past_end_date += 1;
+    }
+    return counts;
+  }, [filtered]);
+
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
       setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      setSortDir(key === "mrr" || key === "end_date" || key === "days_to_end" || key === "renewal_date" ? "asc" : "asc");
+      setSortDir("asc");
     }
   }
 
@@ -328,15 +348,6 @@ export function ContractsListClient({
     expirationPreset ||
     renewalPreset;
 
-  const activeFilterCount = [
-    customerId,
-    status,
-    contractType,
-    managerId,
-    expirationPreset,
-    renewalPreset,
-  ].filter(Boolean).length;
-
   function SortHeader({ label, column }: { label: string; column: SortKey }) {
     const active = sortKey === column;
     return (
@@ -356,36 +367,196 @@ export function ContractsListClient({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-box border border-base-300 bg-base-100 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[12rem] flex-1 basis-48">
-            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 opacity-50" />
-            <input
-              type="search"
-              className="input input-bordered input-sm h-8 w-full pl-9"
-              placeholder="Search contract #, name, customer, manager…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              aria-label="Search contracts"
-            />
+    <div className="flex flex-col gap-3">
+      <div className="rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50/70 to-base-100 p-3 shadow-sm">
+        <div className="grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+            <label className="form-control w-full min-w-0">
+              <span className="mb-1 block h-4 text-xs leading-4 font-medium uppercase tracking-wide opacity-60">
+                Search
+              </span>
+              <div className="relative w-full">
+                <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 opacity-50" />
+                <input
+                  type="search"
+                  className="input input-bordered input-sm h-8 w-full pl-9"
+                  placeholder="Search contract #, name, customer, manager…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  aria-label="Search contracts"
+                />
+              </div>
+            </label>
+            <div className="flex h-8 items-center justify-end sm:pb-0">
+              {hasFilters ? (
+                <button type="button" className="btn btn-ghost btn-sm h-8 min-h-8" onClick={clearFilters}>
+                  <X className="h-4 w-4" />
+                  Clear filters
+                </button>
+              ) : (
+                <span className="hidden h-8 w-[7.5rem] sm:block" aria-hidden />
+              )}
+            </div>
           </div>
 
-          <button
-            type="button"
-            className={`btn btn-sm h-8 min-h-8 gap-1.5 ${filtersOpen || hasFilters ? "btn-primary btn-outline" : "btn-ghost border border-base-300"}`}
-            aria-expanded={filtersOpen}
-            onClick={() => setFiltersOpen((open) => !open)}
-          >
-            Filters
-            {activeFilterCount > 0 ? (
-              <span className="badge badge-sm badge-primary">{activeFilterCount}</span>
-            ) : null}
-          </button>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+            <label className="form-control w-full min-w-0">
+              <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Customer</span>
+              <select
+                className="select select-bordered select-sm h-8 w-full"
+                value={customerId}
+                onChange={(e) => setCustomerId(e.target.value)}
+              >
+                <option value="">All customers</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-xs">
-            <span className="opacity-60 whitespace-nowrap">
-              {filtered.length}/{contracts.length}
+            <label className="form-control w-full min-w-0">
+              <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Status</span>
+              <select
+                className="select select-bordered select-sm h-8 w-full"
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+              >
+                <option value="">All statuses</option>
+                {CONTRACT_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {CONTRACT_STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="form-control w-full min-w-0">
+              <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Contract type</span>
+              <select
+                className="select select-bordered select-sm h-8 w-full"
+                value={contractType}
+                onChange={(e) => setContractType(e.target.value)}
+              >
+                <option value="">All types</option>
+                {CONTRACT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {CONTRACT_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="form-control w-full min-w-0">
+              <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Account manager</span>
+              <select
+                className="select select-bordered select-sm h-8 w-full"
+                value={managerId}
+                onChange={(e) => setManagerId(e.target.value)}
+              >
+                <option value="">All managers</option>
+                {managers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="form-control w-full min-w-0">
+              <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Expiration date</span>
+              <select
+                className="select select-bordered select-sm h-8 w-full"
+                value={expirationPreset}
+                onChange={(e) => setExpirationPreset(e.target.value as DatePreset)}
+              >
+                <option value="">Any expiration</option>
+                <option value="next_30">Next 30 days</option>
+                <option value="next_60">Next 60 days</option>
+                <option value="next_90">Next 90 days</option>
+                <option value="past">Already expired</option>
+                <option value="custom">Custom range</option>
+              </select>
+            </label>
+
+            <label className="form-control w-full min-w-0">
+              <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Renewal date</span>
+              <select
+                className="select select-bordered select-sm h-8 w-full"
+                value={renewalPreset}
+                onChange={(e) => setRenewalPreset(e.target.value as DatePreset)}
+              >
+                <option value="">Any renewal</option>
+                <option value="next_30">Next 30 days</option>
+                <option value="next_60">Next 60 days</option>
+                <option value="next_90">Next 90 days</option>
+                <option value="past">Past renewal date</option>
+                <option value="custom">Custom range</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        {expirationPreset === "custom" ? (
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="form-control w-full min-w-0">
+              <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Expiration from</span>
+              <input
+                type="date"
+                className="input input-bordered input-sm h-8 w-full"
+                value={expirationFrom}
+                onChange={(e) => setExpirationFrom(e.target.value)}
+              />
+            </label>
+            <label className="form-control w-full min-w-0">
+              <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Expiration to</span>
+              <input
+                type="date"
+                className="input input-bordered input-sm h-8 w-full"
+                value={expirationTo}
+                onChange={(e) => setExpirationTo(e.target.value)}
+              />
+            </label>
+          </div>
+        ) : null}
+
+        {renewalPreset === "custom" ? (
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="form-control w-full min-w-0">
+              <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Renewal from</span>
+              <input
+                type="date"
+                className="input input-bordered input-sm h-8 w-full"
+                value={renewalFrom}
+                onChange={(e) => setRenewalFrom(e.target.value)}
+              />
+            </label>
+            <label className="form-control w-full min-w-0">
+              <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Renewal to</span>
+              <input
+                type="date"
+                className="input input-bordered input-sm h-8 w-full"
+                value={renewalTo}
+                onChange={(e) => setRenewalTo(e.target.value)}
+              />
+            </label>
+          </div>
+        ) : null}
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="opacity-60">
+              Showing {filtered.length} of {contracts.length}
+            </span>
+            <span className="badge badge-ghost badge-sm">90-day: {highlightCounts.renewal_90}</span>
+            <span className="badge badge-info badge-sm">60-day: {highlightCounts.renewal_60}</span>
+            <span className="badge badge-warning badge-sm">30-day: {highlightCounts.renewal_30}</span>
+            <span className="badge badge-warning badge-outline badge-sm">
+              Expiring soon: {highlightCounts.ends_soon}
+            </span>
+            <span className="badge badge-error badge-sm">
+              Past end date: {highlightCounts.past_end_date}
             </span>
           </div>
 
@@ -395,323 +566,184 @@ export function ContractsListClient({
             </div>
           ) : null}
         </div>
-
-        {filtersOpen ? (
-          <div className="mt-3 space-y-3 border-t border-base-300 pt-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-medium uppercase tracking-wide opacity-60">Filter contracts</p>
-              {hasFilters ? (
-                <button type="button" className="btn btn-ghost btn-xs gap-1" onClick={clearFilters}>
-                  <X className="h-3.5 w-3.5" />
-                  Clear filters
-                </button>
-              ) : null}
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-              <label className="form-control w-full min-w-0">
-                <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Customer</span>
-                <select
-                  className="select select-bordered select-sm h-8 w-full"
-                  value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                >
-                  <option value="">All customers</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="form-control w-full min-w-0">
-                <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Status</span>
-                <select
-                  className="select select-bordered select-sm h-8 w-full"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                >
-                  <option value="">All statuses</option>
-                  {CONTRACT_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {CONTRACT_STATUS_LABELS[s]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="form-control w-full min-w-0">
-                <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Contract type</span>
-                <select
-                  className="select select-bordered select-sm h-8 w-full"
-                  value={contractType}
-                  onChange={(e) => setContractType(e.target.value)}
-                >
-                  <option value="">All types</option>
-                  {CONTRACT_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {CONTRACT_TYPE_LABELS[t]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="form-control w-full min-w-0">
-                <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Account manager</span>
-                <select
-                  className="select select-bordered select-sm h-8 w-full"
-                  value={managerId}
-                  onChange={(e) => setManagerId(e.target.value)}
-                >
-                  <option value="">All managers</option>
-                  {managers.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="form-control w-full min-w-0">
-                <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Expiration date</span>
-                <select
-                  className="select select-bordered select-sm h-8 w-full"
-                  value={expirationPreset}
-                  onChange={(e) => setExpirationPreset(e.target.value as DatePreset)}
-                >
-                  <option value="">Any expiration</option>
-                  <option value="next_30">Next 30 days</option>
-                  <option value="next_60">Next 60 days</option>
-                  <option value="next_90">Next 90 days</option>
-                  <option value="past">Already expired</option>
-                  <option value="custom">Custom range</option>
-                </select>
-              </label>
-
-              <label className="form-control w-full min-w-0">
-                <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Renewal date</span>
-                <select
-                  className="select select-bordered select-sm h-8 w-full"
-                  value={renewalPreset}
-                  onChange={(e) => setRenewalPreset(e.target.value as DatePreset)}
-                >
-                  <option value="">Any renewal</option>
-                  <option value="next_30">Next 30 days</option>
-                  <option value="next_60">Next 60 days</option>
-                  <option value="next_90">Next 90 days</option>
-                  <option value="past">Past renewal date</option>
-                  <option value="custom">Custom range</option>
-                </select>
-              </label>
-            </div>
-
-            {expirationPreset === "custom" ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="form-control w-full min-w-0">
-                  <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Expiration from</span>
-                  <input
-                    type="date"
-                    className="input input-bordered input-sm h-8 w-full"
-                    value={expirationFrom}
-                    onChange={(e) => setExpirationFrom(e.target.value)}
-                  />
-                </label>
-                <label className="form-control w-full min-w-0">
-                  <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Expiration to</span>
-                  <input
-                    type="date"
-                    className="input input-bordered input-sm h-8 w-full"
-                    value={expirationTo}
-                    onChange={(e) => setExpirationTo(e.target.value)}
-                  />
-                </label>
-              </div>
-            ) : null}
-
-            {renewalPreset === "custom" ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="form-control w-full min-w-0">
-                  <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Renewal from</span>
-                  <input
-                    type="date"
-                    className="input input-bordered input-sm h-8 w-full"
-                    value={renewalFrom}
-                    onChange={(e) => setRenewalFrom(e.target.value)}
-                  />
-                </label>
-                <label className="form-control w-full min-w-0">
-                  <span className="mb-1 block h-4 text-xs leading-4 opacity-60">Renewal to</span>
-                  <input
-                    type="date"
-                    className="input input-bordered input-sm h-8 w-full"
-                    value={renewalTo}
-                    onChange={(e) => setRenewalTo(e.target.value)}
-                  />
-                </label>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
       </div>
 
-      {filtered.length === 0 ? (
-        <EmptyState
-          title="No contracts match your filters"
-          description="Clear filters or adjust search to see more agreements."
-        />
-      ) : (
-        <div className="max-h-[min(70vh,40rem)] overflow-auto rounded-box border border-base-300 bg-base-100">
-          <table className="table table-sm">
-            <thead className="sticky top-0 z-10 border-b border-base-300 bg-base-100">
-              <tr>
-                <th>
-                  <SortHeader label="Contract #" column="contract_number" />
-                </th>
-                <th>
-                  <SortHeader label="Customer" column="customer" />
-                </th>
-                <th>
-                  <SortHeader label="Contract name" column="name" />
-                </th>
-                <th>
-                  <SortHeader label="Status" column="status" />
-                </th>
-                <th>
-                  <SortHeader label="Type" column="contract_type" />
-                </th>
-                <th>
-                  <SortHeader label="Start" column="start_date" />
-                </th>
-                <th>
-                  <SortHeader label="End" column="end_date" />
-                </th>
-                <th>
-                  <SortHeader label="Days to end" column="days_to_end" />
-                </th>
-                <th>
-                  <SortHeader label="MRR" column="mrr" />
-                </th>
-                <th>
-                  <SortHeader label="Renewal" column="renewal_date" />
-                </th>
-                <th>
-                  <SortHeader label="Account manager" column="manager" />
-                </th>
-                <th>Alerts</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(({ row, customer, manager, renewalDate, warnings, daysUntilEnd, mrr }) => (
-                <tr key={row.id} className={contractStatusRowClass(row.status)}>
-                  <td className="font-mono text-xs">{row.contract_number}</td>
-                  <td>
-                    {customer ? (
-                      <Link href={`/customers/${customer.id}`} className="link link-hover">
-                        {customer.name}
-                      </Link>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td>
-                    <Link href={`/contracts/${row.id}`} className="link link-hover font-medium">
-                      {row.name}
-                    </Link>
-                  </td>
-                  <td className="min-w-[7.5rem] max-w-[11rem]">
-                    <StatusBadge
-                      status={row.status}
-                      label={
-                        CONTRACT_STATUS_LABELS[row.status as keyof typeof CONTRACT_STATUS_LABELS] ??
-                        statusLabel(row.status)
-                      }
-                      className="badge-sm h-auto max-w-full whitespace-normal px-2.5 py-1 text-left text-[0.7rem] font-medium leading-snug"
-                    />
-                  </td>
-                  <td className="text-xs">
-                    {CONTRACT_TYPE_LABELS[row.contract_type as keyof typeof CONTRACT_TYPE_LABELS] ??
-                      statusLabel(String(row.contract_type))}
-                  </td>
-                  <td className="whitespace-nowrap text-xs">{formatDate(row.start_date)}</td>
-                  <td className="whitespace-nowrap text-xs">{formatDate(row.end_date)}</td>
-                  <td className="whitespace-nowrap text-xs">
-                    {(() => {
-                      const label = formatDaysToEnd(daysUntilEnd);
-                      if (!label) return <span className="opacity-40">—</span>;
-                      if (daysUntilEnd != null && daysUntilEnd < 0) {
-                        return <span className="font-medium text-error">{label}</span>;
-                      }
-                      if (daysUntilEnd != null && daysUntilEnd <= 30) {
-                        return <span className="font-medium text-warning">{label}</span>;
-                      }
-                      return <span>{label}</span>;
-                    })()}
-                  </td>
-                  <td className="whitespace-nowrap">
-                    <Money value={mrr} />
-                  </td>
-                  <td className="whitespace-nowrap text-xs">
-                    {renewalDate ? formatDate(renewalDate) : "—"}
-                    {row.renewal_type && row.renewal_type !== "none" ? (
-                      <div className="opacity-50">{statusLabel(String(row.renewal_type))}</div>
-                    ) : null}
-                  </td>
-                  <td className="text-xs">{manager?.full_name ?? "—"}</td>
-                  <td className="min-w-[11rem] max-w-[16rem]">
-                    {(() => {
-                      const alertWarnings = warnings.filter(
-                        (warning) => warning.code !== "past_end_date"
-                      );
-                      if (alertWarnings.length === 0) {
-                        return <span className="text-xs opacity-40">—</span>;
-                      }
-                      return (
-                        <div className="flex flex-col items-start gap-1">
-                          {alertWarnings.map((warning) => (
-                            <span
-                              key={warning.code}
-                              className="badge badge-sm badge-ghost h-auto max-w-full whitespace-normal px-2.5 py-1 text-left text-[0.7rem] font-medium leading-snug"
-                            >
-                              {warning.label}
-                            </span>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </td>
-                  <td className="text-right">
-                    <div className="flex flex-wrap justify-end gap-1">
-                      <Link href={`/contracts/${row.id}`} className="btn btn-ghost btn-xs">
-                        View
-                      </Link>
-                      {canEdit ? (
-                        <Link href={`/contracts/${row.id}/edit`} className="btn btn-ghost btn-xs">
-                          {row.status === "draft" ? "Continue" : "Edit"}
-                        </Link>
-                      ) : null}
-                      {row.status === "pending_approval" ? (
-                        <Link
-                          href={`/contracts/${row.id}${role === "executive" ? "#pdf-signatures" : ""}`}
-                          className="btn btn-primary btn-xs"
-                        >
-                          {role === "executive" ? "Review & sign" : "Review"}
-                        </Link>
-                      ) : null}
-                      {row.status === "active" || row.status === "expired" ? (
-                        <Link href={`/contracts/${row.id}`} className="btn btn-outline btn-xs">
-                          Renew / Cancel
-                        </Link>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <section className="overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-b from-violet-50/70 to-base-100 shadow-sm">
+        <div className="border-b border-violet-200/70 px-3 py-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-violet-900/80">
+            Contract directory ({filtered.length})
+          </h2>
         </div>
-      )}
+        <div className="p-3">
+          {filtered.length === 0 ? (
+            <EmptyState
+              title="No contracts match your filters"
+              description="Clear filters or adjust search to see more agreements."
+            />
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-violet-100 bg-white/85">
+              <table className="table table-sm">
+                <thead>
+                  <tr>
+                    <th>
+                      <SortHeader label="Contract #" column="contract_number" />
+                    </th>
+                    <th>
+                      <SortHeader label="Customer" column="customer" />
+                    </th>
+                    <th>
+                      <SortHeader label="Contract name" column="name" />
+                    </th>
+                    <th>
+                      <SortHeader label="Status" column="status" />
+                    </th>
+                    <th>
+                      <SortHeader label="Type" column="contract_type" />
+                    </th>
+                    <th>
+                      <SortHeader label="Start" column="start_date" />
+                    </th>
+                    <th>
+                      <SortHeader label="End" column="end_date" />
+                    </th>
+                    <th>
+                      <SortHeader label="Days to end" column="days_to_end" />
+                    </th>
+                    <th>
+                      <SortHeader label="MRR" column="mrr" />
+                    </th>
+                    <th>
+                      <SortHeader label="Renewal" column="renewal_date" />
+                    </th>
+                    <th>
+                      <SortHeader label="Account manager" column="manager" />
+                    </th>
+                    <th>Alerts</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(
+                    ({ row, customer, manager, renewalDate, warnings, highlight, daysUntilEnd, mrr }) => (
+                      <tr key={row.id} className={contractHighlightClass(highlight)}>
+                        <td className="font-mono text-xs">{row.contract_number}</td>
+                        <td>
+                          {customer ? (
+                            <Link href={`/customers/${customer.id}`} className="link link-hover">
+                              {customer.name}
+                            </Link>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td>
+                          <Link href={`/contracts/${row.id}`} className="link link-hover font-medium">
+                            {row.name}
+                          </Link>
+                        </td>
+                        <td className="min-w-[7.5rem] max-w-[11rem]">
+                          <StatusBadge
+                            status={row.status}
+                            label={
+                              CONTRACT_STATUS_LABELS[
+                                row.status as keyof typeof CONTRACT_STATUS_LABELS
+                              ] ?? statusLabel(row.status)
+                            }
+                            className="badge-sm h-auto max-w-full whitespace-normal px-2.5 py-1 text-left text-[0.7rem] font-medium leading-snug"
+                          />
+                        </td>
+                        <td className="text-xs">
+                          {CONTRACT_TYPE_LABELS[
+                            row.contract_type as keyof typeof CONTRACT_TYPE_LABELS
+                          ] ?? statusLabel(String(row.contract_type))}
+                        </td>
+                        <td className="whitespace-nowrap text-xs">{formatDate(row.start_date)}</td>
+                        <td className="whitespace-nowrap text-xs">{formatDate(row.end_date)}</td>
+                        <td className="whitespace-nowrap text-xs">
+                          {(() => {
+                            const label = formatDaysToEnd(daysUntilEnd);
+                            if (!label) return <span className="opacity-40">—</span>;
+                            if (daysUntilEnd != null && daysUntilEnd < 0) {
+                              return <span className="font-medium text-error">{label}</span>;
+                            }
+                            if (daysUntilEnd != null && daysUntilEnd <= 30) {
+                              return <span className="font-medium text-warning">{label}</span>;
+                            }
+                            return <span>{label}</span>;
+                          })()}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          <Money value={mrr} />
+                        </td>
+                        <td className="whitespace-nowrap text-xs">
+                          {renewalDate ? formatDate(renewalDate) : "—"}
+                          {row.renewal_type && row.renewal_type !== "none" ? (
+                            <div className="opacity-50">{statusLabel(String(row.renewal_type))}</div>
+                          ) : null}
+                        </td>
+                        <td className="text-xs">{manager?.full_name ?? "—"}</td>
+                        <td className="min-w-[11rem] max-w-[16rem]">
+                          {warnings.length > 0 ? (
+                            <div className="flex flex-col items-start gap-1">
+                              {warnings.map((warning) => (
+                                <span
+                                  key={warning.code}
+                                  className={`badge badge-sm h-auto max-w-full whitespace-normal px-2.5 py-1 text-left text-[0.7rem] font-medium leading-snug ${
+                                    warning.code === "past_end_date"
+                                      ? "badge-error"
+                                      : warning.code === "renewal_90"
+                                        ? "badge-ghost"
+                                        : warning.code === "renewal_60" ||
+                                            warning.code === "renewal_soon"
+                                          ? "badge-info"
+                                          : "badge-warning"
+                                  }`}
+                                >
+                                  {warning.label}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs opacity-40">—</span>
+                          )}
+                        </td>
+                        <td className="text-right">
+                          <div className="flex flex-wrap justify-end gap-1">
+                            <Link href={`/contracts/${row.id}`} className="btn btn-ghost btn-xs">
+                              View
+                            </Link>
+                            {canEdit ? (
+                              <Link
+                                href={`/contracts/${row.id}/edit`}
+                                className="btn btn-ghost btn-xs"
+                              >
+                                {row.status === "draft" ? "Continue" : "Edit"}
+                              </Link>
+                            ) : null}
+                            {row.status === "pending_approval" ? (
+                              <Link
+                                href={`/contracts/${row.id}${role === "executive" ? "#pdf-signatures" : ""}`}
+                                className="btn btn-primary btn-xs"
+                              >
+                                {role === "executive" ? "Review & sign" : "Review"}
+                              </Link>
+                            ) : null}
+                            {row.status === "active" || row.status === "expired" ? (
+                              <Link href={`/contracts/${row.id}`} className="btn btn-outline btn-xs">
+                                Renew / Cancel
+                              </Link>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

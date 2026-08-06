@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { isManagerRole } from "@/lib/constants";
 import { ButtonLink } from "@/components/Button";
 import { CustomerApprovalActions } from "@/components/CustomerApprovalActions";
 import { PageLayout } from "@/components/PageLayout";
 import { DataTable, EmptyState, ErrorState, StatusBadge } from "@/components/ui";
+import { canApproveCustomers } from "@/lib/customers/queries";
 import { formatDate } from "@/lib/format";
 
 type ApprovalRow = {
@@ -15,13 +15,15 @@ type ApprovalRow = {
   contact_email: string | null;
   status: string;
   created_at: string;
+  signup_at: string | null;
   approval_note: string | null;
 };
 
 export default async function CustomerApprovalsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!isManagerRole(profile.role)) redirect("/dashboard");
+  // Admin + Manager only — approve/reject Pending Approval signups.
+  if (!canApproveCustomers(profile.role)) redirect("/dashboard");
 
   const supabase = await createClient();
 
@@ -31,20 +33,38 @@ export default async function CustomerApprovalsPage() {
 
   const full = await supabase
     .from("customers")
-    .select("id, name, primary_contact, contact_email, status, created_at, approval_note")
+    .select("id, name, primary_contact, contact_email, status, created_at, signup_at, approval_note")
     .in("status", ["pending_approval", "rejected"])
-    .order("created_at", { ascending: false });
+    .order("signup_at", { ascending: false });
 
   if (!full.error) {
     rows = (full.data ?? []) as ApprovalRow[];
   } else {
     const schemaGap =
       full.error.message.includes("approval_note") ||
+      full.error.message.includes("signup_at") ||
       full.error.message.includes("pending_approval") ||
       full.error.message.includes("rejected");
-    // Without the manager-approval migration, the dedicated queue cannot run.
-    // Show an empty state instead of a hard database error.
-    if (!schemaGap) {
+    if (schemaGap && full.error.message.includes("signup_at")) {
+      const withoutSignup = await supabase
+        .from("customers")
+        .select("id, name, primary_contact, contact_email, status, created_at, approval_note")
+        .in("status", ["pending_approval", "rejected"])
+        .order("created_at", { ascending: false });
+      if (!withoutSignup.error) {
+        rows = (withoutSignup.data ?? []).map((row) => ({
+          ...row,
+          signup_at: null,
+        })) as ApprovalRow[];
+      } else if (
+        !withoutSignup.error.message.includes("approval_note") &&
+        !withoutSignup.error.message.includes("pending_approval") &&
+        !withoutSignup.error.message.includes("rejected")
+      ) {
+        errorMessage = withoutSignup.error.message;
+      }
+    } else if (!schemaGap) {
+      // Without the manager-approval migration, the dedicated queue cannot run.
       errorMessage = full.error.message;
     }
   }
@@ -89,7 +109,7 @@ export default async function CustomerApprovalsPage() {
               <td className="font-medium">{row.name}</td>
               <td>{row.primary_contact ?? "—"}</td>
               <td className="text-sm">{row.contact_email ?? "—"}</td>
-              <td className="text-sm">{formatDate(row.created_at)}</td>
+              <td className="text-sm">{formatDate(row.signup_at ?? row.created_at)}</td>
               <td>
                 <StatusBadge status={row.status} />
                 {row.approval_note ? (

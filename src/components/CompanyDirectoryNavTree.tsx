@@ -11,6 +11,7 @@ type NavLink = { href: string; label: string };
 const COMPANY_DIRECTORY_LINKS: NavLink[] = [
   { href: "/admin/employees", label: "Employees" },
   { href: "/customers", label: "Customers" },
+  { href: "/customer-approvals", label: "Approvals" },
 ];
 
 function pathActive(pathname: string, href: string) {

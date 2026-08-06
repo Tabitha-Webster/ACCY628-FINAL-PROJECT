@@ -4,6 +4,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { StatusBadge } from "@/components/ui";
+import { roleLabel } from "@/lib/constants";
 
 export type EmployeeRow = {
   id: string;
@@ -280,7 +281,7 @@ export function AdminEmployeesManager({
                 >
                   {EMPLOYEE_ROLES.map((role) => (
                     <option key={role} value={role}>
-                      {role}
+                      {roleLabel(role)}
                     </option>
                   ))}
                 </select>

@@ -4,14 +4,17 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { CONTRACTS_NAV_COPY } from "@/lib/constants";
 import { ContractsListClient } from "@/components/ContractsListClient";
-import { ContractMetricsWidgets } from "@/components/ContractMetricsWidgets";
 import { ContractPermissionActions } from "@/components/ContractPermissionActions";
+import {
+  ContractsManageVisuals,
+  type ContractsMetricTile,
+} from "@/components/ContractsManageVisuals";
 import {
   MissingSignedDocumentsTable,
   type MissingSignedDocumentRow,
 } from "@/components/MissingSignedDocumentsTable";
-import { EmptyState, ErrorState, PageHeader, StatCard } from "@/components/ui";
-import type { ContractStatus } from "@/lib/types";
+import { EmptyState, ErrorState } from "@/components/ui";
+import { formatCurrency } from "@/lib/format";
 import {
   canCreateContracts,
   canEditContracts,
@@ -20,6 +23,7 @@ import {
   canViewContractsModule,
   describeContractPermissions,
   fetchContractReportMetrics,
+  getContractHighlight,
   listActiveContractsMissingSignedDocument,
   listContracts,
   summarizeContractsByStatus,
@@ -67,63 +71,103 @@ export default async function ContractsPage({ searchParams }: { searchParams: Se
     : null;
   const missingDocs = (missingDocsRes?.data ?? []) as MissingSignedDocumentRow[];
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title={copy.title}
-        description={copy.description}
-        actions={
-          <div className="flex flex-wrap gap-2">
-            {canReport ? (
-              <Link href="/contracts/reports" className="btn btn-outline">
-                Reporting & Dashboard
-              </Link>
-            ) : null}
-            <Link href="/contracts/renewals" className="btn btn-outline">
-              Renewal & Expiration
-            </Link>
-            {canCreate ? (
-              <Link href="/contracts/new" className="btn btn-primary">
-                Create
-              </Link>
-            ) : null}
-          </div>
-        }
-      />
+  const atRiskFromList = contracts.filter((c) => {
+    const h = getContractHighlight(c);
+    return h === "ends_soon" || h === "past_end_date" || h === "renewal_30" || h === "renewal_60";
+  }).length;
 
+  const metrics: ContractsMetricTile[] = canReport && reportBundle && !reportBundle.error
+    ? [
+        {
+          label: "MRR",
+          value: formatCurrency(reportBundle.metrics.monthlyRecurringRevenue),
+          tone: "sky",
+          hint: `≈ ${formatCurrency(reportBundle.metrics.annualContractValue)} ACV`,
+          href: "/contracts/reports",
+        },
+        {
+          label: "Active",
+          value: String(statusCounts.active),
+          tone: "emerald",
+          hint: `${contracts.length} total on file`,
+          href: "/contracts?status=active",
+        },
+        {
+          label: "Pending",
+          value: String(statusCounts.pending_approval),
+          tone: statusCounts.pending_approval > 0 ? "amber" : "emerald",
+          hint: "Awaiting approval",
+          href: "/contracts?status=pending_approval",
+        },
+        {
+          label: "At risk",
+          value: String(
+            reportBundle.metrics.expiringContracts + reportBundle.metrics.renewalsDue
+          ),
+          tone:
+            reportBundle.metrics.expiringContracts + reportBundle.metrics.renewalsDue > 0
+              ? "rose"
+              : "emerald",
+          hint: `${reportBundle.metrics.expiringContracts} expiring · ${reportBundle.metrics.renewalsDue} renewals`,
+          href: "/contracts/renewals",
+        },
+      ]
+    : [
+        {
+          label: "Contracts",
+          value: String(contracts.length),
+          tone: "sky",
+          hint: "On file",
+        },
+        {
+          label: "Active",
+          value: String(statusCounts.active),
+          tone: "emerald",
+          href: "/contracts?status=active",
+        },
+        {
+          label: "Pending",
+          value: String(statusCounts.pending_approval),
+          tone: statusCounts.pending_approval > 0 ? "amber" : "emerald",
+          href: "/contracts?status=pending_approval",
+        },
+        {
+          label: "At risk",
+          value: String(atRiskFromList),
+          tone: atRiskFromList > 0 ? "rose" : "emerald",
+          hint: "Renewal / expiration pressure",
+          href: "/contracts/renewals",
+        },
+      ];
+
+  return (
+    <ContractsManageVisuals
+      title={copy.title}
+      subtitle={copy.description}
+      metrics={metrics}
+      statusCounts={statusCounts}
+      headerActions={
+        <div className="flex flex-wrap gap-2">
+          {canReport ? (
+            <Link href="/contracts/reports" className="btn btn-outline btn-sm">
+              Reporting & Dashboard
+            </Link>
+          ) : null}
+          <Link href="/contracts/renewals" className="btn btn-outline btn-sm">
+            Renewal & Expiration
+          </Link>
+          {canCreate ? (
+            <Link href="/contracts/new" className="btn btn-primary btn-sm">
+              Create
+            </Link>
+          ) : null}
+        </div>
+      }
+    >
       <ContractPermissionActions items={permissionItems} />
 
       {error ? <ErrorState message={error.message} /> : null}
       {missingDocsRes?.error ? <ErrorState message={missingDocsRes.error.message} /> : null}
-
-      {!error && reportBundle && !reportBundle.error ? (
-        <ContractMetricsWidgets
-          metrics={reportBundle.metrics}
-          showTables={false}
-          title="Portfolio snapshot"
-        />
-      ) : null}
-
-      {!error ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-          <Link href="/contracts" className="block">
-            <StatCard
-              label="All contracts"
-              value={String(contracts.length)}
-              tone={!statusFilter ? "info" : "default"}
-            />
-          </Link>
-          {(Object.entries(statusCounts) as [ContractStatus, number][]).map(([status, count]) => (
-            <Link key={status} href={`/contracts?status=${status}`} className="block">
-              <StatCard
-                label={status.replace(/_/g, " ")}
-                value={String(count)}
-                tone={statusFilter === status ? "info" : "default"}
-              />
-            </Link>
-          ))}
-        </div>
-      ) : null}
 
       {!error && contracts.length === 0 ? (
         <EmptyState
@@ -144,6 +188,6 @@ export default async function ContractsPage({ searchParams }: { searchParams: Se
       {!error && showDocumentChecklist && !missingDocsRes?.error ? (
         <MissingSignedDocumentsTable rows={missingDocs} />
       ) : null}
-    </div>
+    </ContractsManageVisuals>
   );
 }

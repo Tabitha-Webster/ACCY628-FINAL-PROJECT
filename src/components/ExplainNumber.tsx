@@ -40,7 +40,7 @@ export function ExplainNumber({ explanation }: { explanation: MetricExplanation 
             {explanation.formula}
           </p>
           {explanation.description ? <p className="mt-2 text-sm opacity-70">{explanation.description}</p> : null}
-          {explanation.lines?.length ? (
+          {(explanation.lines?.length ?? 0) > 0 ? (
             <div className="mt-4 max-h-72 overflow-auto rounded-box border border-base-300">
               <table className="table table-xs">
                 <thead>
@@ -50,7 +50,7 @@ export function ExplainNumber({ explanation }: { explanation: MetricExplanation 
                   </tr>
                 </thead>
                 <tbody>
-                  {explanation.lines.map((line, index) => (
+                  {(explanation.lines ?? []).map((line, index) => (
                     <tr key={`${line.label}-${index}`}>
                       <td>
                         <div>{line.label}</div>

@@ -377,7 +377,10 @@ export type AdditionalWorkRequest = {
   description: string;
   estimated_hours: number | null;
   estimated_amount: number | null;
+  /** Manager (internal) decision. */
   approval_status: ApprovalStatus;
+  /** Customer decision for project OOS/CRs; not_required for ticket-only requests. */
+  customer_approval_status?: ApprovalStatus | "not_required" | null;
   reviewed_by: string | null;
   review_notes: string | null;
   reviewed_at: string | null;

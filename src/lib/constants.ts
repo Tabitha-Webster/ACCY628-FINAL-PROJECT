@@ -127,14 +127,12 @@ export const DEMO_ACCOUNTS = [
     role: "admin" as UserRole,
     label: "Admin",
     email: "admin@servicesync.demo",
-    password: "1234",
     name: "Tabitha Webster",
   },
   {
     role: "manager" as UserRole,
     label: "Manager",
     email: "manager@servicesync.demo",
-    password: "1234",
     name: "Emilie Pierson",
   },
   {
@@ -148,28 +146,24 @@ export const DEMO_ACCOUNTS = [
     role: "technician" as UserRole,
     label: "Technician",
     email: "tech@servicesync.demo",
-    password: "1234",
     name: "Jackson Pecunia",
   },
   {
     role: "billing" as UserRole,
     label: "Billing & Accounting",
     email: "billing@servicesync.demo",
-    password: "1234",
     name: "Lindsay-Kate Williams",
   },
   {
     role: "hr" as UserRole,
     label: "HR",
     email: "hr@servicesync.demo",
-    password: "1234",
     name: "Lily Walker",
   },
   {
     role: "customer" as UserRole,
     label: "Customer (Chad Corporation)",
     email: "casey.ortiz@chadcorporation.demo",
-    password: "1234",
     name: "Casey Ortiz",
   },
 ] as const;
@@ -317,7 +311,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     // Contracts & Agreements + Billing/Collections/Accounting trees render in AppShell
   ],
   hr: [
-    { href: "/dashboard", label: "HR Home" },
+    { href: "/dashboard", label: "HR Dashboard" },
     { href: "/hr-applicants", label: "Applicants" },
     { href: "/admin/employees", label: "Employees" },
     { href: "/hr-analytics", label: "HR Analytics" },
@@ -328,9 +322,9 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/dashboard", label: "Customer Home" },
     { href: "/support-requests", label: "Make a Request" },
     { href: "/my-contracts", label: "My Contracts" },
+    { href: "/service-usage", label: "Service Usage" },
     { href: "/my-invoices", label: "My Invoices" },
     { href: "/my-projects", label: "My Projects" },
-    { href: "/service-usage", label: "Service Usage" },
   ],
 };
 
@@ -378,7 +372,7 @@ export const CONTRACTS_NAV_COPY: Record<
     href: "/my-contracts",
     title: "My Contracts",
     description:
-      "View your organization's service agreements, download or print PDFs, and sign when a new agreement is ready.",
+      "View your service agreements, download or print PDFs, and sign when ready. Open Service Usage for this month's hour breakdown.",
   },
 };
 

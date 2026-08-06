@@ -57,9 +57,9 @@ export default async function MyProjectsPage() {
     projectIds.length
       ? supabase
           .from("additional_work_requests")
-          .select("id, title, description, project_id, estimated_hours, estimated_amount, approval_status")
+          .select("id, title, description, project_id, estimated_hours, estimated_amount, approval_status, customer_approval_status")
           .in("project_id", projectIds)
-          .eq("approval_status", "pending")
+          .eq("customer_approval_status", "pending")
           .order("created_at", { ascending: false })
       : Promise.resolve({
           data: [] as {
@@ -70,6 +70,7 @@ export default async function MyProjectsPage() {
             estimated_hours: number | null;
             estimated_amount: number | null;
             approval_status: ApprovalStatus;
+            customer_approval_status: string | null;
           }[],
         }),
     projectIds.length
@@ -153,6 +154,8 @@ export default async function MyProjectsPage() {
                 project_name: r.project_id ? projectName.get(r.project_id) : undefined,
                 estimated_hours: r.estimated_hours,
                 estimated_amount: r.estimated_amount,
+                approval_status: r.approval_status,
+                customer_approval_status: r.customer_approval_status,
               }}
             />
           ))}

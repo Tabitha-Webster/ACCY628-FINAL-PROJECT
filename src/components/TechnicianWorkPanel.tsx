@@ -341,6 +341,8 @@ export function TechnicianWorkPanel({
           workNote.trim() ||
           "Technician flagged this ticket work as outside contract scope. Manager approval required before billing.",
         estimated_hours: hoursNum,
+        approval_status: "pending",
+        customer_approval_status: "not_required",
       });
     }
 

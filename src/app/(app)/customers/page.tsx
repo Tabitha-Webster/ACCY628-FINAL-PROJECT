@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { isManagerRole, type UserRole } from "@/lib/constants";
+import { type UserRole } from "@/lib/constants";
 import { ButtonLink } from "@/components/Button";
 import { CustomerListRetryButton } from "@/components/CustomerListRetryButton";
 import { CustomerListSearch } from "@/components/CustomerListSearch";
@@ -11,6 +11,7 @@ import { AdminCustomerAccessNotice } from "@/components/AdminCustomerAccessNotic
 import { PageLayout } from "@/components/PageLayout";
 import { EmptyState, ErrorState } from "@/components/ui";
 import {
+  canApproveCustomers,
   canEditCustomers,
   canViewCustomers,
   listCustomersForInternalRoles,
@@ -22,31 +23,27 @@ function CustomerListSkeleton() {
   return (
     <div className="space-y-3" aria-busy="true" aria-live="polite">
       <p className="text-sm opacity-70">Retrieving customer records…</p>
-      <div className="overflow-hidden rounded-box border border-base-300 bg-base-100">
-        <div className="border-b border-base-300 bg-base-200/60 px-4 py-3">
-          <div className="skeleton h-3 w-full max-w-3xl" />
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="skeleton h-20 rounded-2xl" />
+        ))}
+      </div>
+      <div className="skeleton h-28 rounded-2xl" />
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 6 }).map((_, index) => (
-          <div
-            key={index}
-            className="flex items-center gap-4 border-b border-base-200 px-4 py-3 last:border-b-0"
-          >
-            <div className="skeleton h-3 w-20 shrink-0" />
-            <div className="skeleton h-3 w-40 shrink-0" />
-            <div className="skeleton h-5 w-24 shrink-0" />
-            <div className="skeleton h-3 w-28 shrink-0" />
-            <div className="skeleton h-3 w-32 shrink-0" />
-            <div className="skeleton h-3 min-w-0 flex-1" />
-          </div>
+          <div key={index} className="skeleton h-28 rounded-xl" />
         ))}
       </div>
     </div>
   );
 }
 
-async function CustomerListContent({ role }: { role: UserRole }) {
+async function CustomerListContent({ role, profileId }: { role: UserRole; profileId: string }) {
   const supabase = await createClient();
-  const { customers, error, schemaIncomplete } = await listCustomersForInternalRoles(supabase);
+  const { customers, error, schemaIncomplete } = await listCustomersForInternalRoles(supabase, {
+    role,
+    profileId,
+  });
 
   if (error) {
     return (
@@ -66,6 +63,14 @@ async function CustomerListContent({ role }: { role: UserRole }) {
   }
 
   if (customers.length === 0) {
+    if (role === "technician") {
+      return (
+        <EmptyState
+          title="No assigned customers"
+          description="Active customers appear here when you are assigned to their support tickets."
+        />
+      );
+    }
     if (role === "admin") {
       return (
         <div className="space-y-4">
@@ -80,7 +85,7 @@ async function CustomerListContent({ role }: { role: UserRole }) {
     return (
       <EmptyState
         title="No customers found"
-        description="There are no customer records in Supabase yet. When customers are added to the customers table, they will show up here automatically."
+        description="There are no customer records visible for your role yet. When matching customers are added, they will show up here automatically."
       />
     );
   }
@@ -99,10 +104,13 @@ export default async function CustomersPage() {
   if (!canViewCustomers(profile.role)) redirect("/dashboard");
 
   const canManage = canEditCustomers(profile.role);
-  const canReviewApprovals = isManagerRole(profile.role);
-  const description = canManage
-    ? "Shared live customer list. Admin and Manager can add or edit customers; Technician and Billing can view the same records."
-    : "Shared live customer list — same records Admin and Manager maintain. Open a row to view the latest profile.";
+  const canApprove = canApproveCustomers(profile.role);
+  const isTechnician = profile.role === "technician";
+  const description = isTechnician
+    ? "Customers linked to your assigned tickets — search, filter, and open a profile for contact details."
+    : canManage
+      ? "Shared live customer list from public.customers. Visibility depends on role; Admin and Manager can also review Pending Approval signups."
+      : "Shared live customer list — filtered for your role. Open a card to view the latest profile.";
 
   return (
     <PageLayout
@@ -110,7 +118,7 @@ export default async function CustomersPage() {
       description={description}
       actions={
         <>
-          {canReviewApprovals ? (
+          {canApprove ? (
             <ButtonLink href="/customer-approvals" variant="secondary" size="sm">
               Review approvals
             </ButtonLink>
@@ -124,7 +132,7 @@ export default async function CustomersPage() {
       }
     >
       <Suspense fallback={<CustomerListSkeleton />}>
-        <CustomerListContent role={profile.role} />
+        <CustomerListContent role={profile.role} profileId={profile.id} />
       </Suspense>
     </PageLayout>
   );

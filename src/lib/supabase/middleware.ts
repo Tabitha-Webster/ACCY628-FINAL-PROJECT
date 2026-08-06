@@ -35,8 +35,10 @@ export async function updateSession(request: NextRequest) {
     path === "/signup" ||
     path === "/customer-signup" ||
     path.startsWith("/auth");
+  // Login-page demo autofill must work while signed out.
+  const isPublicDemoAutofill = path === "/api/demo/autofill";
 
-  if (!user && !isAuthPage && path !== "/") {
+  if (!user && !isAuthPage && !isPublicDemoAutofill && path !== "/") {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

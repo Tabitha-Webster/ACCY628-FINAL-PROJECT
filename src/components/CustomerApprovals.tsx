@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Hours, Money } from "@/components/ui";
+import { isAdditionalWorkFullyApproved } from "@/lib/additional-work-approvals";
 
 type ProjectApprovalItem = {
   id: string;
@@ -21,6 +22,8 @@ type ChangeRequestApprovalItem = {
   project_name?: string;
   estimated_hours: number | null;
   estimated_amount: number | null;
+  approval_status?: string | null;
+  customer_approval_status?: string | null;
 };
 
 export function CustomerProjectApprovalCard({
@@ -111,24 +114,31 @@ export function CustomerChangeRequestApprovalCard({
     const { error: updateError } = await supabase
       .from("additional_work_requests")
       .update({
-        approval_status: decision,
+        customer_approval_status: decision,
+        review_notes: notes.trim() || `Customer ${decision} additional hours/price request.`,
         reviewed_by: currentUserId,
         reviewed_at: now,
-        review_notes: notes.trim() || `Customer ${decision} additional hours/price request.`,
       })
       .eq("id", request.id);
 
     if (!updateError && decision === "approved" && request.project_id) {
-      await supabase
-        .from("time_entries")
-        .update({
-          approval_status: "approved",
-          approved_by: currentUserId,
-          approved_at: now,
-        })
-        .eq("project_id", request.project_id)
-        .eq("classification", "out_of_scope")
-        .eq("approval_status", "pending");
+      const nextState = {
+        approval_status: request.approval_status ?? "pending",
+        customer_approval_status: decision,
+        project_id: request.project_id,
+      };
+      if (isAdditionalWorkFullyApproved(nextState)) {
+        await supabase
+          .from("time_entries")
+          .update({
+            approval_status: "approved",
+            approved_by: currentUserId,
+            approved_at: now,
+          })
+          .eq("project_id", request.project_id)
+          .eq("classification", "out_of_scope")
+          .eq("approval_status", "pending");
+      }
     }
 
     setLoading(null);
@@ -144,6 +154,9 @@ export function CustomerChangeRequestApprovalCard({
       <p className="text-xs font-medium uppercase tracking-wide text-warning">Additional cost approval</p>
       <p className="mt-1 font-semibold">{request.title}</p>
       {request.project_name ? <p className="text-xs opacity-60">Project: {request.project_name}</p> : null}
+      <p className="mt-1 text-xs opacity-70">
+        Manager: {request.approval_status ?? "pending"} · Your decision is also required before billing.
+      </p>
       <p className="mt-2 whitespace-pre-wrap text-sm opacity-80">{request.description}</p>
       <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg border border-base-300 bg-base-200/40 p-2 text-sm">
         <div>

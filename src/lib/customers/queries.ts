@@ -9,6 +9,9 @@ export const CUSTOMER_VIEW_ROLES: UserRole[] = ["admin", "manager", "billing", "
 /** Roles that can add and edit customer master data (Admin matches Manager). */
 export const CUSTOMER_MANAGE_ROLES: UserRole[] = ["admin", "manager"];
 
+/** Roles that can approve or reject Pending Approval signups. */
+export const CUSTOMER_APPROVE_ROLES: UserRole[] = ["admin", "manager"];
+
 /** Roles allowed to export the customer list to Excel (Admin matches Manager). */
 export const CUSTOMER_EXPORT_ROLES: UserRole[] = ["admin", "manager", "billing"];
 
@@ -20,8 +23,21 @@ export function canEditCustomers(role: UserRole) {
   return CUSTOMER_MANAGE_ROLES.includes(role);
 }
 
+export function canApproveCustomers(role: UserRole) {
+  return CUSTOMER_APPROVE_ROLES.includes(role);
+}
+
 export function canExportCustomers(role: UserRole) {
   return CUSTOMER_EXPORT_ROLES.includes(role);
+}
+
+/** Statuses each internal role may see on the shared customers list (canonical: status). */
+export function customerListStatusesForRole(role: UserRole): string[] | "all" {
+  if (role === "admin" || role === "manager") return "all";
+  if (role === "hr") return ["active", "inactive"];
+  if (role === "billing") return ["active", "on_hold", "inactive"];
+  if (role === "technician") return ["active"];
+  return ["active"];
 }
 
 export type CustomerListRow = {
@@ -112,25 +128,68 @@ function withBillingFromNotes<T extends { notes?: string | null }>(row: T): T & 
   };
 }
 
-/** Same customer list for manager, technician, billing, and HR — always fresh from Supabase. */
-export async function listCustomersForInternalRoles(supabase: SupabaseClient) {
+/** Same customer list for internal roles — filtered by role visibility; always fresh. */
+export async function listCustomersForInternalRoles(
+  supabase: SupabaseClient,
+  options?: { role?: UserRole; profileId?: string }
+) {
   noStore();
 
-  let { data, error } = await supabase
-    .from("customers")
-    .select(LIST_SELECT)
-    .order("name", { ascending: true });
+  const role = options?.role;
+  const profileId = options?.profileId;
+  let allowedIds: string[] | null = null;
+
+  if (role === "technician" && profileId) {
+    const { data: tickets } = await supabase
+      .from("support_tickets")
+      .select("customer_id")
+      .eq("assigned_technician_id", profileId);
+    allowedIds = [
+      ...new Set(
+        (tickets ?? [])
+          .map((row) => row.customer_id as string | null)
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+    if (allowedIds.length === 0) {
+      return { customers: [] as CustomerListRow[], error: null, schemaIncomplete: false };
+    }
+  }
+
+  let query = supabase.from("customers").select(LIST_SELECT).order("name", { ascending: true });
+
+  if (role) {
+    const statuses = customerListStatusesForRole(role);
+    if (statuses !== "all") {
+      query = query.in("status", statuses);
+    }
+  }
+
+  if (allowedIds) {
+    query = query.in("id", allowedIds);
+  }
+
+  let { data, error } = await query;
 
   if (error && MISSING_COLUMN_PATTERN.test(error.message)) {
-    const fallback = await supabase
+    let fallbackQuery = supabase
       .from("customers")
       .select(LIST_CORE_SELECT)
       .order("name", { ascending: true });
+    if (role) {
+      const statuses = customerListStatusesForRole(role);
+      if (statuses !== "all") {
+        fallbackQuery = fallbackQuery.in("status", statuses);
+      }
+    }
+    if (allowedIds) {
+      fallbackQuery = fallbackQuery.in("id", allowedIds);
+    }
+    const fallback = await fallbackQuery;
     const rows = (fallback.data ?? []) as Array<Omit<CustomerListRow, "customer_identifier">>;
     return {
       customers: rows.map((row) => ({ ...row, customer_identifier: null })),
       error: fallback.error,
-      /** True when customer_identifier (and usually billing columns) are missing on live DB. */
       schemaIncomplete: true,
     };
   }
