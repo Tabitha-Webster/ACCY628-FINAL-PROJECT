@@ -122,7 +122,6 @@ export default async function AdminHomePage() {
 
   const activeUsers = users.filter((user) => user.is_active).length;
   const inactiveUsers = users.length - activeUsers;
-  const demoUsers = users.filter((user) => user.is_demo_user).length;
   const portalUsers = users.filter((user) => user.role === "customer");
   const staffUsers = users.length - portalUsers.length;
   const unlinkedPortalUsers = portalUsers.filter((user) => !user.customer_id).length;
@@ -138,8 +137,6 @@ export default async function AdminHomePage() {
     },
     {}
   );
-  const rolesPresent = Object.keys(countsByRole).length;
-  const rolesWithoutUsers = ASSIGNABLE_ROLES.filter((role) => !countsByRole[role]);
 
   return (
     <div>
@@ -187,22 +184,12 @@ export default async function AdminHomePage() {
           tone={inactiveUsers > 0 ? "warning" : "success"}
         />
         <StatCard
-          label="Roles In Use"
-          value={`${rolesPresent} of ${ASSIGNABLE_ROLES.length}`}
-          hint={
-            rolesWithoutUsers.length > 0
-              ? `Unused: ${rolesWithoutUsers.map(roleLabel).join(", ")}`
-              : "Every role is assigned"
-          }
-        />
-        <StatCard
           label="Unlinked Portal Users"
           value={String(unlinkedPortalUsers)}
           hint="Customer logins with no customer record"
           tone={unlinkedPortalUsers > 0 ? "error" : "success"}
         />
         <StatCard label="Active Customers" value={String(customersRes.data?.length ?? 0)} />
-        <StatCard label="Demo Accounts" value={String(demoUsers)} hint="Used by the role switcher" />
       </div>
 
       <div className="mt-8">
