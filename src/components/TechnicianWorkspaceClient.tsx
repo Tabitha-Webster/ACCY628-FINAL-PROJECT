@@ -3,11 +3,14 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { EmptyState, StatusBadge, Hours, DateText, StatCard } from "@/components/ui";
+import { EmptyState, StatusBadge, Hours, DateText } from "@/components/ui";
 import { TicketSlaAlerts, SlaConditionBadge } from "@/components/SlaBadges";
 import { SlaCountdown } from "@/components/SlaCountdown";
 import { TechnicianWorkPanel } from "@/components/TechnicianWorkPanel";
-import { TechnicianCalendar } from "@/components/TechnicianCalendar";
+import {
+  TechnicianHomeVisuals,
+  type TechMetricFilter,
+} from "@/components/TechnicianHomeVisuals";
 import { createClient } from "@/lib/supabase/client";
 import { formatDateTime, statusLabel } from "@/lib/format";
 import {
@@ -180,34 +183,52 @@ function Section({
   id: string;
   title: string;
   count: number;
-  tone?: "default" | "warning" | "error";
+  tone?: "default" | "warning" | "error" | "sky" | "violet" | "emerald";
   children: React.ReactNode;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const toneClass =
-    tone === "error" ? "border-error/40" : tone === "warning" ? "border-warning/40" : "border-base-300";
+  const shell =
+    tone === "error"
+      ? "border-rose-200/80 bg-gradient-to-b from-rose-50/80 to-base-100"
+      : tone === "warning"
+        ? "border-amber-200/80 bg-gradient-to-b from-amber-50/80 to-base-100"
+        : tone === "sky"
+          ? "border-sky-200/80 bg-gradient-to-b from-sky-50/80 to-base-100"
+          : tone === "violet"
+            ? "border-violet-200/80 bg-gradient-to-b from-violet-50/80 to-base-100"
+            : tone === "emerald"
+              ? "border-emerald-200/80 bg-gradient-to-b from-emerald-50/80 to-base-100"
+              : "border-base-300 bg-gradient-to-b from-base-200/40 to-base-100";
+  const headerBorder =
+    tone === "error"
+      ? "border-rose-200/70 text-rose-900/80"
+      : tone === "warning"
+        ? "border-amber-200/70 text-amber-900/80"
+        : tone === "sky"
+          ? "border-sky-200/70 text-sky-900/80"
+          : tone === "violet"
+            ? "border-violet-200/70 text-violet-900/80"
+            : tone === "emerald"
+              ? "border-emerald-200/70 text-emerald-900/80"
+              : "border-base-300 text-base-content/80";
   return (
-    <section id={id} className={`rounded-box border ${toneClass} bg-base-100`}>
+    <section id={id} className={`overflow-hidden rounded-2xl border shadow-sm ${shell}`}>
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        className={`flex w-full items-center justify-between gap-3 border-b px-3 py-2.5 text-left ${headerBorder}`}
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
-        <span className="text-sm font-semibold">{title}</span>
+        <span className="text-xs font-semibold uppercase tracking-wide">{title}</span>
         <span className="flex items-center gap-2">
-          <span
-            className={`badge ${
-              tone === "error" ? "badge-error" : tone === "warning" ? "badge-warning" : "badge-ghost"
-            }`}
-          >
+          <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold tabular-nums shadow-sm">
             {count}
           </span>
-          <span className="text-xs opacity-60">{open ? "Hide" : "Show"}</span>
+          <span className="text-[11px] opacity-60">{open ? "Hide" : "Show"}</span>
         </span>
       </button>
-      {open ? <div className="border-t border-base-300 p-4">{children}</div> : null}
+      {open ? <div className="p-3">{children}</div> : null}
     </section>
   );
 }
@@ -240,13 +261,13 @@ function TicketCard({
   const awFriendly = friendlyAwStatus(aw?.approval_status ?? null);
   const border =
     isCritical || isOverdue
-      ? "border-error/50 bg-error/[0.03]"
+      ? "border-rose-200 bg-white/90"
       : ticket.priority === "high" || live.overall === "at_risk"
-        ? "border-warning/40 bg-warning/[0.03]"
-        : "border-base-300 bg-base-100";
+        ? "border-amber-200 bg-white/90"
+        : "border-base-200 bg-white/90";
 
   return (
-    <article className={`rounded-box border p-4 ${border}`}>
+    <article className={`rounded-xl border p-3 shadow-sm ${border}`}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -475,12 +496,25 @@ export function TechnicianWorkspaceClient({
   timezoneLabel,
 }: Props) {
   const router = useRouter();
-  const [workspaceView, setWorkspaceView] = useState<"list" | "calendar">("list");
   const [activeWorkId, setActiveWorkId] = useState<string | null>(null);
   const [workFocus, setWorkFocus] = useState<WorkFocus>(null);
   const [filter, setFilter] = useState<QueueFilter>("open");
   const [startingId, setStartingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  function onMetricClick(next: TechMetricFilter) {
+    if (next === "hours_today") {
+      document.getElementById("time-pending")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    setFilter(next);
+    requestAnimationFrame(() => {
+      document.getElementById("filtered-queue")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (next === "all_sections") {
+        document.getElementById("today")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  }
 
   function onToggleWork(ticketId: string, focus: WorkFocus = "status") {
     setActiveWorkId((current) => {
@@ -605,102 +639,106 @@ export function TechnicianWorkspaceClient({
     startingId,
   };
 
-  return (
-    <div className="space-y-4">
-      <div className="rounded-box border border-base-300 bg-base-100 p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold">Technician work queue</p>
-            <p className="mt-1 text-sm opacity-70">
-              Hi {technicianName.split(" ")[0]} — tickets assigned to you only. Critical and overdue items
-              stay highlighted so you can act quickly.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className={`btn btn-sm ${workspaceView === "list" ? "btn-primary" : "btn-outline"}`}
-              onClick={() => setWorkspaceView("list")}
-            >
-              List View
-            </button>
-            <button
-              type="button"
-              className={`btn btn-sm ${workspaceView === "calendar" ? "btn-primary" : "btn-outline"}`}
-              onClick={() => setWorkspaceView("calendar")}
-            >
-              Calendar View
-            </button>
-          </div>
-        </div>
-        {actionError ? (
-          <div className="alert alert-error mt-3 text-sm" role="alert">
-            {actionError}
-          </div>
-        ) : null}
-      </div>
+  const slaCounts = useMemo(() => {
+    let overdueCount = 0;
+    let atRisk = 0;
+    let onTrack = 0;
+    for (const t of openTickets) {
+      if (t.overdue || t.sla === "missed") overdueCount += 1;
+      else if (t.sla === "at_risk") atRisk += 1;
+      else onTrack += 1;
+    }
+    return { overdue: overdueCount, atRisk, onTrack };
+  }, [openTickets]);
 
-      {workspaceView === "calendar" ? (
-        <section className="rounded-box border border-base-300 bg-base-100 p-4">
-          <TechnicianCalendar tickets={tickets} timezoneLabel={timezoneLabel} />
-        </section>
+  const homeMetrics = [
+    {
+      label: "Open",
+      value: String(summary.openAssigned),
+      tone: "sky" as const,
+      filter: "open" as const,
+      hint: "Assigned to you",
+    },
+    {
+      label: "Due today",
+      value: String(summary.dueToday),
+      tone: "amber" as const,
+      filter: "due_today" as const,
+      hint: "Response or resolution",
+    },
+    {
+      label: "Overdue",
+      value: String(summary.overdue),
+      tone: "rose" as const,
+      filter: "overdue" as const,
+      hint: "Missed SLA deadline",
+    },
+    {
+      label: "Critical / High",
+      value: String(summary.criticalHigh),
+      tone: "violet" as const,
+      filter: "critical_high" as const,
+    },
+    {
+      label: "Hours today",
+      value: summary.hoursToday.toFixed(1),
+      tone: "emerald" as const,
+      filter: "hours_today" as const,
+      hint: "Time logged today",
+    },
+  ];
+
+  return (
+    <TechnicianHomeVisuals
+      fullName={technicianName}
+      metrics={homeMetrics}
+      activeFilter={filter}
+      onMetricClick={onMetricClick}
+      sla={slaCounts}
+      calendarTickets={tickets}
+      timezoneLabel={timezoneLabel}
+      contractWarnings={contractWarnings}
+    >
+      {actionError ? (
+        <div className="alert alert-error text-sm" role="alert">
+          {actionError}
+        </div>
       ) : null}
 
-      {workspaceView === "list" ? (
-        <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Open assigned tickets"
-          value={String(summary.openAssigned)}
-          hint="Not resolved, closed, or canceled"
-          tone={summary.openAssigned ? "info" : "default"}
-          onClick={() => setFilter("open")}
-        />
-        <StatCard
-          label="Tickets due today"
-          value={String(summary.dueToday)}
-          hint="Incomplete response or resolution deadline today"
-          tone={summary.dueToday ? "warning" : "default"}
-          onClick={() => setFilter("due_today")}
-        />
-        <StatCard
-          label="Critical or High priority"
-          value={String(summary.criticalHigh)}
-          tone={summary.criticalHigh ? "error" : "default"}
-          onClick={() => setFilter("critical_high")}
-        />
-        <StatCard
-          label="Overdue tickets"
-          value={String(summary.overdue)}
-          hint="Missed response or resolution deadline"
-          tone={summary.overdue ? "error" : "default"}
-          onClick={() => setFilter("overdue")}
-        />
-        <StatCard
-          label="Tickets completed today"
-          value={String(summary.completedToday)}
-          tone={summary.completedToday ? "success" : "default"}
-          onClick={() => setFilter("completed_today")}
-        />
-        <StatCard
-          label="Hours recorded today"
-          value={summary.hoursToday.toFixed(1)}
-          hint="Your time entries for today"
-          href="#time-pending"
-        />
-        <StatCard
-          label="Awaiting approval"
-          value={String(summary.awaitingApproval)}
-          hint="Your additional-work requests still pending"
-          tone={summary.awaitingApproval ? "warning" : "default"}
-          onClick={() => setFilter("awaiting_approval")}
-        />
-        <StatCard
-          label="Browse all sections"
-          value="→"
-          hint="Today, overdue, waiting, completed lists"
-          onClick={() => setFilter("all_sections")}
-        />
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
+            filter === "awaiting_approval"
+              ? "border-amber-300 bg-amber-50 text-amber-950"
+              : "border-base-300 bg-base-100 opacity-80 hover:opacity-100"
+          }`}
+          onClick={() => onMetricClick("awaiting_approval")}
+        >
+          Awaiting approval ({summary.awaitingApproval})
+        </button>
+        <button
+          type="button"
+          className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
+            filter === "completed_today"
+              ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+              : "border-base-300 bg-base-100 opacity-80 hover:opacity-100"
+          }`}
+          onClick={() => onMetricClick("completed_today")}
+        >
+          Completed today ({summary.completedToday})
+        </button>
+        <button
+          type="button"
+          className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
+            filter === "all_sections"
+              ? "border-violet-300 bg-violet-50 text-violet-950"
+              : "border-base-300 bg-base-100 opacity-80 hover:opacity-100"
+          }`}
+          onClick={() => onMetricClick("all_sections")}
+        >
+          Browse all sections
+        </button>
       </div>
 
       {!showSections ? (
@@ -725,19 +763,24 @@ export function TechnicianWorkspaceClient({
               ? "error"
               : filter === "due_today" || filter === "awaiting_approval"
                 ? "warning"
-                : "default"
+                : "sky"
           }
         >
           <TicketList
             tickets={filteredQueue}
             emptyTitle="Nothing in this filter"
-            emptyDescription="Try another summary card or browse all sections."
+            emptyDescription="Try another summary tile or browse all sections."
             {...listProps}
           />
         </Section>
       ) : (
         <>
-          <Section id="today" title="Tickets due today" count={dueToday.length} tone={dueToday.length ? "warning" : "default"}>
+          <Section
+            id="today"
+            title="Tickets due today"
+            count={dueToday.length}
+            tone={dueToday.length ? "warning" : "default"}
+          >
             <TicketList
               tickets={dueToday}
               emptyTitle="Nothing due today"
@@ -759,7 +802,12 @@ export function TechnicianWorkspaceClient({
             />
           </Section>
 
-          <Section id="overdue" title="Overdue tickets" count={overdue.length} tone={overdue.length ? "error" : "default"}>
+          <Section
+            id="overdue"
+            title="Overdue tickets"
+            count={overdue.length}
+            tone={overdue.length ? "error" : "default"}
+          >
             <TicketList
               tickets={overdue}
               emptyTitle="No overdue tickets"
@@ -768,7 +816,12 @@ export function TechnicianWorkspaceClient({
             />
           </Section>
 
-          <Section id="waiting-customer" title="Tickets waiting on customer information" count={waitingCustomer.length}>
+          <Section
+            id="waiting-customer"
+            title="Tickets waiting on customer information"
+            count={waitingCustomer.length}
+            tone="violet"
+          >
             <TicketList tickets={waitingCustomer} emptyTitle="Nothing waiting on customers" {...listProps} />
           </Section>
 
@@ -781,7 +834,7 @@ export function TechnicianWorkspaceClient({
             <TicketList tickets={waitingApproval} emptyTitle="No tickets waiting on approval" {...listProps} />
           </Section>
 
-          <Section id="open" title="All open assigned tickets" count={openTickets.length} defaultOpen>
+          <Section id="open" title="All open assigned tickets" count={openTickets.length} tone="sky" defaultOpen>
             <TicketList
               tickets={openTickets}
               emptyTitle="No open assigned tickets"
@@ -790,7 +843,13 @@ export function TechnicianWorkspaceClient({
             />
           </Section>
 
-          <Section id="completed" title="Recently completed tickets" count={recentlyCompleted.length} defaultOpen={false}>
+          <Section
+            id="completed"
+            title="Recently completed tickets"
+            count={recentlyCompleted.length}
+            tone="emerald"
+            defaultOpen={false}
+          >
             <TicketList tickets={recentlyCompleted} emptyTitle="No recently completed tickets" {...listProps} />
           </Section>
         </>
@@ -800,15 +859,18 @@ export function TechnicianWorkspaceClient({
         id="time-pending"
         title="Time entries not yet submitted"
         count={pendingTimeEntries.length}
-        tone={pendingTimeEntries.length ? "warning" : "default"}
+        tone={pendingTimeEntries.length ? "warning" : "emerald"}
       >
         <p className="mb-3 text-xs opacity-70">
           Hours recorded today (all entries): <Hours value={summary.hoursToday} />
         </p>
         {pendingTimeEntries.length === 0 ? (
-          <EmptyState title="No unsubmitted time entries" description="Draft or pending time entries will appear here." />
+          <EmptyState
+            title="No unsubmitted time entries"
+            description="Draft or pending time entries will appear here."
+          />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-xl border border-base-200 bg-white/80">
             <table className="table table-sm">
               <thead>
                 <tr>
@@ -858,12 +920,12 @@ export function TechnicianWorkspaceClient({
         id="additional-work"
         title="Additional-work requests awaiting approval"
         count={pendingAdditionalWork.length}
-        tone={pendingAdditionalWork.length ? "warning" : "default"}
+        tone={pendingAdditionalWork.length ? "warning" : "violet"}
       >
         {pendingAdditionalWork.length === 0 ? (
           <EmptyState title="No pending additional-work requests" />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-xl border border-base-200 bg-white/80">
             <table className="table table-sm">
               <thead>
                 <tr>
@@ -908,47 +970,6 @@ export function TechnicianWorkspaceClient({
           </div>
         )}
       </Section>
-
-      <Section
-        id="hour-warnings"
-        title="Contract-hour warnings"
-        count={contractWarnings.length}
-        tone={contractWarnings.length ? "warning" : "default"}
-      >
-        {contractWarnings.length === 0 ? (
-          <EmptyState
-            title="No contract-hour warnings"
-            description="Included-hour usage on your assigned contracts is within normal limits this month."
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="table table-sm">
-              <thead>
-                <tr>
-                  <th>Contract</th>
-                  <th>Used / Included</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {contractWarnings.map((w) => (
-                  <tr key={w.contract_id}>
-                    <td>{w.label}</td>
-                    <td>
-                      <Hours value={w.used} /> / <Hours value={w.included} />
-                    </td>
-                    <td>
-                      <StatusBadge status={w.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Section>
-        </>
-      ) : null}
-    </div>
+    </TechnicianHomeVisuals>
   );
 }

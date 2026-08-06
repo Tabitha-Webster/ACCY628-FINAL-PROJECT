@@ -295,7 +295,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     // Contracts & Agreements + Billing/Collections/Accounting trees render in AppShell
   ],
   hr: [
-    { href: "/dashboard", label: "HR Home" },
+    { href: "/dashboard", label: "HR Dashboard" },
     { href: "/hr-applicants", label: "Applicants" },
     { href: "/admin/employees", label: "Employees" },
     { href: "/hr-analytics", label: "HR Analytics" },

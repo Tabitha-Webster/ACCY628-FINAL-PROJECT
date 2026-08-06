@@ -1,17 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  ClipboardList,
+  Flame,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { roleHomePath } from "@/lib/constants";
-import {
-  PageHeader,
-  StatCard,
-  EmptyState,
-  DataTable,
-  StatusBadge,
-  DateText,
-  ErrorState,
-} from "@/components/ui";
+import { EmptyState, StatusBadge, DateText, ErrorState } from "@/components/ui";
 import { AdHocWorkForm } from "@/components/AdHocWorkForm";
 import { slaStatus } from "@/lib/calculations";
 import type { SupportTicket } from "@/lib/types";
@@ -24,6 +23,34 @@ const OPEN_TICKET_STATUSES = [
   "waiting_on_approval",
 ];
 
+const TONE = {
+  sky: {
+    card: "border-sky-300/60 bg-gradient-to-br from-sky-50 to-sky-100/80",
+    icon: "bg-sky-500/15 text-sky-700",
+    value: "text-sky-900",
+  },
+  violet: {
+    card: "border-violet-300/60 bg-gradient-to-br from-violet-50 to-violet-100/80",
+    icon: "bg-violet-500/15 text-violet-700",
+    value: "text-violet-900",
+  },
+  amber: {
+    card: "border-amber-300/60 bg-gradient-to-br from-amber-50 to-amber-100/80",
+    icon: "bg-amber-500/15 text-amber-800",
+    value: "text-amber-950",
+  },
+  rose: {
+    card: "border-rose-300/70 bg-gradient-to-br from-rose-50 to-rose-100/90",
+    icon: "bg-rose-500/15 text-rose-700",
+    value: "text-rose-900",
+  },
+  emerald: {
+    card: "border-emerald-300/60 bg-gradient-to-br from-emerald-50 to-emerald-100/80",
+    icon: "bg-emerald-500/15 text-emerald-700",
+    value: "text-emerald-900",
+  },
+} as const;
+
 function ticketSlaSeverity(t: {
   target_response_at: string | null;
   target_resolution_at: string | null;
@@ -35,6 +62,78 @@ function ticketSlaSeverity(t: {
   if (response === "missed" || resolution === "missed") return "missed";
   if (response === "at_risk" || resolution === "at_risk") return "at_risk";
   return "on_track";
+}
+
+function MetricTile({
+  label,
+  value,
+  tone,
+  icon,
+  hint,
+}: {
+  label: string;
+  value: string;
+  tone: keyof typeof TONE;
+  icon: ReactNode;
+  hint?: string;
+}) {
+  const styles = TONE[tone];
+  return (
+    <div className={`rounded-2xl border p-3 shadow-sm ${styles.card}`}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{label}</p>
+        <span className={`rounded-lg p-1.5 ${styles.icon}`}>{icon}</span>
+      </div>
+      <p className={`mt-1 text-xl font-semibold tabular-nums ${styles.value}`}>{value}</p>
+      {hint ? <p className="mt-0.5 text-[10px] opacity-60">{hint}</p> : null}
+    </div>
+  );
+}
+
+function TintedPanel({
+  title,
+  tone,
+  children,
+  count,
+}: {
+  title: string;
+  tone: "sky" | "violet" | "amber" | "rose" | "emerald";
+  children: ReactNode;
+  count?: number;
+}) {
+  const shell =
+    tone === "rose"
+      ? "border-rose-200/80 from-rose-50/80"
+      : tone === "amber"
+        ? "border-amber-200/80 from-amber-50/80"
+        : tone === "violet"
+          ? "border-violet-200/80 from-violet-50/80"
+          : tone === "emerald"
+            ? "border-emerald-200/80 from-emerald-50/80"
+            : "border-sky-200/80 from-sky-50/80";
+  const header =
+    tone === "rose"
+      ? "border-rose-200/70 text-rose-900/80"
+      : tone === "amber"
+        ? "border-amber-200/70 text-amber-900/80"
+        : tone === "violet"
+          ? "border-violet-200/70 text-violet-900/80"
+          : tone === "emerald"
+            ? "border-emerald-200/70 text-emerald-900/80"
+            : "border-sky-200/70 text-sky-900/80";
+  return (
+    <section className={`overflow-hidden rounded-2xl border bg-gradient-to-b to-base-100 shadow-sm ${shell}`}>
+      <div className={`flex items-center justify-between gap-2 border-b px-3 py-2 ${header}`}>
+        <h2 className="text-xs font-semibold uppercase tracking-wide">{title}</h2>
+        {count != null ? (
+          <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold tabular-nums shadow-sm">
+            {count}
+          </span>
+        ) : null}
+      </div>
+      <div className="p-3">{children}</div>
+    </section>
+  );
 }
 
 export default async function AssignmentsPage() {
@@ -79,8 +178,8 @@ export default async function AssignmentsPage() {
 
   if (assignmentsRes.error) {
     return (
-      <div>
-        <PageHeader title="My Assignments" />
+      <div className="space-y-3">
+        <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Assignments Workbench</h1>
         <ErrorState message={assignmentsRes.error.message} />
       </div>
     );
@@ -142,155 +241,187 @@ export default async function AssignmentsPage() {
 
   const additionalWork = additionalWorkRes.data ?? [];
 
-  function renderAssignment(a: (typeof assignments)[number]) {
+  function assignmentCard(a: (typeof assignments)[number], tone: "rose" | "amber" | "sky" | "violet") {
     const ticket = a.support_ticket_id ? ticketById.get(a.support_ticket_id) : null;
     const project = a.project_id ? projectById.get(a.project_id) : null;
-    const label = ticket ? `${ticket.ticket_number} · ${ticket.title}` : project ? project.name : "Assignment";
+    const label = ticket
+      ? `${ticket.ticket_number} · ${ticket.title}`
+      : project
+        ? project.name
+        : "Assignment";
     const href = ticket ? `/tickets/${ticket.id}` : project ? `/projects/${project.id}` : "#";
     const customerId = ticket?.customer_id ?? project?.customer_id;
     const contractId = ticket?.contract_id ?? null;
+    const border =
+      tone === "rose"
+        ? "border-rose-100 hover:border-rose-300"
+        : tone === "amber"
+          ? "border-amber-100 hover:border-amber-300"
+          : tone === "violet"
+            ? "border-violet-100 hover:border-violet-300"
+            : "border-sky-100 hover:border-sky-300";
+
     return (
-      <tr key={a.id}>
-        <td>
-          <Link className="link link-hover" href={href}>
+      <li key={a.id}>
+        <div className={`rounded-xl border bg-white/85 px-3 py-2.5 shadow-sm transition ${border}`}>
+          <Link href={href} className="block text-sm font-semibold hover:underline">
             {label}
           </Link>
-        </td>
-        <td>{customerId ? customerName.get(customerId) ?? "—" : "—"}</td>
-        <td>
-          {contractId ? (
-            <Link className="link link-hover" href={`/contracts/${contractId}`}>
-              Requirements
-            </Link>
-          ) : (
-            "—"
-          )}
-        </td>
-        <td>{a.due_at ? <DateText value={a.due_at} /> : "Unscheduled"}</td>
-        <td className="max-w-xs truncate opacity-70">{a.notes ?? "—"}</td>
-      </tr>
+          <p className="mt-0.5 text-[11px] opacity-70">
+            {customerId ? customerName.get(customerId) ?? "—" : "—"}
+            {" · "}
+            {a.due_at ? <DateText value={a.due_at} /> : "Unscheduled"}
+          </p>
+          {a.notes ? <p className="mt-1 truncate text-[11px] opacity-60">{a.notes}</p> : null}
+          <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+            {contractId ? (
+              <Link className="link link-hover" href={`/contracts/${contractId}`}>
+                Requirements
+              </Link>
+            ) : (
+              <span className="opacity-50">No contract link</span>
+            )}
+          </div>
+        </div>
+      </li>
     );
   }
 
-  const assignmentHeaders = ["Assignment", "Customer", "Contract", "Due", "Notes"];
-
   return (
-    <div>
-      <PageHeader
-        title="My Assignments"
-        description={`Welcome back, ${profile.full_name}. Review upcoming work, check contract requirements, complete tickets, and log time and materials.`}
-      />
+    <div className="flex flex-col gap-3">
+      <div className="min-w-0 space-y-0.5">
+        <h1 className="text-xl font-semibold tracking-tight md:text-2xl">Assignments Workbench</h1>
+        <p className="text-sm opacity-70">
+          Welcome back, {profile.full_name}. Review upcoming work, check contract requirements, and log
+          time.
+        </p>
+      </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Open Tickets Assigned to Me" value={String(myOpenTicketCount)} />
-        <StatCard label="High Priority" value={String(highPriority.length)} tone={highPriority.length > 0 ? "warning" : "default"} />
-        <StatCard label="SLA Approaching" value={String(slaApproaching.length)} tone={slaApproaching.length > 0 ? "error" : "success"} />
-        <StatCard
-          label="Overdue Assignments"
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricTile
+          label="Open tickets"
+          value={String(myOpenTicketCount)}
+          tone="sky"
+          icon={<ClipboardList className="h-4 w-4" />}
+        />
+        <MetricTile
+          label="High priority"
+          value={String(highPriority.length)}
+          tone={highPriority.length > 0 ? "violet" : "emerald"}
+          icon={<Flame className="h-4 w-4" />}
+        />
+        <MetricTile
+          label="SLA approaching"
+          value={String(slaApproaching.length)}
+          tone={slaApproaching.length > 0 ? "amber" : "emerald"}
+          icon={<CalendarClock className="h-4 w-4" />}
+        />
+        <MetricTile
+          label="Overdue"
           value={String(overdueAssignments.length)}
-          tone={overdueAssignments.length > 0 ? "error" : "success"}
+          tone={overdueAssignments.length > 0 ? "rose" : "emerald"}
+          icon={<AlertTriangle className="h-4 w-4" />}
+          hint="Assignments past due"
         />
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Overdue</h2>
+      <div className="grid gap-3 lg:grid-cols-3">
+        <TintedPanel title="Overdue" tone="rose" count={overdueAssignments.length}>
           {overdueAssignments.length === 0 ? (
-            <EmptyState title="Nothing overdue" description="Great work — no assignments are past due." />
+            <p className="text-sm opacity-60">Nothing overdue.</p>
           ) : (
-            <DataTable headers={assignmentHeaders}>{overdueAssignments.map(renderAssignment)}</DataTable>
+            <ul className="space-y-2">{overdueAssignments.map((a) => assignmentCard(a, "rose"))}</ul>
           )}
-        </div>
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Due Today</h2>
+        </TintedPanel>
+        <TintedPanel title="Due today" tone="amber" count={todayAssignments.length}>
           {todayAssignments.length === 0 ? (
-            <EmptyState title="Nothing due today" />
+            <p className="text-sm opacity-60">Nothing due today.</p>
           ) : (
-            <DataTable headers={assignmentHeaders}>{todayAssignments.map(renderAssignment)}</DataTable>
+            <ul className="space-y-2">{todayAssignments.map((a) => assignmentCard(a, "amber"))}</ul>
           )}
-        </div>
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Upcoming (7 Days)</h2>
+        </TintedPanel>
+        <TintedPanel title="Upcoming (7 days)" tone="sky" count={upcomingAssignments.length}>
           {upcomingAssignments.length === 0 ? (
-            <EmptyState title="Nothing scheduled" description="No assignments due in the next 7 days." />
+            <p className="text-sm opacity-60">Nothing scheduled this week.</p>
           ) : (
-            <DataTable headers={assignmentHeaders}>{upcomingAssignments.map(renderAssignment)}</DataTable>
+            <ul className="space-y-2">{upcomingAssignments.map((a) => assignmentCard(a, "sky"))}</ul>
           )}
-        </div>
+        </TintedPanel>
       </div>
 
       {unscheduledAssignments.length > 0 ? (
-        <div className="mt-6">
-          <h2 className="mb-2 text-sm font-semibold">Unscheduled</h2>
-          <DataTable headers={assignmentHeaders}>{unscheduledAssignments.map(renderAssignment)}</DataTable>
-        </div>
+        <TintedPanel title="Unscheduled" tone="violet" count={unscheduledAssignments.length}>
+          <ul className="space-y-2">
+            {unscheduledAssignments.map((a) => assignmentCard(a, "violet"))}
+          </ul>
+        </TintedPanel>
       ) : null}
 
-      <div className="mt-6">
-        <h2 className="mb-2 text-sm font-semibold">My Open Tickets</h2>
-        <p className="mb-3 text-xs opacity-60">
-          Open a ticket to review contract requirements, record completion, and capture time and materials.
+      <TintedPanel title="My open tickets" tone="sky" count={myOpenTickets.length}>
+        <p className="mb-2 text-[11px] opacity-60">
+          Open a ticket to review requirements, record completion, and capture time and materials.
         </p>
         {myOpenTickets.length === 0 ? (
           <EmptyState title="No open tickets" description="Assigned tickets that need work will appear here." />
         ) : (
-          <DataTable headers={["Ticket", "Customer", "Priority", "Status", "SLA", "Actions"]}>
+          <ul className="space-y-2">
             {myOpenTickets.map((t) => (
-              <tr key={t.id}>
-                <td>
-                  <Link className="link link-hover" href={`/tickets/${t.id}`}>
-                    {t.ticket_number} · {t.title}
-                  </Link>
-                </td>
-                <td>{customerName.get(t.customer_id) ?? "—"}</td>
-                <td>
-                  <StatusBadge status={t.priority} />
-                </td>
-                <td>
-                  <StatusBadge status={t.status} />
-                </td>
-                <td>
-                  <StatusBadge status={ticketSlaSeverity(t)} />
-                </td>
-                <td>
-                  <Link className="btn btn-ghost btn-xs" href={`/tickets/${t.id}`}>
-                    Work ticket
-                  </Link>
-                </td>
-              </tr>
+              <li key={t.id}>
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-100 bg-white/85 px-3 py-2.5 shadow-sm">
+                  <div className="min-w-0 flex-1">
+                    <Link href={`/tickets/${t.id}`} className="text-sm font-semibold hover:underline">
+                      {t.ticket_number} · {t.title}
+                    </Link>
+                    <p className="text-[11px] opacity-70">{customerName.get(t.customer_id) ?? "—"}</p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-1">
+                    <StatusBadge status={t.priority} />
+                    <StatusBadge status={t.status} />
+                    <StatusBadge status={ticketSlaSeverity(t)} />
+                    <Link className="btn btn-ghost btn-xs" href={`/tickets/${t.id}`}>
+                      Work ticket
+                    </Link>
+                  </div>
+                </div>
+              </li>
             ))}
-          </DataTable>
+          </ul>
         )}
-      </div>
+      </TintedPanel>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <AdHocWorkForm technicianId={profile.id} customers={customers} contracts={contracts} />
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="overflow-hidden rounded-2xl border border-emerald-200/80 bg-gradient-to-b from-emerald-50/70 to-base-100 p-3 shadow-sm">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-900/80">
+            Log ad hoc work
+          </h2>
+          <AdHocWorkForm technicianId={profile.id} customers={customers} contracts={contracts} />
+        </div>
 
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">My Recent Ad Hoc Requests</h2>
+        <TintedPanel title="My recent ad hoc requests" tone="violet" count={additionalWork.length}>
           {additionalWork.length === 0 ? (
-            <EmptyState title="No requests yet" description="Submit ad hoc work here or flag out-of-scope work from a ticket." />
+            <EmptyState
+              title="No requests yet"
+              description="Submit ad hoc work here or flag out-of-scope work from a ticket."
+            />
           ) : (
-            <DataTable headers={["Request", "Customer", "Status", "Submitted"]}>
+            <ul className="space-y-2">
               {additionalWork.map((w) => (
-                <tr key={w.id}>
-                  <td>
-                    <Link className="link link-hover" href="/additional-work">
+                <li key={w.id}>
+                  <div className="rounded-xl border border-violet-100 bg-white/85 px-3 py-2.5 shadow-sm">
+                    <Link href="/additional-work" className="text-sm font-semibold hover:underline">
                       {w.title}
                     </Link>
-                  </td>
-                  <td>{customerName.get(w.customer_id) ?? "—"}</td>
-                  <td>
-                    <StatusBadge status={w.approval_status} />
-                  </td>
-                  <td>
-                    <DateText value={w.created_at} />
-                  </td>
-                </tr>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className="opacity-70">{customerName.get(w.customer_id) ?? "—"}</span>
+                      <StatusBadge status={w.approval_status} />
+                      <DateText value={w.created_at} />
+                    </div>
+                  </div>
+                </li>
               ))}
-            </DataTable>
+            </ul>
           )}
-        </div>
+        </TintedPanel>
       </div>
     </div>
   );

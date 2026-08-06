@@ -354,16 +354,37 @@ export function TimeCostForm({
   }
 
   return (
-    <div className="rounded-box border border-base-300 bg-base-100 p-4">
-      <div role="tablist" className="tabs tabs-boxed mb-4 w-fit">
-        <button type="button" role="tab" className={`tab ${tab === "time" ? "tab-active" : ""}`} onClick={() => setTab("time")}>
+    <div className="overflow-hidden rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50/70 to-base-100 shadow-sm">
+      <div className="flex flex-wrap gap-2 border-b border-sky-200/70 px-3 py-2.5" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "time"}
+          className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+            tab === "time"
+              ? "bg-gradient-to-br from-sky-500 to-sky-600 text-white shadow-sm shadow-sky-500/20"
+              : "border border-base-300 bg-white/80 opacity-80 hover:opacity-100"
+          }`}
+          onClick={() => setTab("time")}
+        >
           Log Time
         </button>
-        <button type="button" role="tab" className={`tab ${tab === "cost" ? "tab-active" : ""}`} onClick={() => setTab("cost")}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "cost"}
+          className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+            tab === "cost"
+              ? "bg-gradient-to-br from-violet-500 to-violet-600 text-white shadow-sm shadow-violet-500/20"
+              : "border border-base-300 bg-white/80 opacity-80 hover:opacity-100"
+          }`}
+          onClick={() => setTab("cost")}
+        >
           Log Direct Cost
         </button>
       </div>
 
+      <div className="p-4">
       {tab === "time" ? (
         <form className="space-y-3" onSubmit={submitTime}>
           {timeError ? <div className="alert alert-error text-sm">{timeError}</div> : null}
@@ -504,15 +525,15 @@ export function TimeCostForm({
             />
           </label>
 
-          <div className="rounded-box bg-base-200/60 p-3 text-sm">
+          <div className="rounded-xl border border-sky-200/80 bg-white/80 p-3 text-sm shadow-sm">
             <div className="flex justify-between">
               <span className="opacity-70">Estimated labor cost (internal)</span>
-              <span className="font-medium tabular-nums">{formatCurrency(previewLaborCost)}</span>
+              <span className="font-semibold tabular-nums text-sky-950">{formatCurrency(previewLaborCost)}</span>
             </div>
             {classification === "billable" ? (
               <div className="mt-1 flex justify-between">
                 <span className="opacity-70">Billing rate applied</span>
-                <span className="font-medium tabular-nums">{formatCurrency(previewBillingRate)}/hr</span>
+                <span className="font-semibold tabular-nums">{formatCurrency(previewBillingRate)}/hr</span>
               </div>
             ) : null}
             {classification !== "included" ? (
@@ -520,7 +541,10 @@ export function TimeCostForm({
             ) : null}
           </div>
 
-          <button className="btn btn-primary" disabled={timeLoading}>
+          <button
+            className="rounded-xl border border-sky-400/50 bg-gradient-to-br from-sky-500 to-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-sky-500/25 transition hover:brightness-110 disabled:opacity-60"
+            disabled={timeLoading}
+          >
             {timeLoading ? "Saving…" : "Save Time Entry"}
           </button>
         </form>
@@ -668,10 +692,10 @@ export function TimeCostForm({
             <textarea className="textarea textarea-bordered" rows={3} value={costDescription} onChange={(e) => setCostDescription(e.target.value)} required />
           </label>
 
-          <div className="rounded-box bg-base-200/60 p-3 text-sm">
+          <div className="rounded-xl border border-violet-200/80 bg-white/80 p-3 text-sm shadow-sm">
             <div className="flex justify-between">
               <span className="opacity-70">Billable amount to customer</span>
-              <span className="font-medium tabular-nums">{formatCurrency(previewBillableAmount)}</span>
+              <span className="font-semibold tabular-nums text-violet-950">{formatCurrency(previewBillableAmount)}</span>
             </div>
             <p className="mt-2 text-xs opacity-60">
               Routine costs are approved for billing automatically. Amounts at or above{" "}
@@ -680,11 +704,15 @@ export function TimeCostForm({
             </p>
           </div>
 
-          <button className="btn btn-primary" disabled={costLoading}>
+          <button
+            className="rounded-xl border border-violet-400/50 bg-gradient-to-br from-violet-500 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-violet-500/25 transition hover:brightness-110 disabled:opacity-60"
+            disabled={costLoading}
+          >
             {costLoading ? "Saving…" : "Save Direct Cost"}
           </button>
         </form>
       )}
+      </div>
     </div>
   );
 }

@@ -224,3 +224,31 @@ export function aggregateContractHours(
     hours: hoursByContract.get(c.id) ?? 0,
   }));
 }
+
+type RpcClient = {
+  rpc: (
+    fn: string
+  ) => Promise<{ data: unknown; error: { message: string } | null }>;
+};
+
+/** Load under-worked contract hours for HR match scoring (RPC, then service-role fallback). */
+export async function loadContractHoursForMatch(supabase: RpcClient): Promise<ContractHoursRow[]> {
+  const { data, error } = await supabase.rpc("hr_active_contract_hours");
+  if (!error && data) {
+    return contractHoursFromRpc(
+      data as { contract_id: string; hours_worked: number | string | null }[]
+    );
+  }
+
+  try {
+    const { createServiceClient } = await import("@/lib/supabase/admin");
+    const admin = createServiceClient();
+    const [{ data: contracts }, { data: timeEntries }] = await Promise.all([
+      admin.from("contracts").select("id, name").eq("status", "active"),
+      admin.from("time_entries").select("contract_id, hours_worked"),
+    ]);
+    return aggregateContractHours(contracts ?? [], timeEntries ?? []);
+  } catch {
+    return [];
+  }
+}

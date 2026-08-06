@@ -15,6 +15,7 @@ import {
 import { type MonthlyFinancials } from "@/components/ManagerCharts";
 import { CustomerHomeVisuals } from "@/components/CustomerHomeVisuals";
 import { ExecutiveDashboardVisuals } from "@/components/ExecutiveDashboardVisuals";
+import { HrHomeVisuals } from "@/components/HrHomeVisuals";
 import { ContractMetricsWidgets } from "@/components/ContractMetricsWidgets";
 import {
   TechnicianWorkspaceClient,
@@ -43,6 +44,7 @@ import {
 import { PeriodViewControls } from "@/components/PeriodViewControls";
 import { ExplainNumber } from "@/components/ExplainNumber";
 import { DashboardCollapse, DashboardMetricAccordion, DashboardSection } from "@/components/DashboardAccordion";
+import { loadContractHoursForMatch, rankDemoApplicants } from "@/lib/hr-applicants";
 import type {
   AdditionalWorkRequest,
   Contract,
@@ -123,44 +125,80 @@ export default async function DashboardPage({
 
 async function HrDashboard({ profile }: { profile: Profile }) {
   const supabase = await createClient();
-  const [{ data: contractors }, { data: positions }] = await Promise.all([
+  const [
+    { data: contractors },
+    { data: positions },
+    { data: departments },
+    contractHours,
+  ] = await Promise.all([
     supabase.from("hr_contractors").select("id, status"),
-    supabase.from("hr_positions").select("id, status"),
+    supabase.from("hr_positions").select("id, title, status, department_id"),
+    supabase.from("hr_departments").select("id, name"),
+    loadContractHoursForMatch(supabase),
   ]);
 
   const activeCount = (contractors ?? []).filter((c) => c.status === "active").length;
-  const openCount = (positions ?? []).filter((p) => p.status === "open").length;
-  const filledCount = (positions ?? []).filter((p) => p.status === "filled").length;
+  const openPositions = (positions ?? []).filter((p) => p.status === "open");
+  const openCount = openPositions.length;
+  const deptName = new Map((departments ?? []).map((d) => [d.id, d.name]));
+  const openTitles = openPositions.map((p) => p.title);
+
+  const rankedApplicants = rankDemoApplicants({
+    contractHours,
+    openPositionTitles: openTitles,
+  });
+  const topApplicants = rankedApplicants.slice(0, 5);
+  const topMatch = rankedApplicants[0]?.matchPercent ?? 0;
+  const strongMatches = rankedApplicants.filter((a) => a.matchPercent >= 72).length;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="HR Home"
-        description={`Welcome, ${profile.full_name}. Review applicants, open roles, and workforce analytics.`}
-      />
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Active contractors" value={String(activeCount)} />
-        <StatCard
-          label="Open positions"
-          value={String(openCount)}
-          tone={openCount > 0 ? "warning" : "default"}
-        />
-        <StatCard label="Filled positions" value={String(filledCount)} />
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        <Link href="/hr-applicants" className="btn btn-primary">
-          Applicants
-        </Link>
-        <Link href="/hr-analytics" className="btn btn-outline">
-          HR Analytics
-        </Link>
-        <Link href="/hr-positions" className="btn btn-outline">
-          Positions
-        </Link>
-      </div>
-    </div>
+    <HrHomeVisuals
+      fullName={profile.full_name}
+      pipeline={{
+        openRoles: openCount,
+        applicants: rankedApplicants.length,
+        strongMatches,
+        activeContractors: activeCount,
+      }}
+      metrics={[
+        {
+          label: "Active contractors",
+          value: String(activeCount),
+          tone: "sky",
+          href: "/admin/hr",
+        },
+        {
+          label: "Open positions",
+          value: String(openCount),
+          tone: openCount > 0 ? "amber" : "emerald",
+          href: "/hr-positions",
+        },
+        {
+          label: "Applicants",
+          value: String(rankedApplicants.length),
+          tone: "violet",
+          href: "/hr-applicants",
+        },
+        {
+          label: "Top match",
+          value: `${topMatch}%`,
+          tone: topMatch >= 72 ? "emerald" : "rose",
+          href: "/hr-applicants",
+        },
+      ]}
+      applicants={topApplicants.map((a) => ({
+        id: a.id,
+        fullName: a.fullName,
+        appliedFor: a.appliedFor,
+        matchPercent: a.matchPercent,
+        stars: a.stars,
+      }))}
+      openRoles={openPositions.map((p) => ({
+        id: p.id,
+        title: p.title,
+        department: deptName.get(p.department_id) ?? "—",
+      }))}
+    />
   );
 }
 
@@ -726,22 +764,19 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
   };
 
   return (
-    <div>
-      <PageHeader title="My Assignments" />
-      <TechnicianWorkspaceClient
-        technicianId={profile.id}
-        technicianName={profile.full_name}
-        internalCostRate={Number(profile.internal_cost_rate ?? 65)}
-        tickets={workspaceTickets}
-        pendingTimeEntries={pendingTimeEntries}
-        pendingAdditionalWork={pendingAdditionalWork}
-        allAdditionalWork={allAdditionalWork}
-        contractWarnings={contractWarnings}
-        summary={summary}
-        completedTodayIds={completedTodayTickets.map((t) => t.id)}
-        timezoneLabel={Intl.DateTimeFormat().resolvedOptions().timeZone || "local time"}
-      />
-    </div>
+    <TechnicianWorkspaceClient
+      technicianId={profile.id}
+      technicianName={profile.full_name}
+      internalCostRate={Number(profile.internal_cost_rate ?? 65)}
+      tickets={workspaceTickets}
+      pendingTimeEntries={pendingTimeEntries}
+      pendingAdditionalWork={pendingAdditionalWork}
+      allAdditionalWork={allAdditionalWork}
+      contractWarnings={contractWarnings}
+      summary={summary}
+      completedTodayIds={completedTodayTickets.map((t) => t.id)}
+      timezoneLabel={Intl.DateTimeFormat().resolvedOptions().timeZone || "local time"}
+    />
   );
 }
 
