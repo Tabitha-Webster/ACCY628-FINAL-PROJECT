@@ -79,7 +79,7 @@ export const ROLE_ACCESS_MATRIX: {
     customerData: true,
   },
   {
-    area: "Service Operations",
+    area: "Service Tickets",
     description: "SLA monitoring, open work, hour usage",
     roles: ["admin", "manager"],
     financial: false,
@@ -263,17 +263,12 @@ export type NavItem = {
 
 const MANAGER_NAV: NavItem[] = [
   { href: "/dashboard", label: "Manager Dashboard" },
-  { href: "/customers", label: "Customers" },
-  { href: "/admin/employees", label: "Employees" },
-  // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
+  // Contracts & Agreements + Billing & Finance dropdowns render via AppShell after dashboard
+  { href: "/operations", label: "Service Tickets" },
   { href: "/projects", label: "Projects" },
-  { href: "/operations", label: "Service Operations" },
-  { href: "/time-cost-approvals", label: "Approve Time & Costs" },
-  { href: "/profitability", label: "Profitability" },
-  { href: "/billing-collections", label: "Billing and Collections" },
-  { href: "/payments", label: "Payment History" },
-  { href: "/hr-analytics", label: "HR Analytics" },
+  // Company Directory dropdown renders via CompanyDirectoryNavTree in AppShell after projects
   { href: "/controls", label: "Controls and Exceptions" },
+  { href: "/hr-analytics", label: "HR Analytics" },
 ];
 
 export const ROLE_NAV: Record<UserRole, NavItem[]> = {
@@ -400,11 +395,16 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
     "/accounting",
     "/accounts-receivable",
     "/time-costs",
+    "/time-cost-approvals",
+    "/profitability",
+    "/billing-collections",
     "/contracts",
     "/billing-cost-approvals",
     "/operations",
     "/controls",
     "/hr-analytics",
+    "/customers",
+    "/admin/employees",
   ];
   const shared: Partial<Record<UserRole, string[]>> = {
     admin: [

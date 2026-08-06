@@ -9,6 +9,7 @@ import { BillingStaffNavTree } from "@/components/BillingStaffNavTree";
 import { CompanyDirectoryNavTree } from "@/components/CompanyDirectoryNavTree";
 import { AdminApprovalsNavTree } from "@/components/AdminApprovalsNavTree";
 import { ContractsAgreementsNavTree } from "@/components/ContractsAgreementsNavTree";
+import { ManagerBillingFinanceNavTree } from "@/components/ManagerBillingFinanceNavTree";
 import { SystemNavTree } from "@/components/SystemNavTree";
 import { UserAccessNavTree } from "@/components/UserAccessNavTree";
 import { HeaderPageSearch } from "@/components/HeaderPageSearch";
@@ -107,15 +108,24 @@ function SideNav({
               >
                 {item.label}
               </Link>
-              {!restrictedCustomer && isManager && !isAdmin && item.href === "/customers" ? (
-                <ContractsAgreementsNavTree
-                  showReports
-                  showNewContract
-                  showCustomerContractData
-                  showViewEditContracts
-                  onNavigate={onNavigate}
-                  allowedPageKeys={allowedPageKeys}
-                />
+              {!restrictedCustomer && isManager && !isAdmin && item.href === "/dashboard" ? (
+                <>
+                  <ContractsAgreementsNavTree
+                    showReports
+                    showNewContract
+                    showCustomerContractData
+                    showViewEditContracts
+                    onNavigate={onNavigate}
+                    allowedPageKeys={allowedPageKeys}
+                  />
+                  <ManagerBillingFinanceNavTree
+                    onNavigate={onNavigate}
+                    allowedPageKeys={allowedPageKeys}
+                  />
+                </>
+              ) : null}
+              {!restrictedCustomer && isManager && !isAdmin && item.href === "/projects" ? (
+                <CompanyDirectoryNavTree onNavigate={onNavigate} allowedPageKeys={allowedPageKeys} />
               ) : null}
               {!restrictedCustomer && isExecutive && item.href === "/customers" ? (
                 <ContractsAgreementsNavTree
