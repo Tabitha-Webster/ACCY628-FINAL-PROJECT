@@ -33,7 +33,7 @@ const ACCESS_TOOLS: AdminTool[] = [
   },
   {
     href: "/admin/audit",
-    title: "Audit Trail",
+    title: "Change Log",
     description: "Record of changes to permissions, configuration, and critical records.",
   },
 ];

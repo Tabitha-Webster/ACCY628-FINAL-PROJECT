@@ -50,92 +50,88 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="login-page-bg relative min-h-screen overflow-x-hidden bg-slate-50">
+    <div className="login-page-bg relative min-h-screen overflow-x-hidden">
+      <div className="login-page-mesh pointer-events-none absolute inset-0" aria-hidden />
       <div className="login-page-geo pointer-events-none absolute inset-0" aria-hidden />
-      <div className="relative mx-auto flex w-full max-w-xl flex-col items-center px-4 py-4 sm:py-5 md:py-6">
-        <h1 className="flex w-full justify-center overflow-visible bg-transparent leading-none">
-          <Image
-            src="/images/servicesync-msp-logo.png?v=5"
-            alt="ServiceSync MSP"
-            width={1160}
-            height={700}
-            className="login-brand-logo mx-auto block h-auto w-[min(100%,17.5rem)] bg-transparent object-contain object-top sm:w-[19rem]"
-            sizes="304px"
-            priority
-            unoptimized
-          />
-        </h1>
 
-        <div className="mt-3 w-full max-w-md sm:mt-4">
-          <div className="card border border-slate-200/80 bg-white shadow-xl shadow-slate-200/70">
-            <div className="card-body gap-3 p-5 sm:gap-3.5 sm:p-6">
-              <div>
-                <h2 className="card-title text-xl">Sign in</h2>
-                <p className="text-sm opacity-70">Access your ServiceSync workspace</p>
-              </div>
+      <div className="relative mx-auto flex min-h-screen w-full max-w-xl flex-col items-center justify-center px-4 py-8 sm:py-10">
+        <Image
+          src="/images/servicesync-msp-logo.png?v=5"
+          alt="ServiceSync MSP"
+          width={1160}
+          height={700}
+          className="login-brand-logo mb-5 h-auto w-[min(100%,17.5rem)] object-contain sm:mb-6 sm:w-[19rem]"
+          sizes="304px"
+          priority
+          unoptimized
+        />
 
-              {error ? (
-                <div className="alert alert-error py-2 text-sm">
-                  <span>{error}</span>
-                </div>
-              ) : null}
-
-              <form className="space-y-2" onSubmit={onSubmit}>
-                <label className="form-control w-full">
-                  <span className="label-text mb-0.5">Email</span>
-                  <input
-                    type="email"
-                    className="input input-bordered w-full"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    autoComplete="email"
-                    required
-                  />
-                </label>
-                <label className="form-control w-full">
-                  <span className="label-text mb-0.5">Password</span>
-                  <input
-                    type="password"
-                    className="input input-bordered w-full"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete="current-password"
-                    required
-                  />
-                </label>
-                <button
-                  className="btn login-signin-btn mt-2 w-full border-none text-white"
-                  disabled={loading}
-                >
-                  {loading ? "Signing in…" : "Sign in"}
-                </button>
-              </form>
-
-              <DemoLoginSelector
-                onSelect={(demoEmail, demoPassword) => {
-                  setEmail(demoEmail);
-                  setPassword(demoPassword);
-                  setError(null);
-                }}
-              />
-
-              <div className="divider my-0 text-xs opacity-50">or</div>
-
-              <Link href="/customer-signup" className="btn login-create-account-btn w-full">
-                New Customer? Create an Account
-              </Link>
+        <div className="login-card w-full overflow-hidden rounded-3xl border border-white/70 bg-white/90 shadow-[0_24px_60px_-28px_rgba(18,59,93,0.35)] backdrop-blur-md">
+          <div className="space-y-5 p-6 sm:p-8">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Sign in</h2>
+              <p className="mt-1 text-sm text-slate-500">Access your ServiceSync workspace.</p>
             </div>
+
+            {error ? (
+              <div className="alert alert-error py-2.5 text-sm">
+                <span>{error}</span>
+              </div>
+            ) : null}
+
+            <form className="space-y-3.5" onSubmit={onSubmit}>
+              <label className="form-control w-full">
+                <span className="label-text mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Email
+                </span>
+                <input
+                  type="email"
+                  className="input input-bordered h-11 w-full rounded-xl border-slate-200 bg-white focus:border-[#8fc5e3] focus:outline-none"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  required
+                />
+              </label>
+              <label className="form-control w-full">
+                <span className="label-text mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Password
+                </span>
+                <input
+                  type="password"
+                  className="input input-bordered h-11 w-full rounded-xl border-slate-200 bg-white focus:border-[#8fc5e3] focus:outline-none"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+              </label>
+              <button
+                className="btn login-signin-btn mt-1 h-11 min-h-11 w-full rounded-xl border-none text-white"
+                disabled={loading}
+              >
+                {loading ? "Signing in…" : "Sign in"}
+              </button>
+            </form>
+
+            <DemoLoginSelector
+              onSelect={(demoEmail, demoPassword) => {
+                setEmail(demoEmail);
+                setPassword(demoPassword);
+                setError(null);
+              }}
+            />
+
+            <div className="relative py-1 text-center text-xs uppercase tracking-[0.16em] text-slate-400">
+              <span className="relative z-10 bg-white/90 px-3">or</span>
+              <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-slate-200" />
+            </div>
+
+            <Link href="/customer-signup" className="btn login-create-account-btn h-11 min-h-11 w-full rounded-xl">
+              New Customer? Create an Account
+            </Link>
           </div>
         </div>
-
-        <p className="mt-5 max-w-md text-center text-base text-slate-700 sm:mt-6 sm:text-lg">
-          From service agreement to support, billing, and collection.
-        </p>
-        <p className="mt-2 max-w-md pb-4 text-center text-sm leading-relaxed text-slate-600">
-          Track customer contracts, support hours, technician work, costs, invoices, and payments
-          in one place — so managers, technicians, billing staff, and customers each see what they
-          need.
-        </p>
       </div>
     </div>
   );
