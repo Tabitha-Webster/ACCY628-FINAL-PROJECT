@@ -14,6 +14,7 @@ import {
   DateText,
 } from "@/components/ui";
 import { ManagerCharts, type MonthlyFinancials, type TicketsByStatus } from "@/components/ManagerCharts";
+import { CustomerSupportStatusChart } from "@/components/CustomerSupportStatusChart";
 import { ContractMetricsWidgets } from "@/components/ContractMetricsWidgets";
 import {
   TechnicianWorkspaceClient,
@@ -1809,11 +1810,12 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
   }
 
   const supabase = await createClient();
-  const { data: linkedCustomer } = await supabase
+  const linkedCustomerRes = await supabase
     .from("customers")
-    .select("id, name, status, approval_note")
+    .select("id, name, status")
     .eq("id", profile.customer_id)
     .maybeSingle();
+  const linkedCustomer = linkedCustomerRes.data;
 
   if (linkedCustomer?.status === "pending_approval" || linkedCustomer?.status === "rejected") {
     redirect("/pending-approval");
@@ -1821,11 +1823,18 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
 
   const monthStart = `${lastNMonthKeys(1)[0]}-01`;
   const customerId = profile.customer_id;
+  const year = new Date().getFullYear();
+  const yearStart = `${year}-01-01T00:00:00.000Z`;
 
-  const [contractsRes, ticketsRes, projectsRes, invoicesRes, paymentsRes, disputesRes, timeEntriesRes, revenueRes] =
+  const [contractsRes, ticketsRes, yearTicketsRes, projectsRes, invoicesRes, paymentsRes, disputesRes, timeEntriesRes, revenueRes] =
     await Promise.all([
       supabase.from("contracts").select("id, name, contract_number, status, included_hours_per_month").eq("customer_id", customerId).eq("status", "active"),
       supabase.from("support_tickets").select("id, ticket_number, title, priority, status").eq("customer_id", customerId).in("status", OPEN_TICKET_STATUSES),
+      supabase
+        .from("support_tickets")
+        .select("id, status, submitted_at")
+        .eq("customer_id", customerId)
+        .gte("submitted_at", yearStart),
       supabase.from("projects").select("id, name, status").eq("customer_id", customerId),
       supabase
         .from("invoices")
@@ -1851,6 +1860,7 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
     "id" | "name" | "contract_number" | "status" | "included_hours_per_month"
   >[];
   const tickets = (ticketsRes.data ?? []) as Pick<SupportTicket, "id" | "ticket_number" | "title" | "priority" | "status">[];
+  const yearTickets = (yearTicketsRes.data ?? []) as Pick<SupportTicket, "id" | "status" | "submitted_at">[];
   const projects = (projectsRes.data ?? []) as Pick<Project, "id" | "name" | "status">[];
   const invoices = (invoicesRes.data ?? []).map((invoice) => withDerivedInvoiceStatus(invoice));
   const payments = (paymentsRes.data ?? []) as (Pick<Payment, "payment_number" | "payment_amount" | "payment_date" | "payment_method"> & { id: string })[];
@@ -1874,97 +1884,99 @@ async function CustomerDashboard({ profile }: { profile: Profile }) {
     .filter((i) => !["draft", "canceled", "paid"].includes(i.status) && i.remaining_balance > 0.01)
     .reduce((sum, i) => sum + i.remaining_balance, 0);
   const openDisputes = disputes.filter((d) => d.resolution_status !== "resolved" && d.resolution_status !== "rejected");
+  const activeProjects = projects.filter((p) => !["closed", "canceled"].includes(p.status));
 
   const currentMonthKey = lastNMonthKeys(1)[0];
   const monthlyAmount = revenue
     .filter((r) => r.recognition === "earned" && monthKey(r.period_month) === currentMonthKey)
     .reduce((sum, r) => sum + Number(r.amount), 0);
 
+  const ticketsByStatusMap = new Map<string, number>();
+  for (const ticket of yearTickets) {
+    ticketsByStatusMap.set(ticket.status, (ticketsByStatusMap.get(ticket.status) ?? 0) + 1);
+  }
+  const supportStatusSlices = Array.from(ticketsByStatusMap.entries())
+    .map(([status, count]) => ({ status, count }))
+    .sort((a, b) => b.count - a.count || a.status.localeCompare(b.status));
+
   return (
     <div>
-      <PageHeader title="Customer Home" description={`Welcome back, ${profile.full_name}. Here's your account at a glance.`} />
+      <PageHeader
+        title="Customer Home"
+        description={`Welcome back, ${profile.full_name}. Here's your account at a glance.`}
+        actions={
+          <Link
+            href="/my-invoices"
+            className="block min-w-[12rem] rounded-box border border-error/50 bg-error/10 px-4 py-3 text-right shadow-sm transition hover:border-error hover:bg-error/15"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide text-error">Invoice Balance Due</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-error">{formatCurrency(invoiceBalance)}</p>
+            <p className="mt-1 text-xs text-error/80">
+              {invoiceBalance > 0 ? "View invoices to pay" : "You are all caught up"}
+            </p>
+          </Link>
+        }
+      />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Active Contracts"
-          value={String(contracts.length)}
-          explanation={{
-            title: "Active Contracts",
-            result: String(contracts.length),
-            formula: "Count of your contracts with status = active",
-            lines: contracts.map((contract) => ({ label: contract.name, value: contract.contract_number })),
-          }}
-        />
-        <StatCard
-          label="Open Support Requests"
-          value={String(tickets.length)}
-          explanation={{
-            title: "Open Support Requests",
-            result: String(tickets.length),
-            formula: "Count of your tickets that are still open",
-            lines: tickets.map((ticket) => ({
-              label: ticket.ticket_number,
-              value: ticket.status.replace(/_/g, " "),
-              detail: ticket.title,
-            })),
-          }}
-        />
-        <StatCard
-          label="Active Projects"
-          value={String(projects.filter((p) => !["closed", "canceled"].includes(p.status)).length)}
-          explanation={{
-            title: "Active Projects",
-            result: String(projects.filter((p) => !["closed", "canceled"].includes(p.status)).length),
-            formula: "Count of your projects that are not closed or canceled",
-            lines: projects
-              .filter((project) => !["closed", "canceled"].includes(project.status))
-              .map((project) => ({ label: project.name, value: project.status.replace(/_/g, " ") })),
-          }}
-        />
-        <StatCard
-          label="Invoice Balance Due"
-          value={formatCurrency(invoiceBalance)}
-          tone={invoiceBalance > 0 ? "warning" : "success"}
-          explanation={{
-            title: "Invoice Balance Due",
-            result: formatCurrency(invoiceBalance),
-            formula: "Sum of remaining_balance on your open invoices that are not draft, canceled, or paid",
-            lines: invoices
-              .filter((invoice) => !["draft", "canceled", "paid"].includes(invoice.status) && invoice.remaining_balance > 0.01)
-              .map((invoice) => ({
-                label: invoice.invoice_number,
-                value: formatCurrency(invoice.remaining_balance),
-                detail: invoice.status.replace(/_/g, " "),
+      <div className="grid gap-4 xl:grid-cols-12">
+        <div className="grid gap-4 sm:grid-cols-2 xl:col-span-7">
+          <StatCard
+            label="Active Contracts"
+            value={String(contracts.length)}
+            href="/my-contracts"
+            explanation={{
+              title: "Active Contracts",
+              result: String(contracts.length),
+              formula: "Count of your contracts with status = active",
+              lines: contracts.map((contract) => ({ label: contract.name, value: contract.contract_number })),
+            }}
+          />
+          <StatCard
+            label="Active Projects"
+            value={String(activeProjects.length)}
+            href="/my-projects"
+            explanation={{
+              title: "Active Projects",
+              result: String(activeProjects.length),
+              formula: "Count of your projects that are not closed or canceled",
+              lines: activeProjects.map((project) => ({
+                label: project.name,
+                value: project.status.replace(/_/g, " "),
               })),
-          }}
-        />
-        <StatCard
-          label="Open Disputes"
-          value={String(openDisputes.length)}
-          tone={openDisputes.length > 0 ? "error" : "default"}
-          explanation={{
-            title: "Open Disputes",
-            result: String(openDisputes.length),
-            formula: "Count of your disputes that are not resolved or rejected",
-            lines: openDisputes.map((dispute) => ({
-              label: dispute.dispute_reason,
-              value: formatCurrency(Number(dispute.disputed_amount)),
-              detail: dispute.resolution_status.replace(/_/g, " "),
-            })),
-          }}
-        />
-        <StatCard
-          label="This Month's Service Charges"
-          value={formatCurrency(monthlyAmount)}
-          explanation={{
-            title: "This Month's Service Charges",
-            result: formatCurrency(monthlyAmount),
-            formula: `Sum of earned revenue records for ${monthLabel(currentMonthKey)}`,
-            lines: revenue
-              .filter((row) => row.recognition === "earned" && monthKey(row.period_month) === currentMonthKey)
-              .map((row) => ({ label: row.period_month, value: formatCurrency(Number(row.amount)) })),
-          }}
-        />
+            }}
+          />
+          <StatCard
+            label="Open Disputes"
+            value={String(openDisputes.length)}
+            tone={openDisputes.length > 0 ? "error" : "default"}
+            explanation={{
+              title: "Open Disputes",
+              result: String(openDisputes.length),
+              formula: "Count of your disputes that are not resolved or rejected",
+              lines: openDisputes.map((dispute) => ({
+                label: dispute.dispute_reason,
+                value: formatCurrency(Number(dispute.disputed_amount)),
+                detail: dispute.resolution_status.replace(/_/g, " "),
+              })),
+            }}
+          />
+          <StatCard
+            label="This Month's Service Charges"
+            value={formatCurrency(monthlyAmount)}
+            explanation={{
+              title: "This Month's Service Charges",
+              result: formatCurrency(monthlyAmount),
+              formula: `Sum of earned revenue records for ${monthLabel(currentMonthKey)}`,
+              lines: revenue
+                .filter((row) => row.recognition === "earned" && monthKey(row.period_month) === currentMonthKey)
+                .map((row) => ({ label: row.period_month, value: formatCurrency(Number(row.amount)) })),
+            }}
+          />
+        </div>
+
+        <div className="xl:col-span-5">
+          <CustomerSupportStatusChart data={supportStatusSlices} year={year} />
+        </div>
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">

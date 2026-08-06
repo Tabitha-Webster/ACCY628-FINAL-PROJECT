@@ -26,32 +26,35 @@ export function CustomerApprovalActions({ customerId, managerId, currentStatus }
     }
     setLoading(decision);
     const supabase = createClient();
+    const approved = decision === "approve";
+
     const { error: updateError } = await supabase
       .from("customers")
       .update({
-        status: decision === "approve" ? "active" : "rejected",
-        customer_status: decision === "approve" ? "active" : "rejected",
+        status: approved ? "active" : "rejected",
         approval_note: trimmedNote,
         reviewed_at: new Date().toISOString(),
         reviewed_by: managerId,
       })
       .eq("id", customerId);
 
-    setLoading(null);
     if (updateError) {
-      // Retry without optional columns if migration not fully applied.
+      // Fallback when manager-approval columns / enum values are not applied yet.
       const { error: fallbackError } = await supabase
         .from("customers")
         .update({
-          status: decision === "approve" ? "active" : "inactive",
-          notes: `${decision === "approve" ? "Approved" : "Rejected"}: ${trimmedNote}`,
+          status: approved ? "active" : "inactive",
+          notes: `${approved ? "Approved" : "Rejected"}: ${trimmedNote}`,
         })
         .eq("id", customerId);
       if (fallbackError) {
+        setLoading(null);
         setError(fallbackError.message || updateError.message);
         return;
       }
     }
+
+    setLoading(null);
     setNote("");
     router.refresh();
   }

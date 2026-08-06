@@ -159,7 +159,7 @@ export const DEMO_ACCOUNTS = [
   {
     role: "customer" as UserRole,
     label: "Customer (Chad Corporation)",
-    email: "customer@apexlegal.demo",
+    email: "casey.ortiz@chadcorporation.demo",
     password: "1234",
     name: "Casey Ortiz",
   },
@@ -310,11 +310,11 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
   ],
   customer: [
     { href: "/dashboard", label: "Customer Home" },
-    { href: "/pending-approval", label: "Pending Approval" },
-    { href: "/my-contracts", label: "My Contracts & Agreements" },
-    { href: "/my-projects", label: "Projects" },
+    { href: "/support-requests", label: "Make a Request" },
+    { href: "/my-contracts", label: "My Contracts" },
+    { href: "/my-invoices", label: "My Invoices" },
+    { href: "/my-projects", label: "My Projects" },
     { href: "/service-usage", label: "Service Usage" },
-    { href: "/support-requests", label: "Support Requests" },
   ],
 };
 
@@ -354,7 +354,7 @@ export const CONTRACTS_NAV_COPY: Record<
   },
   customer: {
     href: "/my-contracts",
-    title: "My Contracts & Agreements",
+    title: "My Contracts",
     description:
       "View the service agreements for your organization, including fees, included hours, and covered services.",
   },
