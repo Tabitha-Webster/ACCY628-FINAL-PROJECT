@@ -261,7 +261,7 @@ export function AppShell({
   }
 
   return (
-    <div className="flex min-h-screen bg-base-100">
+    <div className="flex h-screen overflow-hidden bg-base-100">
       <div
         className={`relative sticky top-0 z-30 h-screen shrink-0 transition-[width] duration-200 ease-out ${
           collapsed ? "w-0" : "w-72"
@@ -299,8 +299,8 @@ export function AppShell({
         </button>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex flex-wrap items-center gap-3 border-b border-base-300 bg-base-100 px-4 py-2">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-base-300 bg-base-100 px-4 py-2">
           <div className={`flex min-w-0 items-center gap-2 ${collapsed ? "pl-10" : "pl-3"}`}>
             {collapsed ? (
               <div className="flex min-w-0 max-w-[14rem] flex-col gap-1 sm:max-w-[17rem] md:max-w-[20rem]">
@@ -343,7 +343,7 @@ export function AppShell({
             </button>
           </div>
         </header>
-        <main className="app-main flex-1 p-5 md:p-8">{children}</main>
+        <main className="app-main min-h-0 flex-1 overflow-auto p-5 md:p-8">{children}</main>
       </div>
 
       {settingsOpen ? (

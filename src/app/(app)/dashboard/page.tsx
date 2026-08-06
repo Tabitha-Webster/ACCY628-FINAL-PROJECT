@@ -10,11 +10,11 @@ import {
   DataTable,
   StatusBadge,
   Money,
-  Hours,
   DateText,
 } from "@/components/ui";
-import { ManagerCharts, type MonthlyFinancials, type TicketsByStatus } from "@/components/ManagerCharts";
+import { type MonthlyFinancials } from "@/components/ManagerCharts";
 import { CustomerHomeVisuals } from "@/components/CustomerHomeVisuals";
+import { ExecutiveDashboardVisuals } from "@/components/ExecutiveDashboardVisuals";
 import { ContractMetricsWidgets } from "@/components/ContractMetricsWidgets";
 import {
   TechnicianWorkspaceClient,
@@ -329,11 +329,6 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
     return { month: monthLabel(key), revenue: rev, cost, profit: rev - cost };
   });
 
-  const ticketsByStatus: TicketsByStatus[] = OPEN_TICKET_STATUSES.map((status) => ({
-    status: status.replace(/_/g, " "),
-    count: tickets.filter((t) => t.status === status).length,
-  })).filter((row) => row.count > 0);
-
   const ar = invoices
     .filter((i) => !["draft", "canceled", "paid"].includes(i.status) && Number(i.remaining_balance) > 0)
     .reduce((sum, i) => sum + Number(i.remaining_balance), 0);
@@ -346,417 +341,94 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
         i.due_date < todayStr
     )
     .reduce((sum, i) => sum + Number(i.remaining_balance), 0);
-  const deferred = revenue.filter((r) => r.recognition === "deferred").reduce((sum, r) => sum + Number(r.amount), 0);
-  const unbilled = revenue.filter((r) => r.recognition === "unbilled").reduce((sum, r) => sum + Number(r.amount), 0);
+
+  const ticketStatusSlices = OPEN_TICKET_STATUSES.map((status) => ({
+    status,
+    count: tickets.filter((t) => t.status === status).length,
+  })).filter((row) => row.count > 0);
+
+  const approvalChips = [
+    ...additionalWork.slice(0, 4).map((w) => ({
+      id: `aw-${w.id}`,
+      label: w.title,
+      detail: customerName.get(w.customer_id) ?? "Additional work",
+      href: w.project_id ? `/projects/${w.project_id}` : "/additional-work",
+    })),
+    ...projectsNeedingCustomerAction.slice(0, 4).map((p) => ({
+      id: `proj-${p.id}`,
+      label: p.name,
+      detail: customerName.get(p.customer_id) ?? "Project approval",
+      href: `/projects/${p.id}`,
+    })),
+    ...pendingMilestones.slice(0, 4).map((m) => {
+      const project = Array.isArray(m.projects) ? m.projects[0] : m.projects;
+      return {
+        id: `ms-${m.id}`,
+        label: m.name,
+        detail: project?.name ?? "Milestone",
+        href: `/projects/${m.project_id}`,
+      };
+    }),
+  ].slice(0, 4);
 
   return (
-    <div>
-      <PageHeader
-        title="Executive Dashboard"
-        description={`Welcome back, ${profile.full_name}. Here's how ServiceSync is performing.`}
-      />
-
-      <div className="mb-6">
-        <ContractMetricsWidgets
-          metrics={contractMetrics}
-          showTables={false}
-          title="Contracts portfolio"
-        />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Active Customers"
-          value={String(customersCountRes.count ?? 0)}
-          explanation={{
-            title: "Active Customers",
-            result: String(customersCountRes.count ?? 0),
-            formula: "Count of customers where status = active",
-            lines: (customersRes.data ?? [])
-              .filter((customer) => customer.status === "active" && customer.name)
-              .map((customer) => ({ label: customer.name as string, value: "Active" })),
-          }}
-        />
-        <StatCard
-          label="Active Contracts"
-          value={String(contractsCountRes.count ?? 0)}
-          explanation={{
-            title: "Active Contracts",
-            result: String(contractsCountRes.count ?? 0),
-            formula: "Count of contracts where status = active",
-            lines: activeContracts.map((contract) => ({
-              label: contract.name,
-              value: contract.contract_number,
-              detail: customerName.get(contract.customer_id) ?? "Unknown customer",
-            })),
-          }}
-        />
-        <StatCard
-          label="Open Tickets"
-          value={String(tickets.length)}
-          explanation={{
-            title: "Open Tickets",
-            result: String(tickets.length),
-            formula: "Count of support tickets in new, assigned, in progress, waiting on customer, or waiting on approval",
-            lines: tickets.slice(0, 20).map((ticket) => ({
-              label: ticket.ticket_number,
-              value: ticket.status.replace(/_/g, " "),
-              detail: ticket.title,
-            })),
-          }}
-        />
-        <StatCard
-          label="SLA At Risk / Missed"
-          value={`${slaAtRisk.length} / ${slaMissed.length}`}
-          tone={slaMissed.length > 0 ? "error" : slaAtRisk.length > 0 ? "warning" : "success"}
-          explanation={{
-            title: "SLA At Risk / Missed",
-            result: `${slaAtRisk.length} / ${slaMissed.length}`,
-            formula: "At-risk tickets + missed tickets among currently open tickets",
-            description: "At risk means a response or resolution deadline is close. Missed means a deadline has already passed.",
-            lines: [
-              ...slaMissed.map((ticket) => ({ label: ticket.ticket_number, value: "Missed", detail: ticket.title })),
-              ...slaAtRisk.map((ticket) => ({ label: ticket.ticket_number, value: "At risk", detail: ticket.title })),
-            ],
-          }}
-        />
-        <StatCard
-          label="Critical Open Tickets"
-          value={String(criticalTickets.length)}
-          tone={criticalTickets.length > 0 ? "error" : "success"}
-        />
-        <StatCard
-          label="Contracts Over Included Hours"
-          value={String(contractsOverHours.length)}
-          tone={contractsOverHours.length > 0 ? "warning" : "success"}
-          explanation={{
-            title: "Contracts Over Included Hours",
-            result: String(contractsOverHours.length),
-            formula: "Count of active contracts where included hours used this month > included hours per month",
-            lines: contractsOverHours.map((contract) => ({
-              label: contract.name,
-              value: `${contract.used.toFixed(1)} / ${Number(contract.included_hours_per_month).toFixed(1)} hrs`,
-              detail: `${contract.pct.toFixed(0)}% of included hours`,
-            })),
-          }}
-        />
-        <StatCard
-          label="Pending Approvals"
-          value={String(pendingApprovalsTotal)}
-          tone={pendingApprovalsTotal > 0 ? "warning" : "default"}
-          hint="Projects, change requests, milestones"
-          explanation={{
-            title: "Pending Approvals",
-            result: String(pendingApprovalsTotal),
-            formula: "Pending additional work + proposed projects + awaiting customer approval + pending milestones",
-            lines: [
-              ...additionalWork.map((request) => ({
-                label: request.title,
-                value: formatCurrency(Number(request.estimated_amount ?? 0)),
-                detail: customerName.get(request.customer_id) ?? "Unknown customer",
-              })),
-              ...proposedProjects.map((project) => ({
-                label: project.name,
-                value: "Proposed",
-                detail: customerName.get(project.customer_id) ?? "Unknown customer",
-              })),
-              ...awaitingCustomerProjects.map((project) => ({
-                label: project.name,
-                value: "Awaiting customer",
-                detail: customerName.get(project.customer_id) ?? "Unknown customer",
-              })),
-              ...pendingMilestones.map((milestone) => ({
-                label: milestone.name,
-                value: "Milestone",
-                detail: "Pending approval",
-              })),
-            ],
-          }}
-        />
-        <StatCard
-          label="Monthly Revenue"
-          value={formatCurrency(revenueThisMonth)}
-          hint="Earned this month"
-          explanation={{
-            title: "Monthly Revenue",
-            result: formatCurrency(revenueThisMonth),
-            formula: `Sum of revenue_records.amount where recognition = earned and period is ${monthLabel(currentMonthKey)}`,
-            lines: revenue
-              .filter((row) => row.recognition === "earned" && monthKey(row.period_month) === currentMonthKey)
-              .map((row) => ({
-                label: row.period_month,
-                value: formatCurrency(Number(row.amount)),
-                detail: "Earned revenue",
-              })),
-          }}
-        />
-        <StatCard
-          label="Monthly Profit"
-          value={formatCurrency(profitThisMonth)}
-          tone={profitThisMonth >= 0 ? "success" : "error"}
-          hint={`Cost: ${formatCurrency(costThisMonth)}`}
-          explanation={{
-            title: "Monthly Profit",
-            result: formatCurrency(profitThisMonth),
-            formula: "Earned revenue this month -> (labor cost this month + direct cost this month)",
-            lines: [
-              { label: "Earned revenue", value: formatCurrency(revenueThisMonth) },
-              { label: "Labor cost", value: formatCurrency(laborCostThisMonth), detail: "Internal labor cost on time entries this month" },
-              { label: "Direct cost", value: formatCurrency(directCostThisMonth), detail: "Internal cost on direct cost entries this month" },
-              { label: "Total cost", value: formatCurrency(costThisMonth) },
-              { label: "Profit", value: formatCurrency(profitThisMonth), detail: "Revenue minus total cost" },
-            ],
-          }}
-        />
-      </div>
-
-      {criticalTickets.length > 0 ? (
-        <div className="alert alert-error mt-4 text-sm" role="alert">
-          <div>
-            <p className="font-semibold">
-              {criticalTickets.length} critical ticket{criticalTickets.length === 1 ? "" : "s"} need immediate attention
-            </p>
-            <p className="mt-1 opacity-90">
-              {criticalTickets
-                .slice(0, 4)
-                .map((t) => t.ticket_number)
-                .join(", ")}
-              {criticalTickets.length > 4 ? ` +${criticalTickets.length - 4} more` : ""}. Open them from Tickets or the
-              list below.
-            </p>
-          </div>
-          <Link href="/tickets?priority=critical" className="btn btn-sm">
-            View critical tickets
-          </Link>
-        </div>
-      ) : null}
-
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Accounts Receivable"
-          value={formatCurrency(ar)}
-          explanation={{
-            title: "Accounts Receivable",
-            result: formatCurrency(ar),
-            formula: "Sum of remaining_balance on invoices that are not draft, canceled, or paid and still have a balance",
-            lines: invoices
-              .filter((invoice) => !["draft", "canceled", "paid"].includes(invoice.status) && Number(invoice.remaining_balance) > 0)
-              .map((invoice) => ({
-                label: invoice.invoice_number,
-                value: formatCurrency(Number(invoice.remaining_balance)),
-                detail: customerName.get(invoice.customer_id) ?? "Unknown customer",
-              })),
-          }}
-        />
-        <StatCard
-          label="Overdue Balance"
-          value={formatCurrency(overdue)}
-          tone={overdue > 0 ? "error" : "success"}
-          explanation={{
-            title: "Overdue Balance",
-            result: formatCurrency(overdue),
-            formula: "Sum of remaining_balance on open invoices with due date before today",
-            lines: invoices
-              .filter(
-                (invoice) =>
-                  !["draft", "canceled", "paid"].includes(invoice.status) &&
-                  Number(invoice.remaining_balance) > 0 &&
-                  invoice.due_date < todayStr
-              )
-              .map((invoice) => ({
-                label: invoice.invoice_number,
-                value: formatCurrency(Number(invoice.remaining_balance)),
-                detail: `${customerName.get(invoice.customer_id) ?? "Unknown customer"} | due ${invoice.due_date}`,
-              })),
-          }}
-        />
-        <StatCard
-          label="Deferred Revenue"
-          value={formatCurrency(deferred)}
-          explanation={{
-            title: "Deferred Revenue",
-            result: formatCurrency(deferred),
-            formula: "Sum of revenue_records.amount where recognition = deferred",
-            lines: revenue
-              .filter((row) => row.recognition === "deferred")
-              .map((row) => ({ label: row.period_month, value: formatCurrency(Number(row.amount)) })),
-          }}
-        />
-        <StatCard
-          label="Unbilled Revenue"
-          value={formatCurrency(unbilled)}
-          explanation={{
-            title: "Unbilled Revenue",
-            result: formatCurrency(unbilled),
-            formula: "Sum of revenue_records.amount where recognition = unbilled",
-            lines: revenue
-              .filter((row) => row.recognition === "unbilled")
-              .map((row) => ({ label: row.period_month, value: formatCurrency(Number(row.amount)) })),
-          }}
-        />
-      </div>
-
-      <div className="mt-6">
-        <ManagerCharts monthlyFinancials={monthlyFinancials} ticketsByStatus={ticketsByStatus} />
-      </div>
-
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Tickets Needing Attention</h2>
-          {ticketsNeedingAttention.length === 0 ? (
-            <EmptyState title="No urgent tickets" description="No critical, at-risk, or missed-SLA tickets right now." />
-          ) : (
-            <DataTable headers={["Ticket", "Customer", "Priority", "SLA"]}>
-              {ticketsNeedingAttention.slice(0, 8).map((t) => (
-                <tr key={t.id} className={t.priority === "critical" ? "bg-error/5" : undefined}>
-                  <td>
-                    <Link className="link link-hover" href={`/tickets/${t.id}`}>
-                      {t.ticket_number}
-                    </Link>
-                  </td>
-                  <td>{customerName.get(t.customer_id) ?? "-"}</td>
-                  <td>
-                    {t.priority === "critical" ? (
-                      <span className="inline-flex items-center gap-1 rounded-box border border-error/40 bg-error/10 px-2 py-0.5 text-xs font-semibold text-error">
-                        Critical
-                      </span>
-                    ) : (
-                      <StatusBadge status={t.priority} />
-                    )}
-                  </td>
-                  <td>
-                    <StatusBadge status={ticketSlaSeverity(t)} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-
-        <div>
-          <h2 className="mb-2 text-sm font-semibold">Contracts Over Included Hours</h2>
-          {contractsOverHours.length === 0 ? (
-            <EmptyState title="All contracts within limits" description="No active contract has exceeded its included hours this month." />
-          ) : (
-            <DataTable headers={["Contract", "Customer", "Used / Included", "Usage"]}>
-              {contractsOverHours.map((c) => (
-                <tr key={c.id}>
-                  <td>{c.contract_number}</td>
-                  <td>{customerName.get(c.customer_id) ?? "-"}</td>
-                  <td>
-                    <Hours value={c.used} /> / <Hours value={c.included_hours_per_month} />
-                  </td>
-                  <td>
-                    <StatusBadge status={c.status} />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-6">
-        <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-semibold">Pending Approvals</h2>
-            <p className="text-xs opacity-70">
-              {pendingApprovalsTotal} item{pendingApprovalsTotal === 1 ? "" : "s"} waiting - manage actions on Projects
-            </p>
-          </div>
-          <Link href="/projects" className="btn btn-outline btn-sm">
-            Open approval queue
-          </Link>
-        </div>
-
-        {pendingApprovalsTotal === 0 ? (
-          <EmptyState title="Nothing to review" description="No projects, change requests, or milestones are waiting on approval." />
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div>
-              <h3 className="mb-2 text-xs font-medium uppercase tracking-wide opacity-60">Change requests / additional work</h3>
-              {additionalWork.length === 0 ? (
-                <EmptyState title="No pending change requests" />
-              ) : (
-                <DataTable headers={["Request", "Customer", "Est. Hours", "Est. Amount", "Submitted"]}>
-                  {additionalWork.slice(0, 8).map((w) => (
-                    <tr key={w.id}>
-                      <td>
-                        <Link className="link link-hover" href={w.project_id ? `/projects/${w.project_id}` : "/additional-work"}>
-                          {w.title}
-                        </Link>
-                      </td>
-                      <td>{customerName.get(w.customer_id) ?? "-"}</td>
-                      <td>{w.estimated_hours != null ? <Hours value={Number(w.estimated_hours)} /> : "-"}</td>
-                      <td>{w.estimated_amount != null ? <Money value={Number(w.estimated_amount)} /> : "-"}</td>
-                      <td>
-                        <DateText value={w.created_at} />
-                      </td>
-                    </tr>
-                  ))}
-                </DataTable>
-              )}
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide opacity-60">Projects to send / waiting on customer</h3>
-                {projectsNeedingCustomerAction.length === 0 ? (
-                  <EmptyState title="No project approvals pending" />
-                ) : (
-                  <DataTable headers={["Project", "Customer", "Status"]}>
-                    {projectsNeedingCustomerAction.slice(0, 8).map((p) => (
-                      <tr key={p.id}>
-                        <td>
-                          <Link className="link link-hover" href={`/projects/${p.id}`}>
-                            {p.name}
-                          </Link>
-                        </td>
-                        <td>{customerName.get(p.customer_id) ?? "-"}</td>
-                        <td>
-                          <StatusBadge
-                            status={
-                              p.status === "proposed"
-                                ? "proposed"
-                                : p.customer_approval_status === "pending" || p.status === "awaiting_customer_approval"
-                                  ? "pending"
-                                  : p.status
-                            }
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </DataTable>
-                )}
-              </div>
-
-              <div>
-                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide opacity-60">Milestone approvals</h3>
-                {pendingMilestones.length === 0 ? (
-                  <EmptyState title="No milestone approvals pending" />
-                ) : (
-                  <DataTable headers={["Milestone", "Project"]}>
-                    {pendingMilestones.map((m) => {
-                      const project = Array.isArray(m.projects) ? m.projects[0] : m.projects;
-                      return (
-                        <tr key={m.id}>
-                          <td>{m.name}</td>
-                          <td>
-                            <Link className="link link-hover" href={`/projects/${m.project_id}`}>
-                              {project?.name ?? "View project"}
-                            </Link>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </DataTable>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+    <ExecutiveDashboardVisuals
+      fullName={profile.full_name}
+      overdueBalance={overdue}
+      year={new Date().getFullYear()}
+      metrics={[
+        {
+          label: "Active Customers",
+          value: String(customersCountRes.count ?? 0),
+          href: "/customers",
+          tone: "sky",
+        },
+        {
+          label: "Active Contracts",
+          value: String(contractsCountRes.count ?? 0),
+          href: "/contracts?status=active",
+          tone: "violet",
+          hint:
+            contractMetrics.monthlyRecurringRevenue > 0
+              ? `${formatCurrency(contractMetrics.monthlyRecurringRevenue)} MRR`
+              : undefined,
+        },
+        {
+          label: "Open Tickets",
+          value: String(tickets.length),
+          href: "/tickets",
+          tone: "rose",
+          hint: `${slaMissed.length} missed · ${slaAtRisk.length} at risk`,
+        },
+        {
+          label: "Monthly Profit",
+          value: formatCurrency(profitThisMonth),
+          href: "/profitability",
+          tone: profitThisMonth >= 0 ? "emerald" : "amber",
+          hint: `Rev ${formatCurrency(revenueThisMonth)} · AR ${formatCurrency(ar)}`,
+        },
+      ]}
+      ticketStatusSlices={ticketStatusSlices}
+      monthlyFinancials={monthlyFinancials}
+      attentionTickets={ticketsNeedingAttention.slice(0, 5).map((t) => ({
+        id: t.id,
+        ticketNumber: t.ticket_number,
+        title: t.title,
+        customer: customerName.get(t.customer_id) ?? "Customer",
+        priority: t.priority,
+        sla: ticketSlaSeverity(t),
+      }))}
+      hoursAtRisk={contractsOverHours.slice(0, 3).map((c) => ({
+        id: c.id,
+        name: c.name,
+        customer: customerName.get(c.customer_id) ?? "Customer",
+        used: c.used,
+        included: Number(c.included_hours_per_month),
+        pct: c.pct,
+      }))}
+      approvals={approvalChips}
+      pendingApprovalsTotal={pendingApprovalsTotal}
+    />
   );
 }
 

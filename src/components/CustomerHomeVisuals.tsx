@@ -158,21 +158,28 @@ export function CustomerHomeVisuals({
             const tone = TONE_STYLES[metric.tone] ?? TONE_STYLES.sky;
             const body = (
               <>
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                <div className="flex min-w-0 items-start justify-between gap-2">
+                  <p className="min-w-0 flex-1 text-[10px] font-semibold uppercase leading-tight tracking-wide opacity-70 line-clamp-2">
                     {metric.label}
                   </p>
-                  <span className={`rounded-lg p-1.5 ${tone.icon}`}>
+                  <span className={`shrink-0 rounded-lg p-1.5 ${tone.icon}`}>
                     <MetricIcon tone={metric.tone} />
                   </span>
                 </div>
-                <p className={`mt-1 text-xl font-semibold tabular-nums ${tone.value}`}>
+                <p
+                  className={`mt-1 min-w-0 truncate text-lg font-semibold tabular-nums leading-tight sm:text-xl ${tone.value}`}
+                  title={metric.value}
+                >
                   {metric.value}
                 </p>
-                {metric.hint ? <p className="mt-0.5 text-[10px] opacity-60">{metric.hint}</p> : null}
+                {metric.hint ? (
+                  <p className="mt-0.5 min-w-0 text-[10px] leading-snug opacity-60 line-clamp-2" title={metric.hint}>
+                    {metric.hint}
+                  </p>
+                ) : null}
               </>
             );
-            const classes = `rounded-2xl border p-3 shadow-sm ${tone.card}`;
+            const classes = `flex min-h-[5.75rem] min-w-0 flex-col overflow-hidden rounded-2xl border p-3 shadow-sm ${tone.card}`;
             return metric.href ? (
               <Link key={metric.label} href={metric.href} className={`${classes} transition hover:brightness-[0.98]`}>
                 {body}
@@ -248,7 +255,7 @@ export function CustomerHomeVisuals({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-semibold">{t.ticketNumber}</span>
                     <span className="block truncate text-[11px] opacity-70">{t.title}</span>
-                    <span className="mt-0.5 inline-block rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-800">
+                    <span className="mt-0.5 inline-block max-w-full truncate rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium leading-tight text-sky-800">
                       {statusLabel(t.status)}
                     </span>
                   </span>

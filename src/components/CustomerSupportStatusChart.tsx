@@ -103,15 +103,18 @@ export function CustomerSupportStatusChart({
             </div>
           </div>
 
-          <ul className={`text-xs ${compact ? "space-y-1" : "space-y-1.5 text-sm"}`}>
+          <ul className={`min-w-0 text-xs ${compact ? "space-y-1" : "space-y-1.5 text-sm"}`}>
             {chartData.map((row, index) => (
-              <li key={row.status} className="flex items-center gap-2">
+              <li key={row.status} className="flex min-w-0 items-center gap-2">
                 <span
                   className="inline-block size-2 shrink-0 rounded-full"
                   style={{ backgroundColor: colorForStatus(row.status, index) }}
                   aria-hidden
                 />
-                <span className="min-w-0 flex-1 truncate">{row.label}</span>
+                <span className="min-w-0 flex-1 truncate leading-tight" title={row.label}>
+                  {row.label}
+                </span>
+                <span className="shrink-0 tabular-nums opacity-70">{row.count}</span>
               </li>
             ))}
           </ul>
