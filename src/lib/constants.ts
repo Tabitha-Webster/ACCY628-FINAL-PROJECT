@@ -101,7 +101,7 @@ export const ROLE_ACCESS_MATRIX: {
   },
   {
     area: "Accounting / Profitability",
-    description: "Revenue recognition and margin analysis",
+    description: "Revenue recognition overview and margin analysis",
     roles: ["admin", "manager", "billing"],
     financial: true,
     customerData: true,
@@ -162,7 +162,7 @@ export const DEMO_ACCOUNTS = [
   },
   {
     role: "customer" as UserRole,
-    label: "Customer (Chad Corporation)",
+    label: "Customer",
     email: "casey.ortiz@chadcorporation.demo",
     name: "Casey Ortiz",
   },
@@ -283,7 +283,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     // User Access dropdown renders via UserAccessNavTree in AppShell
     // Company Directory dropdown renders via CompanyDirectoryNavTree in AppShell
     // System dropdown renders via SystemNavTree in AppShell
-    { href: "/admin/audit", label: "Audit Trail" },
+    { href: "/admin/audit", label: "Change Log" },
     { href: "/admin/configurations", label: "Configurations" },
     { href: "/controls", label: "Controls and Exceptions" },
   ],

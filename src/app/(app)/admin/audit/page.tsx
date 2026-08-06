@@ -98,7 +98,7 @@ export default async function AdminAuditPage() {
     return (
       <div>
         <PageHeader
-          title="Audit Trail"
+          title="Change Log"
           description="Change-only history for sensitive system records."
           actions={
             <Link href="/admin" className="btn btn-sm btn-outline">
@@ -132,7 +132,7 @@ export default async function AdminAuditPage() {
   return (
     <div>
       <PageHeader
-        title="Audit Trail"
+        title="Change Log"
         description="Who changed sensitive system data, what changed, which record was affected, and when."
         actions={
           <div className="flex flex-wrap gap-2">

@@ -3,11 +3,11 @@
   themes: false;
 }
 
-/* Site-wide typeface — Helvetica Neue (system); sizing/weight/caps/color unchanged */
+/* Site-wide typefaces — colors stay on the ServiceSync navy / powder-blue theme */
 @theme {
-  --font-sans: "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Helvetica Neue", Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-plus-jakarta), "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-plus-jakarta), "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
 }
 
 @plugin "daisyui/theme" {
@@ -39,13 +39,13 @@
   --color-error: oklch(58% 0.22 27);
   --color-error-content: oklch(98% 0.005 250);
 
-  --radius-selector: 0.5rem;
-  --radius-field: 0.5rem;
-  --radius-box: 0.75rem;
+  --radius-selector: 0.75rem;
+  --radius-field: 0.75rem;
+  --radius-box: 1rem;
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
   --border: 1px;
-  --depth: 0;
+  --depth: 1;
   --noise: 0;
 }
 
@@ -78,13 +78,13 @@
   --color-error: oklch(68% 0.19 25);
   --color-error-content: oklch(18% 0.05 25);
 
-  --radius-selector: 0.5rem;
-  --radius-field: 0.5rem;
-  --radius-box: 0.75rem;
+  --radius-selector: 0.75rem;
+  --radius-field: 0.75rem;
+  --radius-box: 1rem;
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
   --border: 1px;
-  --depth: 0;
+  --depth: 1;
   --noise: 0;
 }
 
@@ -93,13 +93,44 @@ body {
   min-height: 100%;
 }
 
-body,
+body {
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01" on, "cv11" on;
+  letter-spacing: -0.011em;
+  line-height: 1.55;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 button,
 input,
 select,
 textarea,
 optgroup {
-  font-family: var(--font-sans);
+  font-family: inherit;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  font-weight: 600;
+}
+
+h1 {
+  letter-spacing: -0.035em;
+}
+
+.font-mono,
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
+  letter-spacing: 0;
 }
 
 /*
@@ -130,6 +161,8 @@ optgroup {
 .app-sidebar nav a,
 .app-sidebar nav button {
   border: 1px solid transparent;
+  font-size: 0.8125rem;
+  letter-spacing: -0.01em;
   transition:
     background-color 180ms ease,
     color 180ms ease,
@@ -210,18 +243,23 @@ optgroup {
   --app-space-3: 1rem;
   --app-space-4: 1.5rem;
   --app-space-5: 2rem;
-  --app-content-gap: var(--app-space-4);
+  --app-space-6: 2.5rem;
+  --app-content-gap: var(--app-space-5);
+  --app-surface-shadow:
+    0 1px 2px color-mix(in oklab, var(--color-base-content) 3.5%, transparent),
+    0 10px 28px -18px color-mix(in oklab, var(--color-primary) 18%, transparent);
 }
 
 .app-page {
   display: flex;
   flex-direction: column;
   gap: var(--app-content-gap);
+  max-width: 88rem;
 }
 
 .app-page-header {
-  padding-bottom: var(--app-space-2);
-  border-bottom: 1px solid color-mix(in oklab, var(--color-base-300) 80%, transparent);
+  padding-bottom: var(--app-space-3);
+  border-bottom: 1px solid color-mix(in oklab, var(--color-base-300) 85%, transparent);
 }
 
 /* PageHeader keeps mb-6 when used alone; nested under PageLayout the margin is cleared. */
@@ -232,13 +270,42 @@ optgroup {
 .app-page-content {
   display: flex;
   flex-direction: column;
-  gap: var(--app-space-4);
+  gap: var(--app-space-5);
   min-width: 0;
+}
+
+.app-main {
+  background:
+    radial-gradient(ellipse 90% 50% at 0% -10%, color-mix(in oklab, var(--color-primary) 5%, transparent), transparent 58%),
+    linear-gradient(180deg, color-mix(in oklab, var(--color-base-200) 55%, var(--color-base-100)) 0%, var(--color-base-100) 18rem);
+}
+
+.app-topbar {
+  backdrop-filter: saturate(1.15) blur(12px);
+  background-color: color-mix(in oklab, var(--color-base-100) 86%, transparent);
+}
+
+.app-main .btn {
+  border-radius: 0.75rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.app-main .input,
+.app-main .select,
+.app-main .textarea {
+  border-radius: 0.75rem;
+}
+
+.app-main .badge {
+  border-radius: 999px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 @media (min-width: 768px) {
   :root {
-    --app-content-gap: var(--app-space-5);
+    --app-content-gap: var(--app-space-6);
   }
 }
 
@@ -251,23 +318,32 @@ optgroup {
 }
 
 .login-page-bg .login-brand-wordmark {
-  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
+  letter-spacing: -0.04em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Login page — light geometric SaaS background (scoped) */
+/* Login page — soft navy wash + light geometric grid (scoped) */
+.login-page-bg {
+  background-color: #f4f8fc;
+}
+
+.login-page-mesh {
+  background:
+    radial-gradient(ellipse 70% 55% at 12% 18%, rgba(183, 221, 242, 0.55), transparent 60%),
+    radial-gradient(ellipse 55% 45% at 88% 78%, rgba(143, 197, 227, 0.35), transparent 55%),
+    linear-gradient(180deg, #f8fbfe 0%, #eef5fa 100%);
+}
+
 .login-page-geo {
   background-color: transparent;
   background-image:
-    linear-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
-    linear-gradient(135deg, rgba(56, 189, 248, 0.07) 1px, transparent 1px);
-  background-size:
-    48px 48px,
-    48px 48px,
-    24px 24px;
-  mask-image: radial-gradient(ellipse at center, black 40%, transparent 88%);
+    linear-gradient(rgba(18, 59, 93, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(18, 59, 93, 0.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse at center, black 35%, transparent 85%);
+  opacity: 0.7;
 }
 
 /* Sign-in button matches ServiceSync logo navy (#0a2655) */
@@ -334,16 +410,18 @@ optgroup {
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" on, "lnum" on;
 }
 
 .rounded-box.border,
 .card.border {
-  border-width: 2px;
+  border-width: 1px;
+  box-shadow: var(--app-surface-shadow);
 }
 
 /* Roomier content panels in the main column, left of the docked nav untouched. */
 .app-main .rounded-box {
-  padding: var(--app-space-4);
+  padding: var(--app-space-4) var(--app-space-5);
 }
 
 .app-main .rounded-box:has(> table),
@@ -358,8 +436,16 @@ optgroup {
 }
 
 .app-main .table :where(th, td) {
-  padding-top: 0.7rem;
-  padding-bottom: 0.7rem;
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+}
+
+.app-main .table thead th {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.62;
 }
 
 [data-density="compact"] .app-main .rounded-box {
@@ -398,6 +484,11 @@ optgroup {
 .filter-table thead th {
   border-bottom: 1px solid var(--color-base-300);
   white-space: nowrap;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.72;
 }
 
 .filter-table .badge {

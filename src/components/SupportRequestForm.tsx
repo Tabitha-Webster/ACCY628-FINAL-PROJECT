@@ -158,7 +158,9 @@ export function SupportRequestForm({ customerId, customerName, createdBy, contra
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="form-control w-full sm:col-span-2">
-          <span className="label-text mb-1 font-medium">Request title *</span>
+          <span className="label-text mb-1 text-xs font-medium uppercase tracking-wide opacity-70">
+            Request Title *
+          </span>
           <input
             className={`input input-bordered w-full ${fieldErrors.title ? "input-error" : ""}`}
             value={title}
@@ -176,7 +178,9 @@ export function SupportRequestForm({ customerId, customerName, createdBy, contra
         </label>
 
         <label className="form-control w-full">
-          <span className="label-text mb-1 font-medium">Issue category *</span>
+          <span className="label-text mb-1 text-xs font-medium uppercase tracking-wide opacity-70">
+            Issue Category *
+          </span>
           <select
             className={`select select-bordered w-full ${fieldErrors.category ? "select-error" : ""}`}
             value={serviceCategory}
@@ -195,7 +199,9 @@ export function SupportRequestForm({ customerId, customerName, createdBy, contra
         </label>
 
         <label className="form-control w-full">
-          <span className="label-text mb-1 font-medium">Priority *</span>
+          <span className="label-text mb-1 text-xs font-medium uppercase tracking-wide opacity-70">
+            Priority *
+          </span>
           <select
             className={`select select-bordered w-full ${fieldErrors.priority ? "select-error" : ""}`}
             value={priority}
@@ -214,7 +220,9 @@ export function SupportRequestForm({ customerId, customerName, createdBy, contra
         </label>
 
         <label className="form-control w-full">
-          <span className="label-text mb-1 font-medium">Customer / organization *</span>
+          <span className="label-text mb-1 text-xs font-medium uppercase tracking-wide opacity-70">
+            Customer / Organization *
+          </span>
           <input
             className="input input-bordered w-full bg-base-200"
             value={customerName}
@@ -227,7 +235,9 @@ export function SupportRequestForm({ customerId, customerName, createdBy, contra
         </label>
 
         <label className="form-control w-full">
-          <span className="label-text mb-1 font-medium">Related active contract *</span>
+          <span className="label-text mb-1 text-xs font-medium uppercase tracking-wide opacity-70">
+            Related Active Contract *
+          </span>
           <select
             className={`select select-bordered w-full ${fieldErrors.contract ? "select-error" : ""}`}
             value={contractId}
@@ -247,7 +257,9 @@ export function SupportRequestForm({ customerId, customerName, createdBy, contra
       </div>
 
       <label className="form-control w-full">
-        <span className="label-text mb-1 font-medium">Detailed issue description *</span>
+        <span className="label-text mb-1 text-xs font-medium uppercase tracking-wide opacity-70">
+          Detailed Issue Description *
+        </span>
         <textarea
           className={`textarea textarea-bordered w-full min-h-36 ${fieldErrors.description ? "textarea-error" : ""}`}
           rows={6}
@@ -261,13 +273,12 @@ export function SupportRequestForm({ customerId, customerName, createdBy, contra
           <span className="mt-1 text-xs text-error">{fieldErrors.description}</span>
         ) : (
           <span className="mt-1 text-xs opacity-60">
-            Include what happened, error messages, when it started, and business impact.
+            Status will be set to New. Ticket number is assigned automatically.
           </span>
         )}
       </label>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs opacity-60">Status will be set to New. Ticket number is assigned automatically.</p>
+      <div className="flex justify-end">
         <button className="btn btn-primary" type="submit" disabled={loading || !hasContracts}>
           {loading ? "Submitting…" : "Submit Request"}
         </button>

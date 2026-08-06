@@ -76,7 +76,9 @@ function SideNav({
             unoptimized
           />
         </Link>
-        <p className="mt-2 text-xs opacity-60">CONTRACT-TO-CASH WORKSPACE</p>
+        <p className="mt-2 text-[0.65rem] font-semibold uppercase tracking-[0.14em] opacity-55">
+          Contract-to-cash workspace
+        </p>
         <div className="mt-3">
           <span className="badge badge-primary badge-outline">{statusLabel(profile.role)}</span>
         </div>
@@ -89,7 +91,7 @@ function SideNav({
             <Fragment key={item.href}>
               <Link
                 href={item.href}
-                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                className={`rounded-lg px-3 py-2 text-[0.8125rem] font-medium tracking-[-0.01em] transition-colors ${
                   active ? "bg-primary text-primary-content" : "hover:bg-base-200"
                 }`}
                 onClick={onNavigate}
@@ -157,8 +159,10 @@ function SideNav({
           >
             <ProfileAvatar name={profile.full_name} />
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold">{profile.full_name}</span>
-              <span className="block truncate text-xs opacity-60">{statusLabel(profile.role)}</span>
+              <span className="block truncate text-sm font-semibold tracking-tight">{profile.full_name}</span>
+              <span className="block truncate text-[0.65rem] font-semibold uppercase tracking-[0.1em] opacity-55">
+                {statusLabel(profile.role)}
+              </span>
             </span>
             <ChevronRight className="h-4 w-4 shrink-0 opacity-50" />
           </button>
@@ -282,7 +286,7 @@ export function AppShell({
         {!collapsed ? (
           <aside
             id={sidebarId}
-            className="app-sidebar flex h-full w-72 flex-col border-r border-base-300"
+            className="app-sidebar flex h-full w-72 flex-col border-r border-base-300 shadow-[8px_0_28px_-20px_rgba(0,0,0,0.45)]"
             aria-label="Side menu"
           >
             <SideNav
@@ -312,8 +316,8 @@ export function AppShell({
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-base-300 bg-base-100 px-4 py-2">
-          <div className={`flex min-w-0 items-center gap-2 ${collapsed ? "pl-10" : "pl-3"}`}>
+        <header className="app-topbar flex shrink-0 flex-wrap items-center gap-3 border-b border-base-300 px-5 py-2.5 md:px-8">
+          <div className={`flex min-w-0 items-center gap-2 ${collapsed ? "pl-10" : "pl-1"}`}>
             {collapsed ? (
               <div className="flex min-w-0 max-w-[14rem] items-center sm:max-w-[17rem] md:max-w-[20rem]">
                 <Image
@@ -340,19 +344,21 @@ export function AppShell({
             />
             <button
               type="button"
-              className="flex items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-base-200"
+              className="flex items-center gap-2 rounded-xl px-2.5 py-1.5 transition-colors hover:bg-base-200"
               onClick={() => setSettingsOpen(true)}
               aria-label={`Open user settings for ${profile.full_name}`}
             >
               <ProfileAvatar name={profile.full_name} size="sm" />
               <span className="hidden text-left lg:block">
-                <span className="block text-sm font-medium">{profile.full_name}</span>
-                <span className="block text-xs opacity-60">{statusLabel(profile.role)}</span>
+                <span className="block text-sm font-semibold tracking-tight">{profile.full_name}</span>
+                <span className="block text-[0.7rem] font-medium uppercase tracking-[0.08em] opacity-55">
+                  {statusLabel(profile.role)}
+                </span>
               </span>
             </button>
           </div>
         </header>
-        <main className="app-main min-h-0 flex-1 overflow-auto p-5 md:p-8">{children}</main>
+        <main className="app-main min-h-0 flex-1 overflow-auto px-5 py-6 md:px-8 md:py-8">{children}</main>
       </div>
 
       {settingsOpen ? (

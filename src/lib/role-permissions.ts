@@ -483,8 +483,8 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
   },
   {
     key: "admin_audit",
-    label: "Audit Trail",
-    description: "Change-only audit history for sensitive system records.",
+    label: "Change Log",
+    description: "Change-only history for sensitive system records.",
     pathPrefixes: ["/admin/audit"],
     defaultRoles: ["admin"],
     adminOnly: true,
