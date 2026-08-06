@@ -37,7 +37,7 @@ const ADMIN_LINKS = [
   {
     href: "/admin/employees",
     title: "Employees",
-    description: "Company employee directory with names and job titles.",
+    description: "Add, edit, or remove staff directory records.",
   },
   {
     href: "/admin/users",
