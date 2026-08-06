@@ -12,6 +12,7 @@ import {
 } from "date-fns";
 import { StatusBadge } from "@/components/ui";
 import { TicketSlaAlerts, SlaConditionBadge } from "@/components/SlaBadges";
+import { ServiceModeBadge } from "@/components/ServiceModeBadge";
 import { evaluateTicketSla } from "@/lib/sla";
 import { formatDateTime } from "@/lib/format";
 import {
@@ -48,12 +49,6 @@ type Props = {
 };
 
 type ViewMode = "week" | "day";
-
-function modeLabel(mode: string | null) {
-  if (mode === "onsite") return "Onsite";
-  if (mode === "remote") return "Remote";
-  return "Mode not set";
-}
 
 export function TechnicianCalendar({ tickets, timezoneLabel }: Props) {
   const [anchor, setAnchor] = useState(() => new Date());
@@ -237,7 +232,12 @@ export function TechnicianCalendar({ tickets, timezoneLabel }: Props) {
                               <StatusBadge status={t.priority} />
                             )}
                             <StatusBadge status={t.status} />
-                            <span className="badge badge-ghost badge-xs">{modeLabel(t.service_mode)}</span>
+                            <ServiceModeBadge
+                              mode={t.service_mode}
+                              location={null}
+                              showLocation={false}
+                              size="xs"
+                            />
                             {sla.overdue ? (
                               <span className="badge badge-error badge-xs">Overdue</span>
                             ) : null}
@@ -298,10 +298,9 @@ export function TechnicianCalendar({ tickets, timezoneLabel }: Props) {
               </dd>
             </div>
             <div>
-              <dt className="opacity-60">Location</dt>
+              <dt className="opacity-60">Job type / location</dt>
               <dd>
-                {modeLabel(selected.service_mode)}
-                {selected.service_location ? ` · ${selected.service_location}` : ""}
+                <ServiceModeBadge mode={selected.service_mode} location={selected.service_location} />
               </dd>
             </div>
             <div>

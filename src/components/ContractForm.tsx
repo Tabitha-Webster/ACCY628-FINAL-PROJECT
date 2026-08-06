@@ -38,6 +38,7 @@ type Props = {
   initialValues?: Partial<ContractFormValues>;
   customers: ContractFormOption[];
   managers: ContractFormOption[];
+  technicians: ContractFormOption[];
 };
 
 function FieldError({ message }: { message?: string }) {
@@ -81,6 +82,7 @@ export function ContractForm({
   initialValues,
   customers,
   managers,
+  technicians,
 }: Props) {
   const router = useRouter();
   const [values, setValues] = useState<ContractFormValues>(() =>
@@ -528,6 +530,20 @@ export function ContractForm({
               </select>
             )}
           </FormField>
+          <FormField label="Technician">
+            <select
+              className={selectControlClass}
+              value={values.assigned_technician_id}
+              onChange={(e) => update("assigned_technician_id", e.target.value)}
+            >
+              <option value="">Unassigned</option>
+              {technicians.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </FormField>
           <FormField label="Contract type *">
             <select
               className={selectControlClass}
@@ -582,12 +598,29 @@ export function ContractForm({
               ))}
             </select>
           </FormField>
+          <FormField label="Billing contact">
+            <input
+              className={fieldControlClass}
+              value={values.billing_contact}
+              onChange={(e) => update("billing_contact", e.target.value)}
+              placeholder="Name or email for invoices"
+            />
+          </FormField>
           <FormField label="Description / notes" className="sm:col-span-2 lg:col-span-3">
             <textarea
               className={textareaControlClass}
               rows={3}
               value={values.description}
               onChange={(e) => update("description", e.target.value)}
+            />
+          </FormField>
+          <FormField label="Scope" className="sm:col-span-2 lg:col-span-3">
+            <textarea
+              className={textareaControlClass}
+              rows={3}
+              value={values.scope}
+              onChange={(e) => update("scope", e.target.value)}
+              placeholder="What work and deliverables this agreement covers"
             />
           </FormField>
         </div>
@@ -694,6 +727,16 @@ export function ContractForm({
               className={`${fieldControlClass} ${fieldErrors.one_time_setup_fee ? "input-error" : ""}`}
               value={values.one_time_setup_fee}
               onChange={(e) => update("one_time_setup_fee", e.target.value)}
+            />
+          </FormField>
+          <FormField label="Deposit amount" error={fieldErrors.deposit_amount}>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              className={`${fieldControlClass} ${fieldErrors.deposit_amount ? "input-error" : ""}`}
+              value={values.deposit_amount}
+              onChange={(e) => update("deposit_amount", e.target.value)}
             />
           </FormField>
           <FormField label="Included support hours *" error={fieldErrors.included_hours_per_month}>
@@ -819,6 +862,37 @@ export function ContractForm({
               onChange={(e) => update("last_invoice_date", e.target.value)}
             />
           </FormField>
+          <FormField label="Software markup %" error={fieldErrors.software_markup_pct}>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              className={`${fieldControlClass} ${fieldErrors.software_markup_pct ? "input-error" : ""}`}
+              value={values.software_markup_pct}
+              onChange={(e) => update("software_markup_pct", e.target.value)}
+              placeholder="e.g. 15"
+            />
+          </FormField>
+          <FormField label="Equipment markup %" error={fieldErrors.equipment_markup_pct}>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              className={`${fieldControlClass} ${fieldErrors.equipment_markup_pct ? "input-error" : ""}`}
+              value={values.equipment_markup_pct}
+              onChange={(e) => update("equipment_markup_pct", e.target.value)}
+              placeholder="e.g. 20"
+            />
+          </FormField>
+          <FormField label="Reimbursable cost policy" className="sm:col-span-2 lg:col-span-3">
+            <textarea
+              className={textareaControlClass}
+              rows={2}
+              value={values.reimbursable_cost_policy}
+              onChange={(e) => update("reimbursable_cost_policy", e.target.value)}
+              placeholder="How pass-through and reimbursable costs are handled"
+            />
+          </FormField>
         </div>
       </section>
 
@@ -827,6 +901,35 @@ export function ContractForm({
           Coverage & SLA
         </h2>
         <div className={fieldGridClass}>
+          <FormField label="Remote support">
+            <div className="flex h-10 w-full items-center justify-start rounded-lg border border-base-300 bg-base-100 px-3">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-primary"
+                checked={values.remote_support}
+                onChange={(e) => update("remote_support", e.target.checked)}
+              />
+            </div>
+          </FormField>
+          <FormField label="Onsite support">
+            <div className="flex h-10 w-full items-center justify-start rounded-lg border border-base-300 bg-base-100 px-3">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-primary"
+                checked={values.onsite_support}
+                onChange={(e) => update("onsite_support", e.target.checked)}
+              />
+            </div>
+          </FormField>
+          <FormField label="After-hours terms" className="sm:col-span-2 lg:col-span-3">
+            <textarea
+              className={textareaControlClass}
+              rows={2}
+              value={values.after_hours_terms}
+              onChange={(e) => update("after_hours_terms", e.target.value)}
+              placeholder="After-hours coverage, rates, or response expectations"
+            />
+          </FormField>
           <FormField label="SLA level">
             <select
               className={selectControlClass}

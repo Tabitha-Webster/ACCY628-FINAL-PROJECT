@@ -11,7 +11,10 @@ export type ContractFormValues = {
   description: string;
   customer_id: string;
   assigned_manager_id: string;
+  assigned_technician_id: string;
   sales_representative_id: string;
+  billing_contact: string;
+  scope: string;
   contract_type: ContractType | string;
   status: ContractStatus | string;
   start_date: string;
@@ -24,6 +27,7 @@ export type ContractFormValues = {
   cancellation_notice_days: string;
   monthly_recurring_fee: string;
   one_time_setup_fee: string;
+  deposit_amount: string;
   included_hours_per_month: string;
   additional_hourly_rate: string;
   overages_allowed: boolean;
@@ -35,10 +39,16 @@ export type ContractFormValues = {
   next_invoice_date: string;
   last_invoice_date: string;
   billing_status: string;
+  software_markup_pct: string;
+  equipment_markup_pct: string;
+  reimbursable_cost_policy: string;
   included_services: string;
   excluded_services: string;
   supported_locations: string;
   supported_users_devices: string;
+  remote_support: boolean;
+  onsite_support: boolean;
+  after_hours_terms: string;
   sla_critical_response_hours: string;
   sla_high_response_hours: string;
   sla_medium_response_hours: string;
@@ -79,7 +89,10 @@ export function emptyContractFormValues(overrides?: Partial<ContractFormValues>)
     description: "",
     customer_id: "",
     assigned_manager_id: "",
+    assigned_technician_id: "",
     sales_representative_id: "",
+    billing_contact: "",
+    scope: "",
     contract_type: "managed_support",
     status: "draft",
     start_date: "",
@@ -92,6 +105,7 @@ export function emptyContractFormValues(overrides?: Partial<ContractFormValues>)
     cancellation_notice_days: "30",
     monthly_recurring_fee: "0",
     one_time_setup_fee: "0",
+    deposit_amount: "0",
     included_hours_per_month: "0",
     additional_hourly_rate: "0",
     overages_allowed: true,
@@ -103,10 +117,16 @@ export function emptyContractFormValues(overrides?: Partial<ContractFormValues>)
     next_invoice_date: "",
     last_invoice_date: "",
     billing_status: "unbilled",
+    software_markup_pct: "",
+    equipment_markup_pct: "",
+    reimbursable_cost_policy: "",
     included_services: "",
     excluded_services: "",
     supported_locations: "",
     supported_users_devices: "",
+    remote_support: true,
+    onsite_support: true,
+    after_hours_terms: "",
     sla_critical_response_hours: "",
     sla_high_response_hours: "",
     sla_medium_response_hours: "",
@@ -171,6 +191,27 @@ export function validateContractFormValues(
     fieldErrors.one_time_setup_fee = "Setup fee cannot be negative.";
   }
 
+  const deposit = parseNumber(values.deposit_amount);
+  if (values.deposit_amount.trim() !== "" && (deposit == null || deposit < 0)) {
+    fieldErrors.deposit_amount = "Deposit cannot be negative.";
+  }
+
+  const softwareMarkup = parseNumber(values.software_markup_pct);
+  if (
+    values.software_markup_pct.trim() !== "" &&
+    (softwareMarkup == null || softwareMarkup < 0)
+  ) {
+    fieldErrors.software_markup_pct = "Software markup cannot be negative.";
+  }
+
+  const equipmentMarkup = parseNumber(values.equipment_markup_pct);
+  if (
+    values.equipment_markup_pct.trim() !== "" &&
+    (equipmentMarkup == null || equipmentMarkup < 0)
+  ) {
+    fieldErrors.equipment_markup_pct = "Equipment markup cannot be negative.";
+  }
+
   const hourlyRate = parseNumber(values.additional_hourly_rate);
   if (values.overages_allowed) {
     if (hourlyRate == null) {
@@ -233,7 +274,10 @@ export function contractFormToPayload(
     description: nullable(values.description),
     customer_id: values.customer_id,
     assigned_manager_id: nullable(values.assigned_manager_id),
+    assigned_technician_id: nullable(values.assigned_technician_id),
     sales_representative_id: nullable(values.sales_representative_id),
+    billing_contact: nullable(values.billing_contact),
+    scope: nullable(values.scope),
     contract_type: values.contract_type,
     status: values.status,
     start_date: values.start_date,
@@ -246,6 +290,7 @@ export function contractFormToPayload(
     cancellation_notice_days: numOrNull(values.cancellation_notice_days),
     monthly_recurring_fee: numOrZero(values.monthly_recurring_fee),
     one_time_setup_fee: numOrZero(values.one_time_setup_fee),
+    deposit_amount: numOrZero(values.deposit_amount),
     included_hours_per_month: numOrZero(values.included_hours_per_month),
     additional_hourly_rate: values.overages_allowed
       ? numOrZero(values.additional_hourly_rate)
@@ -266,10 +311,16 @@ export function contractFormToPayload(
       }),
     last_invoice_date: nullable(values.last_invoice_date),
     billing_status: (values.billing_status || "unbilled") as BillingStatus,
+    software_markup_pct: numOrNull(values.software_markup_pct),
+    equipment_markup_pct: numOrNull(values.equipment_markup_pct),
+    reimbursable_cost_policy: nullable(values.reimbursable_cost_policy),
     included_services: nullable(values.included_services),
     excluded_services: nullable(values.excluded_services),
     supported_locations: nullable(values.supported_locations),
     supported_users_devices: nullable(values.supported_users_devices),
+    remote_support: values.remote_support,
+    onsite_support: values.onsite_support,
+    after_hours_terms: nullable(values.after_hours_terms),
     sla_critical_response_hours: numOrNull(values.sla_critical_response_hours),
     sla_high_response_hours: numOrNull(values.sla_high_response_hours),
     sla_medium_response_hours: numOrNull(values.sla_medium_response_hours),

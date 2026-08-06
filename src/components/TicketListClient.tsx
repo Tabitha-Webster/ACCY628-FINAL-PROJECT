@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { EmptyState, StatusBadge } from "@/components/ui";
 import { TicketSlaAlerts, SlaConditionBadge } from "@/components/SlaBadges";
+import { ServiceModeBadge } from "@/components/ServiceModeBadge";
 import { formatDateTime } from "@/lib/format";
 import { evaluateTicketSla, type SlaCondition } from "@/lib/sla";
 import type { UserRole } from "@/lib/constants";
@@ -27,6 +28,8 @@ export type TicketListItem = {
   target_resolution_at: string | null;
   actual_response_at: string | null;
   completed_at: string | null;
+  service_mode: string | null;
+  service_location: string | null;
 };
 
 type FilterOption = { id: string; name: string };
@@ -281,6 +284,7 @@ export function TicketListClient({
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <StatusBadge status={t.status} />
+                    <ServiceModeBadge mode={t.service_mode} location={t.service_location} />
                     <SlaConditionBadge condition={overall} />
                     {t.service_category ? <span className="badge badge-ghost">{t.service_category}</span> : null}
                   </div>
@@ -328,6 +332,7 @@ export function TicketListClient({
                   <th>Customer</th>
                   <th>Contract</th>
                   <th>Priority</th>
+                  <th>Job type</th>
                   <th>Category</th>
                   <th>Technician</th>
                   <th>Status</th>
@@ -363,6 +368,14 @@ export function TicketListClient({
                       <td className="max-w-40 truncate">{t.contract_label ?? "—"}</td>
                       <td>
                         <CriticalPriorityBadge priority={t.priority} />
+                      </td>
+                      <td>
+                        <ServiceModeBadge
+                          mode={t.service_mode}
+                          location={t.service_location}
+                          showLocation={false}
+                          size="xs"
+                        />
                       </td>
                       <td>{t.service_category ?? "—"}</td>
                       <td>{t.assigned_technician_name ?? "Unassigned"}</td>

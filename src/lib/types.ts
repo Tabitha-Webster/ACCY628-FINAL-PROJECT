@@ -97,6 +97,7 @@ export type Contract = {
   renewal_type: RenewalType | string | null;
   cancellation_notice_days: number | null;
   assigned_manager_id: string | null;
+  assigned_technician_id: string | null;
   sales_representative_id: string | null;
   description: string | null;
   scope: string | null;

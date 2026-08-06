@@ -55,6 +55,7 @@ export type ProfileNameJoin = {
 export type ContractDetailRow = Contract & {
   customers: ContractCustomerJoin | ContractCustomerJoin[] | null;
   assigned_manager: ProfileNameJoin | ProfileNameJoin[] | null;
+  assigned_technician: ProfileNameJoin | ProfileNameJoin[] | null;
   sales_representative: ProfileNameJoin | ProfileNameJoin[] | null;
   created_by_profile: ProfileNameJoin | ProfileNameJoin[] | null;
   updated_by_profile: ProfileNameJoin | ProfileNameJoin[] | null;
@@ -64,7 +65,7 @@ const LIST_SELECT =
   "id, customer_id, contract_number, name, status, contract_type, start_date, end_date, renewal_type, payment_terms, billing_frequency, billing_method, billing_status, next_invoice_date, last_invoice_date, monthly_recurring_fee, included_hours_per_month, additional_hourly_rate, overages_allowed, overage_charges, assigned_manager_id, customers(id, name), assigned_manager:profiles!contracts_assigned_manager_id_fkey(id, full_name)";
 
 const DETAIL_SELECT =
-  "*, customers(id, name, primary_contact, contact_email, service_address, status), assigned_manager:profiles!contracts_assigned_manager_id_fkey(id, full_name, email), sales_representative:profiles!contracts_sales_representative_id_fkey(id, full_name, email), created_by_profile:profiles!contracts_created_by_fkey(id, full_name, email), updated_by_profile:profiles!contracts_updated_by_fkey(id, full_name, email)";
+  "*, customers(id, name, primary_contact, contact_email, service_address, status), assigned_manager:profiles!contracts_assigned_manager_id_fkey(id, full_name, email), assigned_technician:profiles!contracts_assigned_technician_id_fkey(id, full_name, email), sales_representative:profiles!contracts_sales_representative_id_fkey(id, full_name, email), created_by_profile:profiles!contracts_created_by_fkey(id, full_name, email), updated_by_profile:profiles!contracts_updated_by_fkey(id, full_name, email)";
 
 function unwrapOne<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;

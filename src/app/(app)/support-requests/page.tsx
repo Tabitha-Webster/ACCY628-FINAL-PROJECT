@@ -18,7 +18,7 @@ export default async function SupportRequestsPage() {
     supabase
       .from("support_tickets")
       .select(
-        "id, ticket_number, customer_id, contract_id, title, description, priority, status, service_category, submitted_at, target_response_at, target_resolution_at, actual_response_at, completed_at, assigned_technician_id, customer_resolution_summary"
+        "id, ticket_number, customer_id, contract_id, title, description, priority, status, service_category, submitted_at, target_response_at, target_resolution_at, actual_response_at, completed_at, assigned_technician_id, customer_resolution_summary, service_mode, service_location"
       )
       .eq("customer_id", customerId)
       .order("submitted_at", { ascending: false }),
@@ -87,6 +87,8 @@ export default async function SupportRequestsPage() {
     target_resolution_at: t.target_resolution_at,
     actual_response_at: t.actual_response_at,
     completed_at: t.completed_at,
+    service_mode: t.service_mode ?? null,
+    service_location: t.service_location ?? null,
   }));
 
   const categories = Array.from(

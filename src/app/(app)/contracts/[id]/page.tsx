@@ -119,6 +119,7 @@ export default async function ContractDetailPage({
   const contract = contractData as ContractDetailRow;
   const customer = unwrapCustomer(contract) as ContractCustomerJoin | null;
   const manager = unwrapAssignedManager(contract);
+  const technician = unwrapProfile(contract.assigned_technician);
   const salesRep = unwrapProfile(contract.sales_representative);
   const createdBy = unwrapProfile(contract.created_by_profile);
   const updatedBy = unwrapProfile(contract.updated_by_profile);
@@ -336,6 +337,7 @@ export default async function ContractDetailPage({
               )
             }
           />
+          <Field label="Technician" value={technician?.full_name} />
           <Field
             label="Customer Contact"
             value={
