@@ -21,7 +21,7 @@ import { EmptyState, StatusBadge } from "@/components/ui";
 import { TicketSlaAlerts } from "@/components/SlaBadges";
 import { serviceModeLabel } from "@/components/ServiceModeBadge";
 import { formatDateTime, statusLabel } from "@/lib/format";
-import { evaluateTicketSla, slaConditionLabel, type SlaCondition } from "@/lib/sla";
+import { evaluateTicketSla, evaluateTechnicianTicketSla, slaConditionLabel, type SlaCondition } from "@/lib/sla";
 import type { UserRole } from "@/lib/constants";
 
 export type TicketListItem = {
@@ -117,8 +117,8 @@ const PRIORITY_COLORS = {
   Low: "#0ea5e9",
 } as const;
 
-function liveSla(ticket: TicketListItem) {
-  return evaluateTicketSla(ticket);
+function liveSla(ticket: TicketListItem, role: string) {
+  return role === "technician" ? evaluateTechnicianTicketSla(ticket) : evaluateTicketSla(ticket);
 }
 
 export function TicketListClient({
@@ -148,7 +148,7 @@ export function TicketListClient({
   const enriched = useMemo(
     () =>
       tickets.map((t) => {
-        const sla = liveSla(t);
+        const sla = liveSla(t, role);
         return { ticket: t, sla };
       }),
     [tickets]
@@ -478,7 +478,7 @@ export function TicketListClient({
                       </div>
                       {(isCritical || sla.overdue || overall === "at_risk") && (
                         <div className="mt-2">
-                          <TicketSlaAlerts ticket={t} />
+                          <TicketSlaAlerts ticket={t} forTechnician={role === "technician"} />
                         </div>
                       )}
                       <dl className="mt-2 grid gap-1 text-[11px] opacity-70 sm:grid-cols-3">

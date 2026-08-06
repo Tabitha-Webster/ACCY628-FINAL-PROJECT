@@ -15,7 +15,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { formatDateTime, statusLabel } from "@/lib/format";
 import {
-  evaluateTicketSla,
+  evaluateTechnicianTicketSla,
   localDateKey,
   localDateKeyFromIso,
   slaConditionLabel,
@@ -245,7 +245,7 @@ function TicketCard({
   onStartWork: (ticket: WorkspaceTicket) => void;
   starting: boolean;
 }) {
-  const live = evaluateTicketSla(ticket);
+  const live = evaluateTechnicianTicketSla(ticket);
   const isCritical = ticket.priority === "critical";
   const isOverdue = live.overdue;
   const isOpen = OPEN_STATUSES.has(ticket.status);
@@ -297,7 +297,7 @@ function TicketCard({
           </p>
           {(isCritical || isOverdue || live.overall === "at_risk") && (
             <div className="mt-2">
-              <TicketSlaAlerts ticket={ticket} />
+              <TicketSlaAlerts ticket={ticket} forTechnician />
             </div>
           )}
           <p className="mt-1 text-sm font-medium">{ticket.title}</p>
@@ -593,7 +593,7 @@ export function TechnicianWorkspaceClient({
       tickets
         .filter((t) => OPEN_STATUSES.has(t.status))
         .map((t) => {
-          const live = evaluateTicketSla(t);
+          const live = evaluateTechnicianTicketSla(t);
           return {
             ...t,
             sla: live.overall,

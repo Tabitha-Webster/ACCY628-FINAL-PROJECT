@@ -15,7 +15,7 @@ import {
 } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
 import { hoursRemaining, usagePercentage } from "@/lib/calculations";
-import { evaluateTicketSla } from "@/lib/sla";
+import { evaluateTicketSla, evaluateTechnicianTicketSla } from "@/lib/sla";
 import { completedTicketQualityIssues } from "@/lib/technicianWork";
 import { SlaConditionBadge, TicketSlaAlerts } from "@/components/SlaBadges";
 import { ServiceModeBadge, serviceModeLabel } from "@/components/ServiceModeBadge";
@@ -212,7 +212,7 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
 
   const totalTicketHours = timeEntries.reduce((sum, e) => sum + Number(e.hours_worked), 0);
   const hasTimeEntryDescriptions = timeEntries.some((e) => Boolean(e.description?.trim()));
-  const sla = evaluateTicketSla(t);
+  const sla = role === "technician" ? evaluateTechnicianTicketSla(t) : evaluateTicketSla(t);
   const isOverdue = sla.overdue;
   const qualityIssues = completedTicketQualityIssues({
     status: t.status,
@@ -243,7 +243,7 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
         }
       />
 
-      <TicketSlaAlerts ticket={t} />
+      <TicketSlaAlerts ticket={t} forTechnician={role === "technician"} />
 
       {qualityIssues.length > 0 ? (
         <div className="alert alert-error text-sm" role="alert">

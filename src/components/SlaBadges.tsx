@@ -1,5 +1,10 @@
 import { StatusBadge } from "@/components/ui";
-import { evaluateTicketSla, slaConditionBadgeKey, type SlaCondition } from "@/lib/sla";
+import {
+  evaluateTicketSla,
+  evaluateTechnicianTicketSla,
+  slaConditionBadgeKey,
+  type SlaCondition,
+} from "@/lib/sla";
 
 export function SlaConditionBadge({ condition }: { condition: SlaCondition }) {
   return <StatusBadge status={slaConditionBadgeKey(condition)} />;
@@ -7,8 +12,10 @@ export function SlaConditionBadge({ condition }: { condition: SlaCondition }) {
 
 export function TicketSlaAlerts({
   ticket,
+  forTechnician = false,
 }: {
   ticket: {
+    title?: string | null;
     submitted_at?: string | null;
     target_response_at?: string | null;
     target_resolution_at?: string | null;
@@ -17,8 +24,10 @@ export function TicketSlaAlerts({
     status?: string | null;
     priority?: string | null;
   };
+  /** When true (technician views), stale demo deadlines are freshened so Missed/Overdue stay rare. */
+  forTechnician?: boolean;
 }) {
-  const sla = evaluateTicketSla(ticket);
+  const sla = forTechnician ? evaluateTechnicianTicketSla(ticket) : evaluateTicketSla(ticket);
 
   return (
     <div className="space-y-2">

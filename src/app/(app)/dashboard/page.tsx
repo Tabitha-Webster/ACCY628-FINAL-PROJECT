@@ -27,6 +27,8 @@ import {
 import { AR_AGING_BUCKETS, arAgingBucket, usagePercentage, usageStatus, hoursRemaining } from "@/lib/calculations";
 import {
   evaluateTicketSla,
+  evaluateTechnicianTicketSla,
+  withDemoSlaTargets,
   localDateKey,
   localDateKeyFromIso,
 } from "@/lib/sla";
@@ -798,7 +800,8 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
   }
 
   function toWorkspaceTicket(t: (typeof ticketRows)[number]): WorkspaceTicket {
-    const live = evaluateTicketSla(t);
+    const display = withDemoSlaTargets(t);
+    const live = evaluateTechnicianTicketSla(display);
     const contract = t.contract_id ? contractById.get(t.contract_id) : null;
     const included = contract ? Number(contract.included_hours_per_month ?? 0) : null;
     const used = t.contract_id ? hoursByContract.get(t.contract_id) ?? 0 : null;
@@ -817,11 +820,11 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
         : null,
       priority: t.priority,
       status: t.status,
-      submitted_at: t.submitted_at,
-      target_response_at: t.target_response_at,
-      target_resolution_at: t.target_resolution_at,
-      actual_response_at: t.actual_response_at,
-      completed_at: t.completed_at,
+      submitted_at: display.submitted_at,
+      target_response_at: display.target_response_at,
+      target_resolution_at: display.target_resolution_at,
+      actual_response_at: display.actual_response_at,
+      completed_at: display.completed_at,
       technician_notes: t.technician_notes,
       customer_resolution_summary: t.customer_resolution_summary,
       classification: t.classification,

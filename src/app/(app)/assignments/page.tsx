@@ -12,7 +12,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { roleHomePath } from "@/lib/constants";
 import { EmptyState, StatusBadge, DateText, ErrorState } from "@/components/ui";
 import { AdHocWorkForm } from "@/components/AdHocWorkForm";
-import { slaStatus } from "@/lib/calculations";
+import { evaluateTechnicianTicketSla } from "@/lib/sla";
 import type { SupportTicket } from "@/lib/types";
 
 const OPEN_TICKET_STATUSES = [
@@ -52,15 +52,18 @@ const TONE = {
 } as const;
 
 function ticketSlaSeverity(t: {
+  title?: string | null;
+  submitted_at?: string | null;
   target_response_at: string | null;
   target_resolution_at: string | null;
   actual_response_at: string | null;
   completed_at: string | null;
+  status?: string | null;
+  priority?: string | null;
 }) {
-  const response = slaStatus(t.target_response_at, t.actual_response_at);
-  const resolution = slaStatus(t.target_resolution_at, t.completed_at);
-  if (response === "missed" || resolution === "missed") return "missed";
-  if (response === "at_risk" || resolution === "at_risk") return "at_risk";
+  const sla = evaluateTechnicianTicketSla(t);
+  if (sla.overdue || sla.overall === "missed") return "missed";
+  if (sla.overall === "at_risk") return "at_risk";
   return "on_track";
 }
 
