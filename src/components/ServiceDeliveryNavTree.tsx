@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Minus, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { hrefAllowedByPageKeys } from "@/lib/role-permissions";
 
 type NavLink = { href: string; label: string };
 
-const COMPANY_DIRECTORY_LINKS: NavLink[] = [
-  { href: "/customers", label: "Customers" },
-  { href: "/admin/employees", label: "Employees" },
+const SERVICE_DELIVERY_LINKS: NavLink[] = [
+  { href: "/tickets", label: "Support Tickets" },
+  { href: "/projects", label: "Project Tasks" },
+  { href: "/time-costs", label: "Submit Time and Costs" },
+  { href: "/additional-work", label: "Additional Work Requests" },
 ];
 
 function pathActive(pathname: string, href: string) {
@@ -21,7 +23,7 @@ function sectionActive(pathname: string, links: NavLink[]) {
   return links.some((link) => pathActive(pathname, link.href));
 }
 
-export function CompanyDirectoryNavTree({
+export function ServiceDeliveryNavTree({
   onNavigate,
   allowedPageKeys = null,
 }: {
@@ -30,10 +32,16 @@ export function CompanyDirectoryNavTree({
 }) {
   const pathname = usePathname();
   const links = useMemo(
-    () => COMPANY_DIRECTORY_LINKS.filter((link) => hrefAllowedByPageKeys(link.href, allowedPageKeys)),
+    () => SERVICE_DELIVERY_LINKS.filter((link) => hrefAllowedByPageKeys(link.href, allowedPageKeys)),
     [allowedPageKeys]
   );
-  const [open, setOpen] = useState(() => sectionActive(pathname, COMPANY_DIRECTORY_LINKS));
+  const [open, setOpen] = useState(() => sectionActive(pathname, SERVICE_DELIVERY_LINKS));
+
+  useEffect(() => {
+    if (sectionActive(pathname, SERVICE_DELIVERY_LINKS)) {
+      setOpen(true);
+    }
+  }, [pathname]);
 
   if (links.length === 0) return null;
 
@@ -45,7 +53,7 @@ export function CompanyDirectoryNavTree({
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <span>Company Directory</span>
+        <span>Service Delivery</span>
         {open ? (
           <Minus className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
         ) : (

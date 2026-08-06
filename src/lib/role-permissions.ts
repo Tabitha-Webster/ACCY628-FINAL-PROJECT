@@ -194,7 +194,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
   },
   {
     key: "operations",
-    label: "Service Operations",
+    label: "Service Tickets",
     description: "SLA monitoring and open work overview.",
     pathPrefixes: ["/operations"],
     defaultRoles: ["admin", "manager"],

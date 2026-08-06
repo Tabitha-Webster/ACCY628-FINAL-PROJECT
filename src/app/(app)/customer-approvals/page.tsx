@@ -77,7 +77,7 @@ export default async function CustomerApprovalsPage() {
   if (errorMessage) {
     return (
       <PageLayout
-        title="Customer Approvals"
+        title="New Customers"
         description="Admin only: approve or reject newly registered customer accounts."
         actions={
           <ButtonLink href="/customers" variant="secondary" size="sm">
@@ -94,8 +94,8 @@ export default async function CustomerApprovalsPage() {
 
   return (
     <PageLayout
-      title="Customer Approvals"
-      description="Admin only. Approve or reject newly registered customer accounts. Pending accounts can sign in but cannot use contracts, tickets, or billing."
+      title="New Customers"
+      description="Admin only. Customer accounts created from Create a new customer account stay Pending Approval here until you Approve or Reject them. Until approved, they can sign in but cannot use contracts, tickets, or billing."
       actions={
         <ButtonLink href="/customers" variant="secondary" size="sm">
           View customers
@@ -107,7 +107,7 @@ export default async function CustomerApprovalsPage() {
       {!schemaIncomplete && pending.length === 0 && rows.length === 0 ? (
         <EmptyState
           title="No customers awaiting review"
-          description="New customer signups with Pending Approval status will appear here."
+          description="When someone uses Create a new customer account on the login page, they appear here with Pending Approval status."
         />
       ) : null}
 

@@ -8,9 +8,11 @@ import { hrefAllowedByPageKeys } from "@/lib/role-permissions";
 
 type NavLink = { href: string; label: string };
 
-const COMPANY_DIRECTORY_LINKS: NavLink[] = [
-  { href: "/customers", label: "Customers" },
-  { href: "/admin/employees", label: "Employees" },
+export const MANAGER_BILLING_FINANCE_LINKS: NavLink[] = [
+  { href: "/time-cost-approvals", label: "Approve Time & Costs" },
+  { href: "/profitability", label: "Profitability" },
+  { href: "/billing-collections", label: "Billing and Collections" },
+  { href: "/payments", label: "Payment History" },
 ];
 
 function pathActive(pathname: string, href: string) {
@@ -21,7 +23,7 @@ function sectionActive(pathname: string, links: NavLink[]) {
   return links.some((link) => pathActive(pathname, link.href));
 }
 
-export function CompanyDirectoryNavTree({
+export function ManagerBillingFinanceNavTree({
   onNavigate,
   allowedPageKeys = null,
 }: {
@@ -30,10 +32,10 @@ export function CompanyDirectoryNavTree({
 }) {
   const pathname = usePathname();
   const links = useMemo(
-    () => COMPANY_DIRECTORY_LINKS.filter((link) => hrefAllowedByPageKeys(link.href, allowedPageKeys)),
+    () => MANAGER_BILLING_FINANCE_LINKS.filter((link) => hrefAllowedByPageKeys(link.href, allowedPageKeys)),
     [allowedPageKeys]
   );
-  const [open, setOpen] = useState(() => sectionActive(pathname, COMPANY_DIRECTORY_LINKS));
+  const [open, setOpen] = useState(() => sectionActive(pathname, MANAGER_BILLING_FINANCE_LINKS));
 
   if (links.length === 0) return null;
 
@@ -45,7 +47,7 @@ export function CompanyDirectoryNavTree({
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <span>Company Directory</span>
+        <span>Billing &amp; Finance</span>
         {open ? (
           <Minus className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
         ) : (

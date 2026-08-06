@@ -72,12 +72,7 @@ export function ExportCustomersButton({ rows, role }: Props) {
   }
 
   if (!allowed) {
-    return (
-      <div className="alert alert-warning text-sm py-2 max-w-xl" role="alert">
-        Access denied for customer list export. Your role ({role}) cannot download the customer
-        list. Only Admin, Manager, Executive, and Billing & Accounting may export.
-      </div>
-    );
+    return null;
   }
 
   return (

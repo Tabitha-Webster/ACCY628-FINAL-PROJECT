@@ -391,10 +391,10 @@ export function TimeCostForm({
           {timeMessage ? <div className="alert alert-success text-sm">{timeMessage}</div> : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="form-control">
-              <span className="label-text mb-1">Customer</span>
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">Customer</span>
               <select
-                className="select select-bordered"
+                className="select select-bordered w-full"
                 value={tCustomerId}
                 onChange={(e) => {
                   setTCustomerId(e.target.value);
@@ -412,12 +412,12 @@ export function TimeCostForm({
                 ))}
               </select>
             </label>
-            <label className="form-control">
-              <span className="label-text mb-1">
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">
                 Contract <span className="text-error">*</span>
               </span>
               <select
-                className="select select-bordered"
+                className="select select-bordered w-full"
                 value={tContractId}
                 onChange={(e) => setTContractId(e.target.value)}
                 disabled={!tCustomerId}
@@ -431,12 +431,12 @@ export function TimeCostForm({
                 ))}
               </select>
             </label>
-            <label className="form-control">
-              <span className="label-text mb-1">
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">
                 Related Ticket <span className="text-error">*</span>
               </span>
               <select
-                className="select select-bordered"
+                className="select select-bordered w-full"
                 value={tTicketId}
                 onChange={(e) => setTTicketId(e.target.value)}
                 disabled={!tCustomerId}
@@ -450,12 +450,12 @@ export function TimeCostForm({
                 ))}
               </select>
             </label>
-            <label className="form-control">
-              <span className="label-text mb-1">
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">
                 Related Project <span className="text-error">*</span>
               </span>
               <select
-                className="select select-bordered"
+                className="select select-bordered w-full"
                 value={tProjectId}
                 onChange={(e) => setTProjectId(e.target.value)}
                 disabled={!tCustomerId}
@@ -472,28 +472,28 @@ export function TimeCostForm({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            <label className="form-control">
-              <span className="label-text mb-1">Date</span>
-              <input type="date" className="input input-bordered" value={workDate} onChange={(e) => setWorkDate(e.target.value)} required />
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">Date</span>
+              <input type="date" className="input input-bordered w-full" value={workDate} onChange={(e) => setWorkDate(e.target.value)} required />
             </label>
-            <label className="form-control">
-              <span className="label-text mb-1">
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">
                 Hours Worked <span className="text-error">*</span>
               </span>
               <input
                 type="number"
                 min="0.25"
                 step="0.25"
-                className="input input-bordered"
+                className="input input-bordered w-full"
                 value={hours}
                 onChange={(e) => setHours(e.target.value)}
                 required
               />
             </label>
-            <label className="form-control">
-              <span className="label-text mb-1">Classification</span>
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">Classification</span>
               <select
-                className="select select-bordered"
+                className="select select-bordered w-full"
                 value={classification}
                 onChange={(e) => setClassification(e.target.value as typeof classification)}
               >
@@ -504,20 +504,20 @@ export function TimeCostForm({
             </label>
           </div>
 
-          <label className="form-control">
-            <span className="label-text mb-1">Work Category (optional)</span>
+          <label className="flex w-full flex-col gap-1">
+            <span className="text-sm font-medium">Work Category (optional)</span>
             <input
-              className="input input-bordered"
+              className="input input-bordered w-full"
               placeholder="e.g. Network, Server, Helpdesk"
               value={workCategory}
               onChange={(e) => setWorkCategory(e.target.value)}
             />
           </label>
 
-          <label className="form-control">
-            <span className="label-text mb-1">Description</span>
+          <label className="flex w-full flex-col gap-1">
+            <span className="text-sm font-medium">Description</span>
             <textarea
-              className="textarea textarea-bordered"
+              className="textarea textarea-bordered w-full"
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -554,10 +554,10 @@ export function TimeCostForm({
           {costMessage ? <div className="alert alert-success text-sm">{costMessage}</div> : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="form-control">
-              <span className="label-text mb-1">Customer</span>
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">Customer</span>
               <select
-                className="select select-bordered"
+                className="select select-bordered w-full"
                 value={cCustomerId}
                 onChange={(e) => {
                   setCCustomerId(e.target.value);
@@ -575,12 +575,12 @@ export function TimeCostForm({
                 ))}
               </select>
             </label>
-            <label className="form-control">
-              <span className="label-text mb-1">
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">
                 Contract <span className="text-error">*</span>
               </span>
               <select
-                className="select select-bordered"
+                className="select select-bordered w-full"
                 value={cContractId}
                 onChange={(e) => setCContractId(e.target.value)}
                 disabled={!cCustomerId}
@@ -594,12 +594,12 @@ export function TimeCostForm({
                 ))}
               </select>
             </label>
-            <label className="form-control">
-              <span className="label-text mb-1">
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">
                 Related Ticket <span className="text-error">*</span>
               </span>
               <select
-                className="select select-bordered"
+                className="select select-bordered w-full"
                 value={cTicketId}
                 onChange={(e) => setCTicketId(e.target.value)}
                 disabled={!cCustomerId}
@@ -613,12 +613,12 @@ export function TimeCostForm({
                 ))}
               </select>
             </label>
-            <label className="form-control">
-              <span className="label-text mb-1">
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">
                 Related Project <span className="text-error">*</span>
               </span>
               <select
-                className="select select-bordered"
+                className="select select-bordered w-full"
                 value={cProjectId}
                 onChange={(e) => setCProjectId(e.target.value)}
                 disabled={!cCustomerId}
@@ -635,10 +635,10 @@ export function TimeCostForm({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            <label className="form-control">
-              <span className="label-text mb-1">Category</span>
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">Category</span>
               <select
-                className="select select-bordered"
+                className="select select-bordered w-full"
                 value={costCategory}
                 onChange={(e) => {
                   const cat = e.target.value as (typeof COST_CATEGORIES)[number];
@@ -653,43 +653,43 @@ export function TimeCostForm({
                 ))}
               </select>
             </label>
-            <label className="form-control">
-              <span className="label-text mb-1">Vendor (optional)</span>
-              <input className="input input-bordered" value={vendor} onChange={(e) => setVendor(e.target.value)} />
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">Vendor (optional)</span>
+              <input className="input input-bordered w-full" value={vendor} onChange={(e) => setVendor(e.target.value)} />
             </label>
-            <label className="form-control">
-              <span className="label-text mb-1">Date</span>
-              <input type="date" className="input input-bordered" value={costDate} onChange={(e) => setCostDate(e.target.value)} required />
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">Date</span>
+              <input type="date" className="input input-bordered w-full" value={costDate} onChange={(e) => setCostDate(e.target.value)} required />
             </label>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="form-control">
-              <span className="label-text mb-1">Internal Cost ($)</span>
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">Internal Cost ($)</span>
               <input
                 type="number"
                 min="0"
                 step="0.01"
-                className="input input-bordered"
+                className="input input-bordered w-full"
                 value={internalCost}
                 onChange={(e) => setInternalCost(e.target.value)}
                 required
               />
             </label>
-            <label className="form-control">
-              <span className="label-text mb-1">Markup % (e.g. 0.15 = 15%)</span>
-              <input type="number" min="0" step="0.01" className="input input-bordered" value={markupPct} onChange={(e) => setMarkupPct(e.target.value)} />
+            <label className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">Markup % (e.g. 0.15 = 15%)</span>
+              <input type="number" min="0" step="0.01" className="input input-bordered w-full" value={markupPct} onChange={(e) => setMarkupPct(e.target.value)} />
             </label>
           </div>
 
-          <label className="form-control">
-            <span className="label-text mb-1">Receipt / Reference (optional)</span>
-            <input className="input input-bordered" value={receiptReference} onChange={(e) => setReceiptReference(e.target.value)} />
+          <label className="flex w-full flex-col gap-1">
+            <span className="text-sm font-medium">Receipt / Reference (optional)</span>
+            <input className="input input-bordered w-full" value={receiptReference} onChange={(e) => setReceiptReference(e.target.value)} />
           </label>
 
-          <label className="form-control">
-            <span className="label-text mb-1">Description</span>
-            <textarea className="textarea textarea-bordered" rows={3} value={costDescription} onChange={(e) => setCostDescription(e.target.value)} required />
+          <label className="flex w-full flex-col gap-1">
+            <span className="text-sm font-medium">Description</span>
+            <textarea className="textarea textarea-bordered w-full" rows={3} value={costDescription} onChange={(e) => setCostDescription(e.target.value)} required />
           </label>
 
           <div className="rounded-xl border border-violet-200/80 bg-white/80 p-3 text-sm shadow-sm">

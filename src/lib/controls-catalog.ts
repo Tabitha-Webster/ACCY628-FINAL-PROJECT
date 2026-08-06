@@ -199,7 +199,7 @@ export const CONTROLS_CATALOG: ControlItem[] = [
       "service operations tracks every open ticket against its SLA target and highlights any ticket at risk of, or already past, its resolution deadline",
     whatIf: "What if an SLA deadline is about to be missed?",
     where: [
-      { href: "/operations", label: "Service Operations" },
+      { href: "/operations", label: "Service Tickets" },
       { href: "/tickets", label: "Support tickets" },
     ],
   },
