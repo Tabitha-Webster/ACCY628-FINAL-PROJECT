@@ -21,8 +21,10 @@ import {
   CONTRACT_BILLING_STATUS_LABELS,
   CONTRACT_STATUSES,
   CONTRACT_STATUS_LABELS,
+  CONTRACT_TYPE_DESCRIPTIONS,
   CONTRACT_TYPE_LABELS,
   CONTRACT_TYPES,
+  isKnownContractType,
   RENEWAL_TYPES,
   WORK_LOCATION_LABELS,
   WORK_LOCATIONS,
@@ -55,17 +57,34 @@ function joinServiceList(items: string[]): string {
   return items.join("\n");
 }
 
+const fieldControlClass = "input input-bordered h-10 w-full text-left";
+const selectControlClass = "select select-bordered h-10 w-full text-left";
+const textareaControlClass = "textarea textarea-bordered w-full text-left";
+const fieldGridClass = "grid grid-cols-1 items-start gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-3";
+
 function ServiceChecklist({
   options,
   selected,
   onToggle,
+  onAddCustom,
+  customPlaceholder = "Type a service not listed above",
 }: {
   options: readonly string[];
   selected: string[];
   onToggle: (option: string) => void;
+  onAddCustom: (option: string) => void;
+  customPlaceholder?: string;
 }) {
+  const [customText, setCustomText] = useState("");
   const selectedSet = new Set(selected);
   const extras = selected.filter((item) => !options.includes(item));
+
+  function addCustom() {
+    const next = customText.trim();
+    if (!next) return;
+    onAddCustom(next);
+    setCustomText("");
+  }
 
   return (
     <div className="w-full space-y-2">
@@ -98,16 +117,41 @@ function ServiceChecklist({
                 />
                 <span>
                   {option}
-                  <span className="ml-1 opacity-50">(existing)</span>
+                  <span className="ml-1 opacity-50">(custom)</span>
                 </span>
               </label>
             </li>
           ))}
         </ul>
       </div>
+      <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+        <input
+          className={`${fieldControlClass} sm:flex-1`}
+          value={customText}
+          onChange={(e) => setCustomText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addCustom();
+            }
+          }}
+          placeholder={customPlaceholder}
+        />
+        <button
+          type="button"
+          className="btn btn-outline btn-sm shrink-0"
+          onClick={(e) => {
+            e.preventDefault();
+            addCustom();
+          }}
+          disabled={!customText.trim()}
+        >
+          Add
+        </button>
+      </div>
       <p className="text-xs opacity-60">
         {selected.length === 0
-          ? "Select one or more options."
+          ? "Select options above, or type your own and click Add."
           : `${selected.length} selected`}
       </p>
     </div>
@@ -181,11 +225,6 @@ function FormField({
   );
 }
 
-const fieldControlClass = "input input-bordered h-10 w-full text-left";
-const selectControlClass = "select select-bordered h-10 w-full text-left";
-const textareaControlClass = "textarea textarea-bordered w-full text-left";
-const fieldGridClass = "grid grid-cols-1 items-start gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-3";
-
 export function ContractForm({
   mode,
   profileId,
@@ -212,6 +251,16 @@ export function ContractForm({
   );
   const [newCustomerName, setNewCustomerName] = useState("");
   const [customerOptions, setCustomerOptions] = useState(customers);
+  const [contractTypeMode, setContractTypeMode] = useState<"preset" | "custom">(() =>
+    isKnownContractType(emptyContractFormValues(initialValues).contract_type)
+      ? "preset"
+      : "custom"
+  );
+  const [customContractType, setCustomContractType] = useState(() => {
+    const initial = emptyContractFormValues(initialValues).contract_type;
+    return isKnownContractType(initial) ? "" : initial;
+  });
+  const [openContractTypeHelp, setOpenContractTypeHelp] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<ContractFormFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -473,6 +522,17 @@ export function ContractForm({
       ? current.filter((item) => item !== option)
       : [...current, option];
     update(field, joinServiceList(next));
+  }
+
+  function addCustomService(
+    field: "included_services" | "excluded_services",
+    option: string
+  ) {
+    const trimmed = option.trim();
+    if (!trimmed) return;
+    const current = parseServiceList(values[field]);
+    if (current.some((item) => item.toLowerCase() === trimmed.toLowerCase())) return;
+    update(field, joinServiceList([...current, trimmed]));
   }
 
   async function goNextStep() {
@@ -1102,19 +1162,93 @@ export function ContractForm({
             </select>
           )}
         </FormField>
-        <FormField label="Contract type *">
-          <select
-            className={selectControlClass}
-            value={values.contract_type}
-            onChange={(e) => update("contract_type", e.target.value)}
-          >
-            {CONTRACT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {CONTRACT_TYPE_LABELS[t]}
-              </option>
-            ))}
-          </select>
-        </FormField>
+        <div className="form-control w-full min-w-0 sm:col-span-2">
+          <span className="mb-1.5 block min-h-5 text-left text-xs font-medium leading-5 tracking-wide opacity-70">
+            Contract type *
+          </span>
+          <div className="w-full space-y-2">
+            <div className="w-full overflow-hidden rounded-lg border border-base-300 bg-base-100">
+              <ul className="divide-y divide-base-300">
+                {CONTRACT_TYPES.map((t) => {
+                  const selected =
+                    contractTypeMode === "preset" && values.contract_type === t;
+                  const helpOpen = openContractTypeHelp === t;
+                  return (
+                    <li key={t} className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-sm">
+                          <input
+                            type="radio"
+                            name="contract_type_choice"
+                            className="radio radio-primary radio-sm"
+                            checked={selected}
+                            onChange={() => {
+                              setContractTypeMode("preset");
+                              setCustomContractType("");
+                              update("contract_type", t);
+                            }}
+                          />
+                          <span className="truncate">{CONTRACT_TYPE_LABELS[t]}</span>
+                        </label>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs btn-circle shrink-0 text-base font-semibold opacity-70"
+                          aria-label={`What does ${CONTRACT_TYPE_LABELS[t]} mean?`}
+                          aria-expanded={helpOpen}
+                          onClick={() =>
+                            setOpenContractTypeHelp((prev) => (prev === t ? null : t))
+                          }
+                        >
+                          ?
+                        </button>
+                      </div>
+                      {helpOpen ? (
+                        <p className="mt-1.5 pl-8 text-xs leading-snug opacity-70">
+                          {CONTRACT_TYPE_DESCRIPTIONS[t]}
+                        </p>
+                      ) : null}
+                    </li>
+                  );
+                })}
+                <li className="px-3 py-2">
+                  <label className="flex cursor-pointer items-center gap-3 text-sm">
+                    <input
+                      type="radio"
+                      name="contract_type_choice"
+                      className="radio radio-primary radio-sm"
+                      checked={contractTypeMode === "custom"}
+                      onChange={() => {
+                        setContractTypeMode("custom");
+                        setOpenContractTypeHelp(null);
+                        update("contract_type", customContractType.trim());
+                      }}
+                    />
+                    <span>Other (type your own)</span>
+                  </label>
+                  {contractTypeMode === "custom" ? (
+                    <input
+                      className={`${fieldControlClass} mt-2 ${
+                        fieldErrors.contract_type ? "input-error" : ""
+                      }`}
+                      value={customContractType}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setCustomContractType(next);
+                        update("contract_type", next);
+                      }}
+                      placeholder="Type a contract type not listed above"
+                      autoFocus
+                    />
+                  ) : null}
+                </li>
+              </ul>
+            </div>
+            <p className="text-xs opacity-60">
+              Choose a standard type, or pick Other to enter a custom contract type.
+            </p>
+          </div>
+          <FieldError message={fieldErrors.contract_type} />
+        </div>
         <FormField label="Status *" error={fieldErrors.status}>
           <select
             className={`${selectControlClass} ${fieldErrors.status ? "select-error" : ""}`}
@@ -1632,6 +1766,8 @@ export function ContractForm({
             options={CONTRACT_COVERED_SERVICE_OPTIONS}
             selected={coveredServicesSelected}
             onToggle={(option) => toggleService("included_services", option)}
+            onAddCustom={(option) => addCustomService("included_services", option)}
+            customPlaceholder="Type a covered service not listed above"
           />
         </FormField>
         <FormField label="Excluded services" className="sm:col-span-2 lg:col-span-3">
@@ -1639,6 +1775,8 @@ export function ContractForm({
             options={CONTRACT_EXCLUDED_SERVICE_OPTIONS}
             selected={excludedServicesSelected}
             onToggle={(option) => toggleService("excluded_services", option)}
+            onAddCustom={(option) => addCustomService("excluded_services", option)}
+            customPlaceholder="Type an excluded service not listed above"
           />
         </FormField>
       </div>

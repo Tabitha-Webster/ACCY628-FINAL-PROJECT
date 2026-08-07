@@ -18,7 +18,13 @@ import {
   validateHoursWorked,
 } from "@/lib/time-cost-rules";
 
-type Option = { id: string; label: string; customerId: string };
+type Option = {
+  id: string;
+  label: string;
+  customerId: string;
+  projectId?: string | null;
+  contractId?: string | null;
+};
 
 type Defaults = {
   customerId?: string;
@@ -115,6 +121,24 @@ export function TimeCostForm({
   const ticketsForCustomer = (customerId: string) => tickets.filter((t) => t.customerId === customerId);
   const projectsForCustomer = (customerId: string) => projects.filter((p) => p.customerId === customerId);
 
+  function applyTicketChoice(
+    ticketId: string,
+    setTicketId: (id: string) => void,
+    setProjectId: (id: string) => void,
+    setContractId?: (id: string) => void,
+    currentContractId?: string
+  ) {
+    setTicketId(ticketId);
+    const ticket = tickets.find((t) => t.id === ticketId);
+    setProjectId(ticket?.projectId ?? "");
+    if (setContractId && ticket?.contractId) {
+      setContractId(ticket.contractId);
+    } else if (setContractId && !currentContractId && ticket?.customerId) {
+      const firstContract = contracts.find((c) => c.customerId === ticket.customerId);
+      if (firstContract) setContractId(firstContract.id);
+    }
+  }
+
   const selectedContract = contracts.find((c) => c.id === tContractId);
   const previewLaborCost = useMemo(() => laborCost(Number(hours) || 0, internalCostRate), [hours, internalCostRate]);
   const previewBillingRate = classification === "billable" ? selectedContract?.additionalHourlyRate ?? 0 : 0;
@@ -138,12 +162,8 @@ export function TimeCostForm({
       setTimeError("Please select a contract.");
       return;
     }
-    if (!tTicketId) {
-      setTimeError("Please select a related ticket.");
-      return;
-    }
-    if (!tProjectId) {
-      setTimeError("Please select a related project.");
+    if (!tTicketId && !tProjectId) {
+      setTimeError("Select a related ticket or related project.");
       return;
     }
     if (!description.trim()) {
@@ -187,8 +207,8 @@ export function TimeCostForm({
     }
 
     const dupWarning = duplicateTimeEntryWarning(dayRows ?? [], {
-      supportTicketId: tTicketId,
-      projectId: tProjectId,
+      supportTicketId: tTicketId || null,
+      projectId: tProjectId || null,
       hoursWorked: hoursNum,
     });
     if (dupWarning) {
@@ -203,8 +223,8 @@ export function TimeCostForm({
       technician_id: technicianId,
       customer_id: tCustomerId,
       contract_id: tContractId,
-      support_ticket_id: tTicketId,
-      project_id: tProjectId,
+      support_ticket_id: tTicketId || null,
+      project_id: tProjectId || null,
       work_date: workDate,
       hours_worked: hoursNum,
       work_category: workCategory || null,
@@ -247,12 +267,8 @@ export function TimeCostForm({
       setCostError(contractIssue.message);
       return;
     }
-    if (!cTicketId) {
-      setCostError("Please select a related ticket.");
-      return;
-    }
-    if (!cProjectId) {
-      setCostError("Please select a related project.");
+    if (!cTicketId && !cProjectId) {
+      setCostError("Select a related ticket or related project.");
       return;
     }
     if (!costDescription.trim()) {
@@ -312,8 +328,8 @@ export function TimeCostForm({
     const { error } = await supabase.from("direct_costs").insert({
       customer_id: cCustomerId,
       contract_id: cContractId,
-      support_ticket_id: cTicketId,
-      project_id: cProjectId,
+      support_ticket_id: cTicketId || null,
+      project_id: cProjectId || null,
       cost_category: costCategory,
       vendor: vendor || null,
       cost_date: costDate,
@@ -432,15 +448,20 @@ export function TimeCostForm({
               </select>
             </label>
             <label className="flex w-full flex-col gap-1">
-              <span className="text-sm font-medium">
-                Related Ticket <span className="text-error">*</span>
-              </span>
+              <span className="text-sm font-medium">Related Ticket</span>
               <select
                 className="select select-bordered w-full"
                 value={tTicketId}
-                onChange={(e) => setTTicketId(e.target.value)}
+                onChange={(e) =>
+                  applyTicketChoice(
+                    e.target.value,
+                    setTTicketId,
+                    setTProjectId,
+                    setTContractId,
+                    tContractId
+                  )
+                }
                 disabled={!tCustomerId}
-                required
               >
                 <option value="">Select a ticket…</option>
                 {ticketsForCustomer(tCustomerId).map((t) => (
@@ -451,15 +472,12 @@ export function TimeCostForm({
               </select>
             </label>
             <label className="flex w-full flex-col gap-1">
-              <span className="text-sm font-medium">
-                Related Project <span className="text-error">*</span>
-              </span>
+              <span className="text-sm font-medium">Related Project</span>
               <select
                 className="select select-bordered w-full"
                 value={tProjectId}
                 onChange={(e) => setTProjectId(e.target.value)}
                 disabled={!tCustomerId}
-                required
               >
                 <option value="">Select a project…</option>
                 {projectsForCustomer(tCustomerId).map((p) => (
@@ -468,6 +486,9 @@ export function TimeCostForm({
                   </option>
                 ))}
               </select>
+              <span className="text-xs opacity-60">
+                Auto-fills from the ticket when one is selected. Ticket or project is enough.
+              </span>
             </label>
           </div>
 
@@ -595,15 +616,20 @@ export function TimeCostForm({
               </select>
             </label>
             <label className="flex w-full flex-col gap-1">
-              <span className="text-sm font-medium">
-                Related Ticket <span className="text-error">*</span>
-              </span>
+              <span className="text-sm font-medium">Related Ticket</span>
               <select
                 className="select select-bordered w-full"
                 value={cTicketId}
-                onChange={(e) => setCTicketId(e.target.value)}
+                onChange={(e) =>
+                  applyTicketChoice(
+                    e.target.value,
+                    setCTicketId,
+                    setCProjectId,
+                    setCContractId,
+                    cContractId
+                  )
+                }
                 disabled={!cCustomerId}
-                required
               >
                 <option value="">Select a ticket…</option>
                 {ticketsForCustomer(cCustomerId).map((t) => (
@@ -614,15 +640,12 @@ export function TimeCostForm({
               </select>
             </label>
             <label className="flex w-full flex-col gap-1">
-              <span className="text-sm font-medium">
-                Related Project <span className="text-error">*</span>
-              </span>
+              <span className="text-sm font-medium">Related Project</span>
               <select
                 className="select select-bordered w-full"
                 value={cProjectId}
                 onChange={(e) => setCProjectId(e.target.value)}
                 disabled={!cCustomerId}
-                required
               >
                 <option value="">Select a project…</option>
                 {projectsForCustomer(cCustomerId).map((p) => (
@@ -631,6 +654,9 @@ export function TimeCostForm({
                   </option>
                 ))}
               </select>
+              <span className="text-xs opacity-60">
+                Auto-fills from the ticket when one is selected. Ticket or project is enough.
+              </span>
             </label>
           </div>
 
