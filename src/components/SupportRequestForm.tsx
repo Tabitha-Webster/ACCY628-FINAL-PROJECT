@@ -31,11 +31,7 @@ const ISSUE_CATEGORIES = [
   "Other",
 ] as const;
 
-const DESCRIPTION_PLACEHOLDER = `Please include:
-• What happened
-• Any error messages you saw
-• When the issue began
-• How this is affecting your business`;
+const DESCRIPTION_PLACEHOLDER = "Describe the issue (optional details welcome).";
 
 type FieldErrors = {
   title?: string;
@@ -64,9 +60,7 @@ export function SupportRequestForm({ customerId, customerName, createdBy, contra
     const next: FieldErrors = {};
     if (!title.trim()) next.title = "Please enter a request title.";
     if (!description.trim()) {
-      next.description = "Please describe the issue, including what happened and when it began.";
-    } else if (description.trim().length < 20) {
-      next.description = "Please add a bit more detail so our team can help (at least a few sentences).";
+      next.description = "Please enter a description.";
     }
     if (!serviceCategory) next.category = "Please select an issue category.";
     if (!priority) next.priority = "Please select a priority.";
