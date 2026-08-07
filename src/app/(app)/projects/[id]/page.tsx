@@ -57,7 +57,13 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           .maybeSingle()
       : Promise.resolve({ data: null }),
     supabase.from("project_milestones").select("*").eq("project_id", p.id).order("due_date", { ascending: true }),
-    supabase.from("time_entries").select("hours_worked, labor_cost").eq("project_id", p.id),
+    supabase
+      .from("time_entries")
+      .select(
+        "id, technician_id, work_date, hours_worked, classification, description, labor_cost, approval_status, billing_status, work_category"
+      )
+      .eq("project_id", p.id)
+      .order("work_date", { ascending: false }),
     supabase.from("direct_costs").select("cost_category, internal_cost, billable_amount").eq("project_id", p.id),
     supabase
       .from("additional_work_requests")
@@ -99,7 +105,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       ...(p.customer_approved_by ? [p.customer_approved_by] : []),
     ])
   );
-  const technicianIds = Array.from(new Set(assignments.map((a) => a.technician_id)));
+  const technicianIds = Array.from(
+    new Set([
+      ...assignments.map((a) => a.technician_id),
+      ...timeEntries.map((t) => t.technician_id).filter((id): id is string => Boolean(id)),
+    ])
+  );
   const profileIds = Array.from(
     new Set([...requesterIds, ...technicianIds, p.project_manager_id].filter(Boolean))
   ) as string[];
@@ -305,6 +316,68 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   </tr>
                 ))}
               </DataTable>
+            </div>
+          ) : null}
+
+          {isInternal ? (
+            <div>
+              <h2 className="mb-2 text-sm font-semibold">Technician time entries</h2>
+              {timeEntries.length === 0 ? (
+                <EmptyState
+                  title="No time entries yet"
+                  description="When technicians submit hours for this project, they will appear here."
+                />
+              ) : (
+                <DataTable
+                  headers={[
+                    "Technician",
+                    "Work date",
+                    "Hours",
+                    "Classification",
+                    "Category",
+                    "Labor cost",
+                    "Approval",
+                    "Billing",
+                    "Description",
+                  ]}
+                >
+                  {timeEntries.map((entry) => (
+                    <tr key={entry.id}>
+                      <td className="whitespace-nowrap font-medium">
+                        {profileName.get(entry.technician_id) ?? "—"}
+                      </td>
+                      <td className="whitespace-nowrap">
+                        <DateText value={entry.work_date} />
+                      </td>
+                      <td className="tabular-nums">
+                        <Hours value={Number(entry.hours_worked)} />
+                      </td>
+                      <td>
+                        <StatusBadge status={entry.classification} />
+                      </td>
+                      <td className="max-w-[8rem] truncate text-sm">
+                        {entry.work_category ?? "—"}
+                      </td>
+                      <td className="tabular-nums">
+                        <Money value={Number(entry.labor_cost ?? 0)} />
+                      </td>
+                      <td>
+                        <StatusBadge status={entry.approval_status} />
+                      </td>
+                      <td>
+                        {entry.billing_status ? (
+                          <StatusBadge status={entry.billing_status} />
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="max-w-xs truncate text-sm" title={entry.description}>
+                        {entry.description || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </DataTable>
+              )}
             </div>
           ) : null}
         </div>

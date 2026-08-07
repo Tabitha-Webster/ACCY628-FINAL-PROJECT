@@ -2,7 +2,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { EmptyState, StatusBadge, Money, DateText, ErrorState } from "@/components/ui";
+import { isManagerRole } from "@/lib/constants";
+import {
+  EmptyState,
+  StatusBadge,
+  Money,
+  DateText,
+  ErrorState,
+  DataTable,
+  Hours,
+} from "@/components/ui";
 import { grossMarginPct, marginBand } from "@/lib/calculations";
 import type { ApprovalStatus, Project, ProjectMilestone, ProjectStatus } from "@/lib/types";
 import { ProjectActions, ProjectChangeRequestPanel } from "@/components/ProjectActions";
@@ -183,9 +192,23 @@ export default async function ProjectsPage({
     change_request_procedure: string | null;
   } | null = null;
   let customerContracts: { id: string; label: string }[] = [];
+  let selectedTimeEntries: {
+    id: string;
+    technician_id: string;
+    work_date: string;
+    hours_worked: number;
+    classification: string;
+    description: string;
+    labor_cost: number | null;
+    approval_status: ApprovalStatus;
+    billing_status: string | null;
+    work_category: string | null;
+  }[] = [];
+  let technicianNames: Record<string, string> = {};
 
   if (selectedProject) {
-    const [crsRes, contractRes, customerContractsRes] = await Promise.all([
+    const showTimeEntries = isManagerRole(profile.role) || profile.role === "billing";
+    const [crsRes, contractRes, customerContractsRes, timeEntriesRes] = await Promise.all([
       supabase
         .from("additional_work_requests")
         .select(
@@ -207,6 +230,15 @@ export default async function ProjectsPage({
         .select("id, name, contract_number")
         .eq("customer_id", selectedProject.customer_id)
         .order("created_at", { ascending: false }),
+      showTimeEntries
+        ? supabase
+            .from("time_entries")
+            .select(
+              "id, technician_id, work_date, hours_worked, classification, description, labor_cost, approval_status, billing_status, work_category"
+            )
+            .eq("project_id", selectedProject.id)
+            .order("work_date", { ascending: false })
+        : Promise.resolve({ data: [] as typeof selectedTimeEntries }),
     ]);
     selectedChangeRequests = crsRes.data ?? [];
     selectedContract = contractRes.data;
@@ -214,10 +246,15 @@ export default async function ProjectsPage({
       id: c.id,
       label: `${c.contract_number} · ${c.name}`,
     }));
+    selectedTimeEntries = timeEntriesRes.data ?? [];
     const requesterIds = Array.from(new Set(selectedChangeRequests.map((r) => r.requested_by)));
-    if (requesterIds.length) {
-      const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", requesterIds);
-      requesterNames = Object.fromEntries((profiles ?? []).map((p) => [p.id, p.full_name]));
+    const techIds = Array.from(new Set(selectedTimeEntries.map((e) => e.technician_id)));
+    const profileIds = Array.from(new Set([...requesterIds, ...techIds]));
+    if (profileIds.length) {
+      const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", profileIds);
+      const nameMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p.full_name]));
+      requesterNames = Object.fromEntries(requesterIds.map((id) => [id, nameMap[id] ?? "—"]));
+      technicianNames = Object.fromEntries(techIds.map((id) => [id, nameMap[id] ?? "—"]));
     }
   }
 
@@ -382,6 +419,7 @@ export default async function ProjectsPage({
           </section>
 
           {selectedProject ? (
+            <>
             <div className="grid gap-3 xl:grid-cols-2">
               <div className="space-y-3">
                 <div className="rounded-2xl border border-base-300 bg-base-100 p-4 shadow-sm">
@@ -434,6 +472,22 @@ export default async function ProjectsPage({
                         <Money value={Number(selectedProject.amount_collected ?? 0)} />
                       </p>
                     </div>
+                    <div className="rounded-xl border border-base-300 bg-base-200/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-base-content/60">
+                        Hours logged
+                      </p>
+                      <p className="font-semibold tabular-nums text-base-content">
+                        <Hours value={hoursByProject.get(selectedProject.id) ?? 0} />
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-base-300 bg-base-200/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-base-content/60">
+                        Time entries
+                      </p>
+                      <p className="font-semibold tabular-nums text-base-content">
+                        {selectedTimeEntries.length}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -474,6 +528,81 @@ export default async function ProjectsPage({
                 </div>
               </div>
             </div>
+
+            {isManagerRole(profile.role) || profile.role === "billing" ? (
+              <section className="rounded-2xl border border-base-300 bg-base-100 p-4 shadow-sm">
+                <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                  <div>
+                    <h2 className="text-lg font-semibold tracking-tight text-base-content">
+                      Technician time entries
+                    </h2>
+                    <p className="text-sm text-base-content/70">
+                      Hours technicians logged against {selectedProject.name}.
+                    </p>
+                  </div>
+                  <p className="text-sm tabular-nums text-base-content/80">
+                    <Hours value={hoursByProject.get(selectedProject.id) ?? 0} /> total
+                  </p>
+                </div>
+                {selectedTimeEntries.length === 0 ? (
+                  <EmptyState
+                    title="No time entries yet"
+                    description="When technicians submit hours for this project, they will appear here."
+                  />
+                ) : (
+                  <DataTable
+                    headers={[
+                      "Technician",
+                      "Work date",
+                      "Hours",
+                      "Classification",
+                      "Category",
+                      "Labor cost",
+                      "Approval",
+                      "Billing",
+                      "Description",
+                    ]}
+                  >
+                    {selectedTimeEntries.map((entry) => (
+                      <tr key={entry.id}>
+                        <td className="whitespace-nowrap font-medium">
+                          {technicianNames[entry.technician_id] ?? "—"}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          <DateText value={entry.work_date} />
+                        </td>
+                        <td className="tabular-nums">
+                          <Hours value={Number(entry.hours_worked)} />
+                        </td>
+                        <td>
+                          <StatusBadge status={entry.classification} />
+                        </td>
+                        <td className="max-w-[8rem] truncate text-sm">
+                          {entry.work_category ?? "—"}
+                        </td>
+                        <td className="tabular-nums">
+                          <Money value={Number(entry.labor_cost ?? 0)} />
+                        </td>
+                        <td>
+                          <StatusBadge status={entry.approval_status} />
+                        </td>
+                        <td>
+                          {entry.billing_status ? (
+                            <StatusBadge status={entry.billing_status} />
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="max-w-xs truncate text-sm" title={entry.description}>
+                          {entry.description || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </DataTable>
+                )}
+              </section>
+            ) : null}
+            </>
           ) : (
             <EmptyState
               title="Select a project"
