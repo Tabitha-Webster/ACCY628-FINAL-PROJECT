@@ -117,26 +117,45 @@ export function TimeCostForm({
   const [costError, setCostError] = useState<string | null>(null);
   const [costMessage, setCostMessage] = useState<string | null>(null);
 
-  const contractsForCustomer = (customerId: string) => contracts.filter((c) => c.customerId === customerId);
-  const ticketsForCustomer = (customerId: string) => tickets.filter((t) => t.customerId === customerId);
-  const projectsForCustomer = (customerId: string) => projects.filter((p) => p.customerId === customerId);
-
   function applyTicketChoice(
     ticketId: string,
     setTicketId: (id: string) => void,
-    setProjectId: (id: string) => void,
-    setContractId?: (id: string) => void,
-    currentContractId?: string
+    setCustomerId: (id: string) => void,
+    setContractId: (id: string) => void,
+    setProjectId: (id: string) => void
   ) {
     setTicketId(ticketId);
-    const ticket = tickets.find((t) => t.id === ticketId);
-    setProjectId(ticket?.projectId ?? "");
-    if (setContractId && ticket?.contractId) {
-      setContractId(ticket.contractId);
-    } else if (setContractId && !currentContractId && ticket?.customerId) {
-      const firstContract = contracts.find((c) => c.customerId === ticket.customerId);
-      if (firstContract) setContractId(firstContract.id);
+    if (!ticketId) {
+      setCustomerId("");
+      setContractId("");
+      setProjectId("");
+      return;
     }
+    const ticket = tickets.find((t) => t.id === ticketId);
+    if (!ticket) return;
+    setCustomerId(ticket.customerId);
+    setContractId(
+      ticket.contractId ||
+        contracts.find((c) => c.customerId === ticket.customerId)?.id ||
+        ""
+    );
+    setProjectId(
+      ticket.projectId ||
+        projects.find((p) => p.customerId === ticket.customerId)?.id ||
+        ""
+    );
+  }
+
+  function labelForCustomer(customerId: string) {
+    return customers.find((c) => c.id === customerId)?.name ?? "";
+  }
+
+  function labelForContract(contractId: string) {
+    return contracts.find((c) => c.id === contractId)?.label ?? "";
+  }
+
+  function labelForProject(projectId: string) {
+    return projects.find((p) => p.id === projectId)?.label ?? "";
   }
 
   const selectedContract = contracts.find((c) => c.id === tContractId);
@@ -154,16 +173,16 @@ export function TimeCostForm({
     setTimeMessage(null);
 
     const hoursNum = Number(hours);
+    if (!tTicketId) {
+      setTimeError("Please select a related ticket.");
+      return;
+    }
     if (!tCustomerId) {
-      setTimeError("Please select a customer.");
+      setTimeError("Selected ticket is missing a customer.");
       return;
     }
     if (!tContractId) {
-      setTimeError("Please select a contract.");
-      return;
-    }
-    if (!tTicketId && !tProjectId) {
-      setTimeError("Select a related ticket or related project.");
+      setTimeError("Selected ticket is missing a contract.");
       return;
     }
     if (!description.trim()) {
@@ -258,17 +277,17 @@ export function TimeCostForm({
     setCostMessage(null);
 
     const costNum = Number(internalCost);
+    if (!cTicketId) {
+      setCostError("Please select a related ticket.");
+      return;
+    }
     if (!cCustomerId) {
-      setCostError("Please select a customer.");
+      setCostError("Selected ticket is missing a customer.");
       return;
     }
     const contractIssue = requireContract(cContractId);
     if (contractIssue) {
       setCostError(contractIssue.message);
-      return;
-    }
-    if (!cTicketId && !cProjectId) {
-      setCostError("Select a related ticket or related project.");
       return;
     }
     if (!costDescription.trim()) {
@@ -407,48 +426,10 @@ export function TimeCostForm({
           {timeMessage ? <div className="alert alert-success text-sm">{timeMessage}</div> : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex w-full flex-col gap-1">
-              <span className="text-sm font-medium">Customer</span>
-              <select
-                className="select select-bordered w-full"
-                value={tCustomerId}
-                onChange={(e) => {
-                  setTCustomerId(e.target.value);
-                  setTContractId("");
-                  setTTicketId("");
-                  setTProjectId("");
-                }}
-                required
-              >
-                <option value="">Select a customer…</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex w-full flex-col gap-1">
+            <label className="flex w-full flex-col gap-1 sm:col-span-2">
               <span className="text-sm font-medium">
-                Contract <span className="text-error">*</span>
+                Related Ticket <span className="text-error">*</span>
               </span>
-              <select
-                className="select select-bordered w-full"
-                value={tContractId}
-                onChange={(e) => setTContractId(e.target.value)}
-                disabled={!tCustomerId}
-                required
-              >
-                <option value="">Select a contract…</option>
-                {contractsForCustomer(tCustomerId).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex w-full flex-col gap-1">
-              <span className="text-sm font-medium">Related Ticket</span>
               <select
                 className="select select-bordered w-full"
                 value={tTicketId}
@@ -456,40 +437,56 @@ export function TimeCostForm({
                   applyTicketChoice(
                     e.target.value,
                     setTTicketId,
-                    setTProjectId,
+                    setTCustomerId,
                     setTContractId,
-                    tContractId
+                    setTProjectId
                   )
                 }
-                disabled={!tCustomerId}
+                required
               >
                 <option value="">Select a ticket…</option>
-                {ticketsForCustomer(tCustomerId).map((t) => (
+                {tickets.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.label}
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="flex w-full flex-col gap-1">
-              <span className="text-sm font-medium">Related Project</span>
-              <select
-                className="select select-bordered w-full"
-                value={tProjectId}
-                onChange={(e) => setTProjectId(e.target.value)}
-                disabled={!tCustomerId}
-              >
-                <option value="">Select a project…</option>
-                {projectsForCustomer(tCustomerId).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
               <span className="text-xs opacity-60">
-                Auto-fills from the ticket when one is selected. Ticket or project is enough.
+                Customer, contract, and project fill in automatically from the ticket.
               </span>
             </label>
+            <div className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">Customer</span>
+              <div className="input input-bordered flex h-12 w-full items-center bg-base-200/50 text-sm">
+                {tCustomerId ? (
+                  labelForCustomer(tCustomerId)
+                ) : (
+                  <span className="opacity-50">Select a ticket first</span>
+                )}
+              </div>
+            </div>
+            <div className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">Contract</span>
+              <div className="input input-bordered flex h-12 w-full items-center bg-base-200/50 text-sm">
+                {tContractId ? (
+                  labelForContract(tContractId)
+                ) : (
+                  <span className="opacity-50">Select a ticket first</span>
+                )}
+              </div>
+            </div>
+            <div className="flex w-full flex-col gap-1 sm:col-span-2">
+              <span className="text-sm font-medium">Related Project</span>
+              <div className="input input-bordered flex h-12 w-full items-center bg-base-200/50 text-sm">
+                {tProjectId ? (
+                  labelForProject(tProjectId)
+                ) : tTicketId ? (
+                  <span className="opacity-50">No project linked to this ticket</span>
+                ) : (
+                  <span className="opacity-50">Select a ticket first</span>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
@@ -575,48 +572,10 @@ export function TimeCostForm({
           {costMessage ? <div className="alert alert-success text-sm">{costMessage}</div> : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex w-full flex-col gap-1">
-              <span className="text-sm font-medium">Customer</span>
-              <select
-                className="select select-bordered w-full"
-                value={cCustomerId}
-                onChange={(e) => {
-                  setCCustomerId(e.target.value);
-                  setCContractId("");
-                  setCTicketId("");
-                  setCProjectId("");
-                }}
-                required
-              >
-                <option value="">Select a customer…</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex w-full flex-col gap-1">
+            <label className="flex w-full flex-col gap-1 sm:col-span-2">
               <span className="text-sm font-medium">
-                Contract <span className="text-error">*</span>
+                Related Ticket <span className="text-error">*</span>
               </span>
-              <select
-                className="select select-bordered w-full"
-                value={cContractId}
-                onChange={(e) => setCContractId(e.target.value)}
-                disabled={!cCustomerId}
-                required
-              >
-                <option value="">Select a contract…</option>
-                {contractsForCustomer(cCustomerId).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex w-full flex-col gap-1">
-              <span className="text-sm font-medium">Related Ticket</span>
               <select
                 className="select select-bordered w-full"
                 value={cTicketId}
@@ -624,40 +583,56 @@ export function TimeCostForm({
                   applyTicketChoice(
                     e.target.value,
                     setCTicketId,
-                    setCProjectId,
+                    setCCustomerId,
                     setCContractId,
-                    cContractId
+                    setCProjectId
                   )
                 }
-                disabled={!cCustomerId}
+                required
               >
                 <option value="">Select a ticket…</option>
-                {ticketsForCustomer(cCustomerId).map((t) => (
+                {tickets.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.label}
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="flex w-full flex-col gap-1">
-              <span className="text-sm font-medium">Related Project</span>
-              <select
-                className="select select-bordered w-full"
-                value={cProjectId}
-                onChange={(e) => setCProjectId(e.target.value)}
-                disabled={!cCustomerId}
-              >
-                <option value="">Select a project…</option>
-                {projectsForCustomer(cCustomerId).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
               <span className="text-xs opacity-60">
-                Auto-fills from the ticket when one is selected. Ticket or project is enough.
+                Customer, contract, and project fill in automatically from the ticket.
               </span>
             </label>
+            <div className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">Customer</span>
+              <div className="input input-bordered flex h-12 w-full items-center bg-base-200/50 text-sm">
+                {cCustomerId ? (
+                  labelForCustomer(cCustomerId)
+                ) : (
+                  <span className="opacity-50">Select a ticket first</span>
+                )}
+              </div>
+            </div>
+            <div className="flex w-full flex-col gap-1">
+              <span className="text-sm font-medium">Contract</span>
+              <div className="input input-bordered flex h-12 w-full items-center bg-base-200/50 text-sm">
+                {cContractId ? (
+                  labelForContract(cContractId)
+                ) : (
+                  <span className="opacity-50">Select a ticket first</span>
+                )}
+              </div>
+            </div>
+            <div className="flex w-full flex-col gap-1 sm:col-span-2">
+              <span className="text-sm font-medium">Related Project</span>
+              <div className="input input-bordered flex h-12 w-full items-center bg-base-200/50 text-sm">
+                {cProjectId ? (
+                  labelForProject(cProjectId)
+                ) : cTicketId ? (
+                  <span className="opacity-50">No project linked to this ticket</span>
+                ) : (
+                  <span className="opacity-50">Select a ticket first</span>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">

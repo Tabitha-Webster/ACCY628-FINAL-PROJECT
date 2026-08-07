@@ -368,6 +368,14 @@ export async function POST(request: Request) {
           errors.push(`${contract.name}: invoice ${invoice.invoice_number} created but a time entry was already invoiced.`);
           continue;
         }
+        const ticketIds = (timeEntries ?? [])
+          .filter((entry) => billableTimeIds.includes(entry.id))
+          .map((entry) => entry.support_ticket_id)
+          .filter((id): id is string => Boolean(id));
+        if (ticketIds.length > 0) {
+          const { linkTicketsToInvoice } = await import("@/lib/invoice-tickets");
+          await linkTicketsToInvoice(supabase, invoice.id, ticketIds);
+        }
       }
     }
 

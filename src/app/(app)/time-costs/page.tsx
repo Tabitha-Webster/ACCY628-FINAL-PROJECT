@@ -83,12 +83,12 @@ export default async function TimeCostsPage({
       supabase
         .from("contracts")
         .select("id, name, contract_number, customer_id, additional_hourly_rate")
-        .eq("status", "active"),
+        .not("status", "in", "(canceled)"),
       supabase
         .from("support_tickets")
         .select("id, ticket_number, title, customer_id, project_id, contract_id")
         .not("status", "in", "(resolved,closed,canceled)"),
-      supabase.from("projects").select("id, name, customer_id").not("status", "in", "(closed,canceled)"),
+      supabase.from("projects").select("id, name, customer_id").not("status", "in", "(canceled)"),
       supabase
         .from("time_entries")
         .select(
@@ -127,13 +127,18 @@ export default async function TimeCostsPage({
     label: `${c.contract_number} · ${c.name}`,
     additionalHourlyRate: Number(c.additional_hourly_rate),
   }));
-  const tickets = (ticketsRes.data ?? []).map((t) => ({
-    id: t.id,
-    customerId: t.customer_id as string,
-    projectId: (t.project_id as string | null) ?? null,
-    contractId: (t.contract_id as string | null) ?? null,
-    label: `${t.ticket_number} · ${t.title}`,
-  }));
+  const tickets = (ticketsRes.data ?? []).map((t) => {
+    const customer = customerName.get(t.customer_id as string);
+    return {
+      id: t.id,
+      customerId: t.customer_id as string,
+      projectId: (t.project_id as string | null) ?? null,
+      contractId: (t.contract_id as string | null) ?? null,
+      label: customer
+        ? `${t.ticket_number} · ${t.title} · ${customer}`
+        : `${t.ticket_number} · ${t.title}`,
+    };
+  });
   const preselectTicket = initialTicketId ? tickets.find((t) => t.id === initialTicketId) : null;
   const preselectContractId = preselectTicket
     ? preselectTicket.contractId ??

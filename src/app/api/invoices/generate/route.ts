@@ -573,6 +573,20 @@ export async function POST(request: Request) {
     if (error) updateErrors.push(error.message);
   }
 
+  const ticketIdsToLink = Array.from(
+    new Set(
+      [
+        ...timeEntries.map((e) => e.support_ticket_id),
+        ...directCosts.map((c) => c.support_ticket_id),
+      ].filter((id): id is string => Boolean(id))
+    )
+  );
+  if (ticketIdsToLink.length > 0) {
+    const { linkTicketsToInvoice } = await import("@/lib/invoice-tickets");
+    const linked = await linkTicketsToInvoice(supabase, invoice.id, ticketIdsToLink);
+    if (linked.error) updateErrors.push(linked.error);
+  }
+
   return NextResponse.json({
     invoice: {
       id: invoice.id,

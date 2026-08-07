@@ -104,9 +104,38 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
+  let invoiceInfo: {
+    invoiceId: string | null;
+    invoiceNumber: string | null;
+    skipped?: string;
+    error?: string;
+  } | null = null;
+  try {
+    const { createInvoiceForCompletedTicket } = await import("@/lib/invoice-tickets");
+    const created = await createInvoiceForCompletedTicket({
+      ticketId,
+      generatedBy: profile.id,
+    });
+    invoiceInfo = {
+      invoiceId: created.invoiceId,
+      invoiceNumber: created.invoiceNumber,
+      skipped: created.skipped,
+      error: created.error ?? undefined,
+    };
+  } catch (err) {
+    invoiceInfo = {
+      invoiceId: null,
+      invoiceNumber: null,
+      error: err instanceof Error ? err.message : "Could not create correlating invoice.",
+    };
+  }
+
   return NextResponse.json({
     ok: true,
-    message: "Ticket marked complete. Status set to Resolved.",
+    message: invoiceInfo?.invoiceNumber
+      ? `Ticket marked complete. Draft invoice ${invoiceInfo.invoiceNumber} created for billing.`
+      : "Ticket marked complete. Status set to Resolved.",
     ticket: data,
+    invoice: invoiceInfo,
   });
 }
