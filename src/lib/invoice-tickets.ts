@@ -1,5 +1,5 @@
-import { makeInvoiceLine, summarizeInvoice } from "@/lib/billing";
-import { billedMonthlyRecurringFee } from "@/lib/contracts";
+import { computeMonthlyUsage, makeInvoiceLine, round2, summarizeInvoice } from "@/lib/billing";
+import { billedHourlyRate, billedMonthlyRecurringFee } from "@/lib/contracts";
 import { allocateNextDocumentNumber, loadNumberingSettings } from "@/lib/document-numbering";
 import { createServiceClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -321,4 +321,178 @@ export function contractAgreementFee(contract: {
 } | null): number | null {
   if (!contract) return null;
   return billedMonthlyRecurringFee(contract);
+}
+
+export type InvoiceLineForTotal = {
+  source_type: string | null;
+  source_id: string | null;
+  line_amount: number | string | null;
+  quantity?: number | string | null;
+  rate?: number | string | null;
+};
+
+export type InvoiceTotalBreakdown = {
+  monthlyRecurringFee: number;
+  hourOverages: number;
+  billableTime: number;
+  directCosts: number;
+  projects: number;
+  invoiceTotal: number;
+};
+
+/**
+ * Invoice Total for the billing list:
+ * monthly fee (location-adjusted) + hour overages + billable time + direct costs + projects.
+ */
+export function computeInvoiceListTotal(input: {
+  contract: {
+    monthly_recurring_fee?: number | null;
+    work_location?: string | null;
+    included_hours_per_month?: number | null;
+    additional_hourly_rate?: number | null;
+  } | null;
+  lines: InvoiceLineForTotal[];
+  timeEntries: Array<{
+    id: string;
+    hours_worked: number | string | null;
+    billing_rate: number | string | null;
+    classification: string | null;
+    approval_status?: string | null;
+    billing_status?: string | null;
+    invoice_id?: string | null;
+    invoice_line_item_id?: string | null;
+    billed_at?: string | null;
+  }>;
+  directCosts: Array<{
+    id: string;
+    billable_amount: number | string | null;
+  }>;
+  projects: Array<{
+    id: string;
+    fixed_fee: number | string | null;
+    estimated_billing_amount: number | string | null;
+  }>;
+}): InvoiceTotalBreakdown {
+  const lines = input.lines ?? [];
+  const hasRecurring = lines.some((l) => l.source_type === "recurring");
+  const hasOverageLine = lines.some((l) => l.source_type === "overage");
+
+  const monthlyRecurringFee =
+    hasRecurring && input.contract ? billedMonthlyRecurringFee(input.contract) : 0;
+
+  let hourOverages = 0;
+  if (hasOverageLine && input.contract) {
+    // Recompute overages from time tied to this invoice (ignore already-billed skip).
+    const usageRows = input.timeEntries.map((entry) => ({
+      hours_worked: entry.hours_worked ?? 0,
+      classification: entry.classification ?? "included",
+      approval_status: entry.approval_status ?? "not_required",
+      billing_status: "unbilled" as const,
+      invoice_id: null,
+      invoice_line_item_id: null,
+      billed_at: null,
+    }));
+    const usage = computeMonthlyUsage(
+      usageRows,
+      Number(input.contract.included_hours_per_month ?? 0),
+      billedHourlyRate(input.contract),
+      billedMonthlyRecurringFee(input.contract)
+    );
+    hourOverages = usage.overageCharge;
+    if (hourOverages <= 0) {
+      hourOverages = round2(
+        lines
+          .filter((l) => l.source_type === "overage")
+          .reduce((sum, l) => sum + Number(l.line_amount ?? 0), 0)
+      );
+    }
+  } else if (hasOverageLine) {
+    hourOverages = round2(
+      lines
+        .filter((l) => l.source_type === "overage")
+        .reduce((sum, l) => sum + Number(l.line_amount ?? 0), 0)
+    );
+  }
+
+  const timeById = new Map(input.timeEntries.map((e) => [e.id, e]));
+  let billableTime = 0;
+  for (const line of lines) {
+    if (line.source_type !== "time_entry" || !line.source_id) continue;
+    const entry = timeById.get(line.source_id);
+    if (entry && entry.classification === "billable") {
+      billableTime += round2(Number(entry.hours_worked ?? 0) * Number(entry.billing_rate ?? 0));
+    } else if (!entry) {
+      // Fallback to stored line when source row is missing.
+      billableTime += Number(line.line_amount ?? 0);
+    }
+  }
+  billableTime = round2(billableTime);
+
+  const costById = new Map(input.directCosts.map((c) => [c.id, c]));
+  let directCosts = 0;
+  for (const line of lines) {
+    if (line.source_type !== "direct_cost" || !line.source_id) continue;
+    const cost = costById.get(line.source_id);
+    directCosts += cost ? Number(cost.billable_amount ?? 0) : Number(line.line_amount ?? 0);
+  }
+  directCosts = round2(directCosts);
+
+  const projectById = new Map(input.projects.map((p) => [p.id, p]));
+  let projects = 0;
+  for (const line of lines) {
+    if (line.source_type !== "project" && line.source_type !== "milestone" && line.source_type !== "project_milestone") {
+      continue;
+    }
+    if (line.source_type === "project" && line.source_id) {
+      const project = projectById.get(line.source_id);
+      if (project) {
+        projects += Number(project.fixed_fee || project.estimated_billing_amount || 0);
+        continue;
+      }
+    }
+    projects += Number(line.line_amount ?? 0);
+  }
+  projects = round2(projects);
+
+  const invoiceTotal = round2(
+    monthlyRecurringFee + hourOverages + billableTime + directCosts + projects
+  );
+
+  return {
+    monthlyRecurringFee,
+    hourOverages,
+    billableTime,
+    directCosts,
+    projects,
+    invoiceTotal,
+  };
+}
+
+export function invoiceGainLossVersusContractFee(
+  invoiceTotal: number,
+  contractFee: number | null
+): {
+  amount: number | null;
+  outcome: "gain" | "loss" | "even" | "unknown";
+  label: string;
+} {
+  if (contractFee == null || Math.abs(contractFee) < 0.005) {
+    return { amount: null, outcome: "unknown", label: "—" };
+  }
+  const amount = round2(invoiceTotal - contractFee);
+  if (Math.abs(amount) < 0.005) {
+    return { amount: 0, outcome: "even", label: "Even · $0.00" };
+  }
+  if (amount > 0) {
+    return {
+      amount,
+      outcome: "gain",
+      label: `Gain · $${amount.toFixed(2)}`,
+    };
+  }
+  return {
+    amount,
+    outcome: "loss",
+    label: `Loss · $${Math.abs(amount).toFixed(2)}`,
+  };
 }
