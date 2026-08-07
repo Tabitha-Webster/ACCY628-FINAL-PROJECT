@@ -199,6 +199,7 @@ export function TimeCostForm({
       }
     }
 
+    // labor_cost is a generated column (hours_worked * internal_cost_rate) — do not insert it.
     const { error } = await supabase.from("time_entries").insert({
       technician_id: technicianId,
       customer_id: tCustomerId,
@@ -212,7 +213,6 @@ export function TimeCostForm({
       classification,
       internal_cost_rate: internalCostRate,
       billing_rate: previewBillingRate,
-      labor_cost: laborCost(hoursNum, internalCostRate),
       unusual_hours_flag: unusualHours,
       approval_status: classification === "included" ? "not_required" : "pending",
     });
