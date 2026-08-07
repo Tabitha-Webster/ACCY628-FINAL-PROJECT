@@ -95,6 +95,24 @@ export function SupportRequestForm({ customerId, customerName, createdBy, contra
     const supabase = createClient();
     const submittedAt = new Date().toISOString();
 
+    let ticketNumber: string | null = null;
+    try {
+      const numberRes = await fetch("/api/numbering/next", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "ticket" }),
+      });
+      const numberData = (await numberRes.json().catch(() => ({}))) as {
+        number?: string;
+        error?: string;
+      };
+      if (numberRes.ok && numberData.number) {
+        ticketNumber = numberData.number;
+      }
+    } catch {
+      // Fall back to DB trigger if numbering API is unavailable.
+    }
+
     const { data, error: insertError } = await supabase
       .from("support_tickets")
       .insert({
@@ -107,6 +125,7 @@ export function SupportRequestForm({ customerId, customerName, createdBy, contra
         status: "new",
         submitted_at: submittedAt,
         created_by: createdBy,
+        ...(ticketNumber ? { ticket_number: ticketNumber } : {}),
       })
       .select("id, ticket_number")
       .single();

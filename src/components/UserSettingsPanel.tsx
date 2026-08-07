@@ -8,11 +8,13 @@ import {
   CreditCard,
   Download,
   LogOut,
+  Palette,
   User,
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
+import { ThemeSelector } from "@/components/ThemeSelector";
 import { createClient } from "@/lib/supabase/client";
 import { statusLabel } from "@/lib/format";
 import type { Profile, UserRole } from "@/lib/constants";
@@ -24,7 +26,7 @@ import {
   type UserPreferences,
 } from "@/lib/user-preferences";
 
-type PaneId = "root" | "account" | "notifications" | "exports" | "billingContact";
+type PaneId = "root" | "account" | "appearance" | "notifications" | "exports" | "billingContact";
 
 type Section = {
   id: Exclude<PaneId, "root">;
@@ -145,6 +147,7 @@ export function UserSettingsPanel({
 
   const sections: Section[] = [
     { id: "account", icon: User, title: "Account", subtitle: "Name, email, role, and password" },
+    { id: "appearance", icon: Palette, title: "Appearance", subtitle: "Light or dark theme" },
     { id: "notifications", icon: Bell, title: "Notifications", subtitle: "Choose which alerts you receive" },
     ...(isStaff
       ? [{ id: "exports" as const, icon: Download, title: "Data & exports", subtitle: "CSV export defaults" }]
@@ -287,6 +290,12 @@ export function UserSettingsPanel({
                   {passwordBusy ? "Updating..." : "Update password"}
                 </button>
               </section>
+            </div>
+          ) : null}
+
+          {pane === "appearance" ? (
+            <div className="space-y-4">
+              <ThemeSelector />
             </div>
           ) : null}
 

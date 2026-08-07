@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button, ButtonLink } from "@/components/Button";
 import { Card } from "@/components/Card";
 import {
@@ -41,7 +40,7 @@ type FieldErrors = Partial<Record<keyof FormValues, string>>;
 
 const EMPTY: FormValues = {
   name: "",
-  status: "prospect",
+  status: "active",
   industry: "",
   primaryContact: "",
   contactEmail: "",
@@ -94,7 +93,6 @@ function buildBillingNotes(values: FormValues, options?: { includePhone?: boolea
 }
 
 export function AddCustomerForm() {
-  const router = useRouter();
   const [values, setValues] = useState<FormValues>(EMPTY);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
@@ -210,8 +208,11 @@ export function AddCustomerForm() {
     };
 
     const buildPayload = (identifier: string | null) => {
+      const trimmedName = values.name.trim();
       const payload: Record<string, string | null> = {
-        name: values.name.trim(),
+        name: trimmedName,
+        // Keep customer_name in sync so directory / signup schemas always have a display name.
+        customer_name: trimmedName,
         status: values.status,
         industry: values.industry.trim() || null,
         primary_contact: values.primaryContact.trim(),
@@ -242,6 +243,15 @@ export function AddCustomerForm() {
       payload = withoutIdentifier;
       customerIdentifier = null;
       selectColumns = "id";
+      insertResult = await supabase.from("customers").insert(payload).select(selectColumns).single();
+      inserted = asInserted(insertResult.data);
+      insertError = insertResult.error;
+    }
+
+    // Older schemas may not have customer_name — retry with name only.
+    if (insertError && /customer_name/i.test(insertError.message)) {
+      const { customer_name: _customerName, ...withoutCustomerName } = payload;
+      payload = withoutCustomerName;
       insertResult = await supabase.from("customers").insert(payload).select(selectColumns).single();
       inserted = asInserted(insertResult.data);
       insertError = insertResult.error;
@@ -330,13 +340,13 @@ export function AddCustomerForm() {
     setDuplicateMatches([]);
     setSuccess(
       savedIdentifier
-        ? `${values.name.trim()} was added successfully as ${savedIdentifier}. Returning to the customer list…`
-        : `${values.name.trim()} was added successfully. Returning to the customer list…`
+        ? `${values.name.trim()} was added successfully as ${savedIdentifier}. Opening the customer directory…`
+        : `${values.name.trim()} was added successfully. Opening the customer directory…`
     );
+    // Hard navigate so the Company Directory customer list always reloads the new row.
     window.setTimeout(() => {
-      router.push("/customers");
-      router.refresh();
-    }, 1600);
+      window.location.assign("/customers");
+    }, 900);
   }
 
   async function onSubmit(e: React.FormEvent) {

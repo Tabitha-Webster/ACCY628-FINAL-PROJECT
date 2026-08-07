@@ -20,7 +20,7 @@ import {
 import { StatusBadge } from "@/components/ui";
 import { TicketSlaAlerts, SlaConditionBadge } from "@/components/SlaBadges";
 import { ServiceModeBadge } from "@/components/ServiceModeBadge";
-import { evaluateTicketSla } from "@/lib/sla";
+import { evaluateTechnicianTicketSla } from "@/lib/sla";
 import { formatDateTime } from "@/lib/format";
 import {
   eventEndIso,
@@ -140,7 +140,7 @@ export function TechnicianCalendar({ tickets, timezoneLabel }: Props) {
         : `Day view · ${format(anchor, "EEEE, MMM d, yyyy")}`;
 
   function renderEventCard(t: CalendarTicket & { scheduled_start_at: string }, compact: boolean) {
-    const sla = evaluateTicketSla(t);
+    const sla = evaluateTechnicianTicketSla(t);
     const start = parseISO(t.scheduled_start_at);
     const end = parseISO(eventEndIso(t));
     const mins = Math.max(30, differenceInMinutes(end, start));
@@ -390,14 +390,14 @@ export function TechnicianCalendar({ tickets, timezoneLabel }: Props) {
               Close
             </button>
           </div>
-          <TicketSlaAlerts ticket={selected} />
+          <TicketSlaAlerts ticket={selected} forTechnician />
           <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
             <div>
               <dt className="opacity-60">Priority / Status</dt>
               <dd className="flex flex-wrap gap-1">
                 <StatusBadge status={selected.priority} />
                 <StatusBadge status={selected.status} />
-                <SlaConditionBadge condition={evaluateTicketSla(selected).overall} />
+                <SlaConditionBadge condition={evaluateTechnicianTicketSla(selected).overall} />
               </dd>
             </div>
             <div>

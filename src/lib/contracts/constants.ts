@@ -107,6 +107,26 @@ export const CONTRACT_TYPE_LABELS: Record<ContractType, string> = {
   pass_through: "Pass-Through",
 };
 
+/** Short explanations shown next to each contract type on New/Edit Contract. */
+export const CONTRACT_TYPE_DESCRIPTIONS: Record<ContractType, string> = {
+  managed_support:
+    "Ongoing IT support for a fixed monthly fee. Covers day-to-day help desk, monitoring, and maintenance under an agreed scope and SLA.",
+  included_hours:
+    "A monthly block of support hours is included. Time beyond the block can be billed as overages if allowed on the contract.",
+  unlimited_remote:
+    "Remote support without a hard hourly cap. Best for customers who need frequent remote help desk and administration.",
+  project_only:
+    "Scoped project work (migrations, installs, refreshes) billed as a project rather than recurring managed support.",
+  managed_plus_project:
+    "Combines a recurring managed-support agreement with one or more defined project deliverables under the same contract.",
+  pass_through:
+    "Vendor or third-party costs (software, hardware, licensing) billed through to the customer, often with an agreed markup.",
+};
+
+export function isKnownContractType(value: string): value is ContractType {
+  return (CONTRACT_TYPES as readonly string[]).includes(value);
+}
+
 /** Integration touchpoints for billing, customers, technicians, and reporting. */
 export const CONTRACT_INTEGRATION_POINTS = {
   customers: {

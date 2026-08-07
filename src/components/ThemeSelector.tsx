@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 export const THEME_STORAGE_KEY = "servicesync-theme";
-export const DEFAULT_APPEARANCE = "system" as const;
+export const DEFAULT_APPEARANCE = "light" as const;
 
 export type AppearancePreference = "light" | "dark" | "system";
 
@@ -15,6 +15,9 @@ const OPTIONS: { id: AppearancePreference; label: string; hint: string }[] = [
   { id: "dark", label: "Dark", hint: "Always use the dark theme" },
   { id: "system", label: "Match system", hint: "Follow this computer's light or dark setting" },
 ];
+
+/** One-time key so existing devices move to light after this update. */
+export const FORCE_LIGHT_ONCE_KEY = "servicesync-set-light-once";
 
 /** @deprecated Use DEFAULT_APPEARANCE — kept for existing ThemeInit imports during migration. */
 export const DEFAULT_THEME = DEFAULT_APPEARANCE;

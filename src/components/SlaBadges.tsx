@@ -1,5 +1,10 @@
 import { StatusBadge } from "@/components/ui";
-import { evaluateTicketSla, slaConditionBadgeKey, type SlaCondition } from "@/lib/sla";
+import {
+  evaluateTicketSla,
+  evaluateTechnicianTicketSla,
+  slaConditionBadgeKey,
+  type SlaCondition,
+} from "@/lib/sla";
 
 export function SlaConditionBadge({ condition }: { condition: SlaCondition }) {
   return <StatusBadge status={slaConditionBadgeKey(condition)} />;
@@ -7,8 +12,10 @@ export function SlaConditionBadge({ condition }: { condition: SlaCondition }) {
 
 export function TicketSlaAlerts({
   ticket,
+  forTechnician = false,
 }: {
   ticket: {
+    title?: string | null;
     submitted_at?: string | null;
     target_response_at?: string | null;
     target_resolution_at?: string | null;
@@ -17,18 +24,26 @@ export function TicketSlaAlerts({
     status?: string | null;
     priority?: string | null;
   };
+  /** When true (technician views), stale demo deadlines are freshened so Missed/Overdue stay rare. */
+  forTechnician?: boolean;
 }) {
-  const sla = evaluateTicketSla(ticket);
+  const sla = forTechnician ? evaluateTechnicianTicketSla(ticket) : evaluateTicketSla(ticket);
 
   return (
     <div className="space-y-2">
       {sla.isCritical ? (
-        <div className="alert alert-error text-sm" role="alert">
+        <div
+          className="rounded-lg border border-error/50 bg-transparent px-3 py-2 text-sm text-error"
+          role="alert"
+        >
           <span>⚠ Critical priority — treat as highest urgency.</span>
         </div>
       ) : null}
       {sla.overdue ? (
-        <div className="alert alert-error text-sm" role="alert">
+        <div
+          className="rounded-lg border border-error/50 bg-transparent px-3 py-2 text-sm text-error"
+          role="alert"
+        >
           <span>
             ⚠ Overdue —{" "}
             {sla.responseOverdue && sla.resolutionOverdue
@@ -39,7 +54,10 @@ export function TicketSlaAlerts({
           </span>
         </div>
       ) : sla.overall === "at_risk" ? (
-        <div className="alert alert-warning text-sm" role="status">
+        <div
+          className="rounded-lg border border-warning/50 bg-transparent px-3 py-2 text-sm text-warning"
+          role="status"
+        >
           <span>
             At Risk — at least 80% of an SLA window has elapsed and the requirement is not yet
             satisfied.
@@ -47,7 +65,10 @@ export function TicketSlaAlerts({
         </div>
       ) : null}
       {sla.overall === "not_defined" ? (
-        <div className="alert text-sm" role="status">
+        <div
+          className="rounded-lg border border-base-content/25 bg-transparent px-3 py-2 text-sm text-base-content/80"
+          role="status"
+        >
           <span>SLA Not Defined — this ticket has no contract response/resolution targets.</span>
         </div>
       ) : null}

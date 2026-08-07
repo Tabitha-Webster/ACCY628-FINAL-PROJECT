@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { EmptyState, Money, StatusBadge } from "@/components/ui";
+import { DocumentNumber } from "@/components/SystemConfigProvider";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
   type CompareOp,
@@ -260,7 +261,7 @@ export function InvoiceListClient({ invoices }: { invoices: InvoiceListRow[] }) 
                 <tr key={invoice.id}>
                   <td>
                     <Link href={`/invoices/${invoice.id}`} className="link link-hover font-medium">
-                      {invoice.invoice_number}
+                      <DocumentNumber kind="invoice" value={invoice.invoice_number} />
                     </Link>
                   </td>
                   <td>{invoice.customer_name}</td>

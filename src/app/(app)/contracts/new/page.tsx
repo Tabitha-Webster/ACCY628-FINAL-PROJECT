@@ -5,6 +5,7 @@ import { getCurrentProfile } from "@/lib/auth";
 import { ContractForm } from "@/components/ContractForm";
 import { ErrorState } from "@/components/ui";
 import { canCreateContracts, suggestNextContractNumber } from "@/lib/contracts";
+import { loadNumberingSettings } from "@/lib/document-numbering";
 
 export default async function NewContractPage() {
   const profile = await getCurrentProfile();
@@ -12,34 +13,41 @@ export default async function NewContractPage() {
   if (!canCreateContracts(profile.role)) redirect("/contracts/reports");
 
   const supabase = await createClient();
-const [
+  const [{ numbering }, customersBundle] = await Promise.all([
+    loadNumberingSettings(),
+    Promise.all([
+      supabase.from("customers").select("id, name").order("name"),
+      supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("role", "manager")
+        .eq("is_active", true)
+        .order("full_name"),
+      supabase
+        .from("profiles")
+        .select("id, full_name, primary_specialty, skill_level, skill_tags")
+        .eq("role", "technician")
+        .eq("is_active", true)
+        .order("full_name"),
+      supabase.from("contracts").select("contract_number"),
+    ]),
+  ]);
+
+  const [
     { data: customers, error: customersError },
     { data: managers },
     { data: technicians },
     { data: numbers },
-  ] = await Promise.all([
-    supabase.from("customers").select("id, name").order("name"),
-    supabase
-      .from("profiles")
-      .select("id, full_name")
-      .eq("role", "manager")
-      .eq("is_active", true)
-      .order("full_name"),
-    supabase
-      .from("profiles")
-      .select("id, full_name")
-      .eq("role", "technician")
-      .eq("is_active", true)
-      .order("full_name"),
-    supabase.from("contracts").select("contract_number"),
-  ]);
+  ] = customersBundle;
 
   if (customersError) {
     return <ErrorState message={customersError.message} />;
   }
 
   const suggestedNumber = suggestNextContractNumber(
-    (numbers ?? []).map((row) => row.contract_number as string)
+    (numbers ?? []).map((row) => row.contract_number as string),
+    numbering.contractPrefix,
+    numbering.nextContractSequence
   );
 
   return (
@@ -55,7 +63,14 @@ const [
         profileName={profile.full_name}
         customers={(customers ?? []).map((c) => ({ id: c.id, label: c.name }))}
         managers={(managers ?? []).map((m) => ({ id: m.id, label: m.full_name }))}
-        technicians={(technicians ?? []).map((t) => ({ id: t.id, label: t.full_name }))}
+        technicians={(technicians ?? []).map((t) => ({
+          id: t.id,
+          full_name: t.full_name,
+          primary_specialty: (t as { primary_specialty?: string | null }).primary_specialty ?? null,
+          skill_level: (t as { skill_level?: string | null }).skill_level ?? null,
+          skill_tags: (t as { skill_tags?: string[] | null }).skill_tags ?? [],
+        }))}
+        contractNumberPrefix={numbering.contractPrefix}
         initialValues={{
           contract_number: suggestedNumber,
           assigned_manager_id: profile.id,

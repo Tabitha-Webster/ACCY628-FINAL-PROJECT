@@ -128,7 +128,7 @@ export function ContractsDashboardVisuals({
       icon: "alert",
     },
     {
-      label: "SLA",
+      label: "Delivery",
       value: metrics.slaCompliancePct == null ? "—" : `${metrics.slaCompliancePct.toFixed(0)}%`,
       href: "/operations",
       tone:
@@ -139,7 +139,7 @@ export function ContractsDashboardVisuals({
             : metrics.slaCompliancePct >= 75
               ? "amber"
               : "rose",
-      hint: `${metrics.slaMet} met · ${metrics.slaMissed} missed`,
+      hint: "Ticket & project completion",
       icon: "shield",
     },
     {

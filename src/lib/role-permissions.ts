@@ -13,6 +13,7 @@ export type PagePermissionKey =
   | "contracts_renewals"
   | "contracts_awaiting_signature"
   | "contracts_view_edit"
+  | "contracts_assigned"
   | "contracts_customers"
   | "contracts_new"
   | "projects"
@@ -169,6 +170,14 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
     group: "Contracts",
   },
   {
+    key: "contracts_assigned",
+    label: "Assigned Contracts",
+    description: "Review and edit which technician is assigned to each contract, with skill levels.",
+    pathPrefixes: ["/contracts/assigned"],
+    defaultRoles: ["manager"],
+    group: "Contracts",
+  },
+  {
     key: "contracts_customers",
     label: "Contracts by Customer",
     description: "Customer-focused contract browse.",
@@ -194,8 +203,8 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
   },
   {
     key: "operations",
-    label: "Service Tickets",
-    description: "SLA monitoring and open work overview.",
+    label: "Ticket & Project Completion",
+    description: "Match tickets and projects to contracts; mark contracts completed when delivery is done.",
     pathPrefixes: ["/operations"],
     defaultRoles: ["admin", "manager"],
     group: "Operations",

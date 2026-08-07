@@ -18,10 +18,10 @@ import {
   YAxis,
 } from "recharts";
 import { EmptyState, StatusBadge } from "@/components/ui";
-import { TicketSlaAlerts, SlaConditionBadge } from "@/components/SlaBadges";
-import { ServiceModeBadge } from "@/components/ServiceModeBadge";
-import { formatDateTime } from "@/lib/format";
-import { evaluateTicketSla, type SlaCondition } from "@/lib/sla";
+import { TicketSlaAlerts } from "@/components/SlaBadges";
+import { serviceModeLabel } from "@/components/ServiceModeBadge";
+import { formatDateTime, statusLabel } from "@/lib/format";
+import { evaluateTicketSla, evaluateTechnicianTicketSla, slaConditionLabel, type SlaCondition } from "@/lib/sla";
 import type { UserRole } from "@/lib/constants";
 
 export type TicketListItem = {
@@ -84,29 +84,29 @@ const OPEN_STATUSES = new Set([
 
 const TONE_STYLES = {
   sky: {
-    card: "border-sky-300/60 bg-gradient-to-br from-sky-50 to-sky-100/80",
-    icon: "bg-sky-500/15 text-sky-700",
-    value: "text-sky-900",
+    card: "border-sky-400/30 bg-sky-500/10 text-base-content",
+    icon: "bg-sky-500/20 text-sky-300",
+    value: "text-base-content",
   },
   violet: {
-    card: "border-violet-300/60 bg-gradient-to-br from-violet-50 to-violet-100/80",
-    icon: "bg-violet-500/15 text-violet-700",
-    value: "text-violet-900",
+    card: "border-violet-400/30 bg-violet-500/10 text-base-content",
+    icon: "bg-violet-500/20 text-violet-300",
+    value: "text-base-content",
   },
   amber: {
-    card: "border-amber-300/60 bg-gradient-to-br from-amber-50 to-amber-100/80",
-    icon: "bg-amber-500/15 text-amber-800",
-    value: "text-amber-950",
+    card: "border-amber-400/30 bg-amber-500/10 text-base-content",
+    icon: "bg-amber-500/20 text-amber-300",
+    value: "text-base-content",
   },
   rose: {
-    card: "border-rose-300/70 bg-gradient-to-br from-rose-50 to-rose-100/90",
-    icon: "bg-rose-500/15 text-rose-700",
-    value: "text-rose-900",
+    card: "border-rose-400/30 bg-rose-500/10 text-base-content",
+    icon: "bg-rose-500/20 text-rose-300",
+    value: "text-base-content",
   },
   emerald: {
-    card: "border-emerald-300/60 bg-gradient-to-br from-emerald-50 to-emerald-100/80",
-    icon: "bg-emerald-500/15 text-emerald-700",
-    value: "text-emerald-900",
+    card: "border-emerald-400/30 bg-emerald-500/10 text-base-content",
+    icon: "bg-emerald-500/20 text-emerald-300",
+    value: "text-base-content",
   },
 } as const;
 
@@ -117,20 +117,8 @@ const PRIORITY_COLORS = {
   Low: "#0ea5e9",
 } as const;
 
-function CriticalPriorityBadge({ priority }: { priority: string }) {
-  if (priority === "critical") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-box border border-error/40 bg-error/10 px-2 py-0.5 text-xs font-semibold text-error">
-        <span aria-hidden>⚠</span>
-        Critical
-      </span>
-    );
-  }
-  return <StatusBadge status={priority} />;
-}
-
-function liveSla(ticket: TicketListItem) {
-  return evaluateTicketSla(ticket);
+function liveSla(ticket: TicketListItem, role: string) {
+  return role === "technician" ? evaluateTechnicianTicketSla(ticket) : evaluateTicketSla(ticket);
 }
 
 export function TicketListClient({
@@ -160,7 +148,7 @@ export function TicketListClient({
   const enriched = useMemo(
     () =>
       tickets.map((t) => {
-        const sla = liveSla(t);
+        const sla = liveSla(t, role);
         return { ticket: t, sla };
       }),
     [tickets]
@@ -317,7 +305,7 @@ export function TicketListClient({
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-sky-200/80 bg-gradient-to-b from-sky-50/70 to-base-100 p-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-end">
+      <div className="flex flex-col gap-3 rounded-2xl border border-base-300 bg-base-100/50 p-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-end">
         <label className="form-control w-full sm:max-w-xs">
           <span className="label-text text-xs">Search</span>
           <input
@@ -421,9 +409,9 @@ export function TicketListClient({
         </button>
       </div>
 
-      <section className="overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-b from-violet-50/70 to-base-100 shadow-sm">
-        <div className="border-b border-violet-200/70 px-3 py-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-violet-900/80">
+      <section className="overflow-hidden rounded-2xl border border-base-300 bg-base-100/50 shadow-sm">
+        <div className="border-b border-base-300 px-3 py-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-base-content/80">
             Ticket queue ({filtered.length})
           </h2>
         </div>
@@ -444,23 +432,40 @@ export function TicketListClient({
               {filtered.map(({ ticket: t, sla }) => {
                 const isCritical = t.priority === "critical";
                 const overall = sla.overall as SlaCondition;
-                const border =
-                  isCritical || sla.overdue
-                    ? "border-rose-200 bg-white/90"
-                    : overall === "at_risk"
-                      ? "border-amber-200 bg-white/90"
-                      : "border-violet-100 bg-white/85";
                 return (
                   <li key={t.id}>
                     <Link
                       href={`/tickets/${t.id}`}
-                      className={`block rounded-xl border px-3 py-2.5 shadow-sm transition hover:border-violet-300 ${border}`}
+                      className="block rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-neutral-900 shadow-sm transition hover:border-primary/50"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold">
                             {t.ticket_number}
                             <span className="font-medium opacity-80"> · {t.title}</span>
+                          </p>
+                          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] opacity-70">
+                            <span className={isCritical ? "font-medium text-error" : undefined}>
+                              {isCritical ? "⚠ Critical" : statusLabel(t.priority)}
+                            </span>
+                            <span aria-hidden className="opacity-40">
+                              ·
+                            </span>
+                            <span>{serviceModeLabel(t.service_mode)}</span>
+                            <span aria-hidden className="opacity-40">
+                              ·
+                            </span>
+                            <span
+                              className={
+                                overall === "missed" || sla.overdue
+                                  ? "text-error"
+                                  : overall === "at_risk"
+                                    ? "text-warning"
+                                    : undefined
+                              }
+                            >
+                              {slaConditionLabel(overall)}
+                            </span>
                           </p>
                           <p className="truncate text-[11px] opacity-70">
                             {t.customer_name}
@@ -469,21 +474,11 @@ export function TicketListClient({
                             {t.assigned_technician_name ?? "Unassigned"}
                           </p>
                         </div>
-                        <div className="flex shrink-0 flex-wrap items-center gap-1">
-                          <CriticalPriorityBadge priority={t.priority} />
-                          <StatusBadge status={t.status} />
-                          <ServiceModeBadge
-                            mode={t.service_mode}
-                            location={t.service_location}
-                            showLocation={false}
-                            size="xs"
-                          />
-                          <SlaConditionBadge condition={overall} />
-                        </div>
+                        <StatusBadge status={t.status} className="badge-sm shrink-0" />
                       </div>
                       {(isCritical || sla.overdue || overall === "at_risk") && (
                         <div className="mt-2">
-                          <TicketSlaAlerts ticket={t} />
+                          <TicketSlaAlerts ticket={t} forTechnician={role === "technician"} />
                         </div>
                       )}
                       <dl className="mt-2 grid gap-1 text-[11px] opacity-70 sm:grid-cols-3">

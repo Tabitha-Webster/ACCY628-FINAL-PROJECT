@@ -58,6 +58,7 @@ assigned_technician_id: "Assigned technician",
   sla_low_response_hours: "SLA Low",
   sla_response_hours: "Default response SLA",
   sla_resolution_hours: "Resolution SLA",
+  completion_request: "Completion request",
 };
 
 /** Commercial / price fields that require manager approval on active contracts. */

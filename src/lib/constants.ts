@@ -79,8 +79,8 @@ export const ROLE_ACCESS_MATRIX: {
     customerData: true,
   },
   {
-    area: "Service Tickets",
-    description: "SLA monitoring, open work, hour usage",
+    area: "Ticket & Project Completion",
+    description: "Match tickets and projects to contracts and mark delivery complete",
     roles: ["admin", "manager"],
     financial: false,
     customerData: true,
@@ -143,6 +143,12 @@ export const DEMO_ACCOUNTS = [
     name: "Evan Bean",
   },
   {
+    role: "customer" as UserRole,
+    label: "Customer",
+    email: "casey.ortiz@chadcorporation.demo",
+    name: "Casey Ortiz",
+  },
+  {
     role: "technician" as UserRole,
     label: "Technician",
     email: "tech@servicesync.demo",
@@ -159,12 +165,6 @@ export const DEMO_ACCOUNTS = [
     label: "HR",
     email: "hr@servicesync.demo",
     name: "Lily Walker",
-  },
-  {
-    role: "customer" as UserRole,
-    label: "Customer",
-    email: "casey.ortiz@chadcorporation.demo",
-    name: "Casey Ortiz",
   },
 ] as const;
 
@@ -264,7 +264,7 @@ export type NavItem = {
 const MANAGER_NAV: NavItem[] = [
   { href: "/dashboard", label: "Manager Dashboard" },
   // Contracts & Agreements + Billing & Finance dropdowns render via AppShell after dashboard
-  { href: "/operations", label: "Service Tickets" },
+  { href: "/operations", label: "Ticket & Project Completion" },
   { href: "/projects", label: "Projects" },
   // Company Directory dropdown renders via CompanyDirectoryNavTree in AppShell after projects
   { href: "/controls", label: "Controls and Exceptions" },
@@ -290,11 +290,7 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/dashboard", label: "My Assignments" },
     { href: "/assignments", label: "Assignments Workbench" },
     { href: "/customers", label: "Customers" },
-    // Contracts & Agreements dropdown renders via ContractsAgreementsNavTree in AppShell
-    { href: "/tickets", label: "Support Tickets" },
-    { href: "/projects", label: "Project Tasks" },
-    { href: "/time-costs", label: "Submit Time and Costs" },
-    { href: "/additional-work", label: "Additional Work Requests" },
+    // Contracts & Agreements + Service Delivery trees render in AppShell
   ],
   billing: [
     { href: "/dashboard", label: "Dashboard" },
@@ -425,7 +421,15 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/accounts-receivable",
       "/admin/employees",
     ],
-    technician: ["/contracts", "/customers", "/assignments"],
+    technician: [
+      "/contracts",
+      "/customers",
+      "/assignments",
+      "/tickets",
+      "/projects",
+      "/time-costs",
+      "/additional-work",
+    ],
     billing: [
       "/customers",
       "/contracts",

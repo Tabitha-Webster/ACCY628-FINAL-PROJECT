@@ -65,19 +65,38 @@ export type ContractPdfInput = {
     | "contract_type"
     | "start_date"
     | "end_date"
+    | "effective_date"
     | "monthly_recurring_fee"
+    | "one_time_setup_fee"
     | "included_hours_per_month"
     | "additional_hourly_rate"
+    | "overages_allowed"
     | "payment_terms"
     | "billing_frequency"
+    | "billing_method"
+    | "billing_contact"
+    | "renewal_type"
+    | "renewal_terms"
+    | "cancellation_terms"
+    | "cancellation_notice_days"
     | "sla_response_hours"
     | "sla_resolution_hours"
+    | "sla_critical_response_hours"
+    | "sla_high_response_hours"
+    | "sla_medium_response_hours"
+    | "sla_low_response_hours"
     | "description"
     | "scope"
     | "included_services"
+    | "excluded_services"
+    | "supported_locations"
+    | "supported_users_devices"
+    | "after_hours_terms"
     | "work_location"
-  >;  customerName: string;
+  >;
+  customerName: string;
   managerName: string | null;
+  technicianName?: string | null;
   signatures: {
     manager?: { name: string; signedAt: string; imageDataUrl: string } | null;
     executive?: { name: string; signedAt: string; imageDataUrl: string } | null;

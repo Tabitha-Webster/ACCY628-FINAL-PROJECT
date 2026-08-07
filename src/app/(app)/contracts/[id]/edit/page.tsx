@@ -35,7 +35,7 @@ export default async function EditContractPage({
         .order("full_name"),
       supabase
         .from("profiles")
-        .select("id, full_name")
+        .select("id, full_name, primary_specialty, skill_level, skill_tags")
         .eq("role", "technician")
         .eq("is_active", true)
         .order("full_name"),
@@ -80,7 +80,13 @@ export default async function EditContractPage({
         currentVersion={Number(contract.version_number ?? 1)}
         customers={customers.map((c) => ({ id: c.id, label: c.name }))}
         managers={(managers ?? []).map((m) => ({ id: m.id, label: m.full_name }))}
-        technicians={(technicians ?? []).map((t) => ({ id: t.id, label: t.full_name }))}
+        technicians={(technicians ?? []).map((t) => ({
+          id: t.id,
+          full_name: t.full_name,
+          primary_specialty: t.primary_specialty ?? null,
+          skill_level: t.skill_level ?? null,
+          skill_tags: t.skill_tags ?? [],
+        }))}
         initialValues={{
           contract_number: contract.contract_number,
           name: contract.name,

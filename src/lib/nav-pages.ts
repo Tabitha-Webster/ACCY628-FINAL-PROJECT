@@ -17,13 +17,13 @@ const ADMIN_EXTRA_PAGES: SearchablePage[] = [
   { href: "/admin/system", label: "Platform Status", group: "System" },
   { href: "/admin/exceptions", label: "Exception Log", group: "System" },
   { href: "/admin/exports", label: "Data Exports", group: "System" },
-  { href: "/admin/search", label: "Global Search", group: "System" },
 ];
 
 const CONTRACTS_PAGES: SearchablePage[] = [
   { href: "/contracts/reports", label: "Contracts Dashboard", group: "Contracts & Agreements" },
   { href: "/contracts", label: "Manage Contracts", group: "Contracts & Agreements" },
   { href: "/contracts/view-edit", label: "View and Edit Contracts", group: "Contracts & Agreements" },
+  { href: "/contracts/assigned", label: "Assigned Contracts", group: "Contracts & Agreements" },
   { href: "/contracts/awaiting-signature", label: "Awaiting Your Signature", group: "Contracts & Agreements" },
   { href: "/contracts/new", label: "New Contract", group: "Contracts & Agreements" },
   { href: "/contracts/renewals", label: "Renewal & Expiration", group: "Contracts & Agreements" },
@@ -50,6 +50,13 @@ const MANAGER_BILLING_FINANCE_PAGES: SearchablePage[] = [
 const MANAGER_COMPANY_DIRECTORY_PAGES: SearchablePage[] = [
   { href: "/customers", label: "Customers", group: "Company Directory" },
   { href: "/admin/employees", label: "Employees", group: "Company Directory" },
+];
+
+const SERVICE_DELIVERY_PAGES: SearchablePage[] = [
+  { href: "/tickets", label: "Support Tickets", group: "Service Delivery" },
+  { href: "/projects", label: "Project Tasks", group: "Service Delivery" },
+  { href: "/time-costs", label: "Submit Time and Costs", group: "Service Delivery" },
+  { href: "/additional-work", label: "Additional Work Requests", group: "Service Delivery" },
 ];
 
 function dedupePages(pages: SearchablePage[]) {
@@ -91,6 +98,7 @@ export function pagesForRole(
         if (page.href === "/contracts/customers") return role === "admin" || role === "manager";
         if (page.href === "/contracts/awaiting-signature") return role === "executive" || role === "admin";
         if (page.href === "/contracts/view-edit") return role === "admin" || role === "manager";
+        if (page.href === "/contracts/assigned") return role === "manager";
         if (page.href === "/contracts/renewals")
           return role === "admin" || role === "manager" || role === "billing" || role === "technician";
         return true;
@@ -104,6 +112,10 @@ export function pagesForRole(
 
   if (role === "manager") {
     pages.push(...MANAGER_BILLING_FINANCE_PAGES, ...MANAGER_COMPANY_DIRECTORY_PAGES);
+  }
+
+  if (role === "technician") {
+    pages.push(...SERVICE_DELIVERY_PAGES);
   }
 
   if (role === "customer") {

@@ -12,7 +12,7 @@ function pathActive(pathname: string, href: string) {
   if (href === "/contracts") {
     return (
       pathname === "/contracts" ||
-      /^\/contracts\/(?!reports(?:\/|$)|renewals(?:\/|$)|customers(?:\/|$)|new(?:\/|$)|awaiting-signature(?:\/|$)|view-edit(?:\/|$)|[^/]+\/(?:view|edit)(?:\/|$)).+/.test(
+      /^\/contracts\/(?!reports(?:\/|$)|renewals(?:\/|$)|customers(?:\/|$)|new(?:\/|$)|awaiting-signature(?:\/|$)|view-edit(?:\/|$)|assigned(?:\/|$)|[^/]+\/(?:view|edit)(?:\/|$)).+/.test(
         pathname
       )
     );
@@ -36,6 +36,7 @@ export function ContractsAgreementsNavTree({
   showCustomerContractData = false,
   showAwaitingSignature = false,
   showViewEditContracts = false,
+  showAssignedContracts = false,
   showRenewals = true,
   onNavigate,
   allowedPageKeys = null,
@@ -45,6 +46,7 @@ export function ContractsAgreementsNavTree({
   showCustomerContractData?: boolean;
   showAwaitingSignature?: boolean;
   showViewEditContracts?: boolean;
+  showAssignedContracts?: boolean;
   showRenewals?: boolean;
   onNavigate?: () => void;
   allowedPageKeys?: Set<string> | null;
@@ -56,6 +58,9 @@ export function ContractsAgreementsNavTree({
       { href: "/contracts", label: "Manage Contracts" },
       ...(showViewEditContracts
         ? [{ href: "/contracts/view-edit", label: "View and Edit Contracts" }]
+        : []),
+      ...(showAssignedContracts
+        ? [{ href: "/contracts/assigned", label: "Assigned Contracts" }]
         : []),
       ...(showAwaitingSignature
         ? [{ href: "/contracts/awaiting-signature", label: "Awaiting Your Signature" }]
@@ -72,6 +77,7 @@ export function ContractsAgreementsNavTree({
       showCustomerContractData,
       showAwaitingSignature,
       showViewEditContracts,
+      showAssignedContracts,
       showRenewals,
     ]
   );

@@ -24,14 +24,17 @@ export default async function AdminDemoSettingsPage() {
       <div className="mb-4 rounded-box border border-base-300 bg-base-100 p-4 text-sm">
         <p className="font-semibold">How demos work</p>
         <ul className="mt-2 list-disc space-y-1 pl-5 opacity-80">
-          <li>All listed demo passwords are <code>1234</code>.</li>
           <li>
-            On the login page, Demo Login Selector fills email/password; the user still clicks Sign
-            in.
+            With Demo Mode on, click a role on login or in the header switcher to sign in
+            instantly — no password.
           </li>
           <li>
-            Demo Mode is on by default: the header Demo Role Switcher signs in to demo accounts
+            Demo Mode is on by default: the header Demo Role control signs in to demo accounts
             without typing a password.
+          </li>
+          <li>
+            Demo account passwords remain <code>1234</code> for manual email/password sign-in when
+            Demo Mode is off.
           </li>
           <li>
             Set <code>NEXT_PUBLIC_DEMO_MODE=false</code> in <code>.env.local</code> (then restart

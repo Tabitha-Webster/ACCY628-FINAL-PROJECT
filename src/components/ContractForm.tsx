@@ -5,6 +5,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { SignaturePad } from "@/components/SignaturePad";
+import { buildContractPdfBlob, downloadPdfBlob } from "@/lib/contracts/build-contract-pdf";
+import { formatCurrency } from "@/lib/format";
+import {
+  formatTechnicianOptionLabel,
+  rankTechniciansForContract,
+  skillLevelLabel,
+  type TechnicianSkillProfile,
+} from "@/lib/technicians/skills";
 import {
   BILLING_FREQUENCIES,
   BILLING_METHOD_OPTIONS,
@@ -13,8 +21,10 @@ import {
   CONTRACT_BILLING_STATUS_LABELS,
   CONTRACT_STATUSES,
   CONTRACT_STATUS_LABELS,
+  CONTRACT_TYPE_DESCRIPTIONS,
   CONTRACT_TYPE_LABELS,
   CONTRACT_TYPES,
+  isKnownContractType,
   RENEWAL_TYPES,
   WORK_LOCATION_LABELS,
   WORK_LOCATIONS,
@@ -29,11 +39,10 @@ import {
   locationAdjustedAmount,
   workLocationAdjustmentLabel,
   packetSignaturesForPdf,
+  pdfContractFromFormValues,
   type ContractFormFieldErrors,
   type ContractFormValues,
 } from "@/lib/contracts";
-import { buildContractPdfBlob } from "@/lib/contracts/build-contract-pdf";
-import { formatCurrency } from "@/lib/format";
 
 export type ContractFormOption = { id: string; label: string };
 
@@ -48,17 +57,34 @@ function joinServiceList(items: string[]): string {
   return items.join("\n");
 }
 
+const fieldControlClass = "input input-bordered h-10 w-full text-left";
+const selectControlClass = "select select-bordered h-10 w-full text-left";
+const textareaControlClass = "textarea textarea-bordered w-full text-left";
+const fieldGridClass = "grid grid-cols-1 items-start gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-3";
+
 function ServiceChecklist({
   options,
   selected,
   onToggle,
+  onAddCustom,
+  customPlaceholder = "Type a service not listed above",
 }: {
   options: readonly string[];
   selected: string[];
   onToggle: (option: string) => void;
+  onAddCustom: (option: string) => void;
+  customPlaceholder?: string;
 }) {
+  const [customText, setCustomText] = useState("");
   const selectedSet = new Set(selected);
   const extras = selected.filter((item) => !options.includes(item));
+
+  function addCustom() {
+    const next = customText.trim();
+    if (!next) return;
+    onAddCustom(next);
+    setCustomText("");
+  }
 
   return (
     <div className="w-full space-y-2">
@@ -91,16 +117,41 @@ function ServiceChecklist({
                 />
                 <span>
                   {option}
-                  <span className="ml-1 opacity-50">(existing)</span>
+                  <span className="ml-1 opacity-50">(custom)</span>
                 </span>
               </label>
             </li>
           ))}
         </ul>
       </div>
+      <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+        <input
+          className={`${fieldControlClass} sm:flex-1`}
+          value={customText}
+          onChange={(e) => setCustomText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addCustom();
+            }
+          }}
+          placeholder={customPlaceholder}
+        />
+        <button
+          type="button"
+          className="btn btn-outline btn-sm shrink-0"
+          onClick={(e) => {
+            e.preventDefault();
+            addCustom();
+          }}
+          disabled={!customText.trim()}
+        >
+          Add
+        </button>
+      </div>
       <p className="text-xs opacity-60">
         {selected.length === 0
-          ? "Select one or more options."
+          ? "Select options above, or type your own and click Add."
           : `${selected.length} selected`}
       </p>
     </div>
@@ -116,8 +167,22 @@ type Props = {
   initialValues?: Partial<ContractFormValues>;
   customers: ContractFormOption[];
   managers: ContractFormOption[];
-  technicians?: ContractFormOption[];
+  technicians?: TechnicianSkillProfile[];
+  /** From Admin → Configurations → Numbering (defaults to CTR-). */
+  contractNumberPrefix?: string;
 };
+
+async function consumeContractNumber(contractNumber: string) {
+  try {
+    await fetch("/api/numbering/next", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "contract", consume: contractNumber }),
+    });
+  } catch {
+    // Non-blocking — contract is already saved.
+  }
+}
 
 const CREATE_STEPS = [
   { id: "details", label: "Details & dates" },
@@ -160,11 +225,6 @@ function FormField({
   );
 }
 
-const fieldControlClass = "input input-bordered h-10 w-full text-left";
-const selectControlClass = "select select-bordered h-10 w-full text-left";
-const textareaControlClass = "textarea textarea-bordered w-full text-left";
-const fieldGridClass = "grid grid-cols-1 items-start gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-3";
-
 export function ContractForm({
   mode,
   profileId,
@@ -175,6 +235,7 @@ export function ContractForm({
   customers,
   managers,
   technicians = [],
+  contractNumberPrefix = "CTR-",
 }: Props) {
   const router = useRouter();
   const [values, setValues] = useState<ContractFormValues>(() =>
@@ -190,12 +251,23 @@ export function ContractForm({
   );
   const [newCustomerName, setNewCustomerName] = useState("");
   const [customerOptions, setCustomerOptions] = useState(customers);
+  const [contractTypeMode, setContractTypeMode] = useState<"preset" | "custom">(() =>
+    isKnownContractType(emptyContractFormValues(initialValues).contract_type)
+      ? "preset"
+      : "custom"
+  );
+  const [customContractType, setCustomContractType] = useState(() => {
+    const initial = emptyContractFormValues(initialValues).contract_type;
+    return isKnownContractType(initial) ? "" : initial;
+  });
+  const [openContractTypeHelp, setOpenContractTypeHelp] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<ContractFormFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [signatureAck, setSignatureAck] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [pdfRefreshKey, setPdfRefreshKey] = useState(0);
 
   const title =
     mode === "create"
@@ -234,44 +306,33 @@ export function ContractForm({
   const managerLabel =
     managers.find((m) => m.id === values.assigned_manager_id)?.label ?? profileName;
 
+  const rankedTechnicians = useMemo(
+    () =>
+      rankTechniciansForContract(technicians, {
+        contract_type: values.contract_type || null,
+        included_services: values.included_services || null,
+        work_location: values.work_location || null,
+      }),
+    [technicians, values.contract_type, values.included_services, values.work_location]
+  );
+  const recommendedTechnician = rankedTechnicians[0]?.tech ?? null;
+  const recommendedFit = rankedTechnicians[0]?.fit ?? 0;
+  const selectedTechnician =
+    technicians.find((t) => t.id === values.assigned_technician_id) ?? null;
+
   useEffect(() => {
     if (wizardStep !== 3) return;
     let revoked: string | null = null;
     let cancelled = false;
     (async () => {
       const blob = await buildContractPdfBlob({
-        contract: {
-          contract_number: values.contract_number,
-          name: values.name,
-          status: (values.status || "draft") as
-            | "draft"
-            | "pending_approval"
-            | "active"
-            | "on_hold"
-            | "expired"
-            | "canceled"
-            | "renewed",
-          contract_type: values.contract_type,
-          start_date: values.start_date,
-          end_date: values.end_date || null,
-          monthly_recurring_fee: Number(values.monthly_recurring_fee || 0),
-          included_hours_per_month: Number(values.included_hours_per_month || 0),
-          additional_hourly_rate: Number(values.additional_hourly_rate || 0),
-          payment_terms: values.payment_terms || null,
-          billing_frequency: values.billing_frequency || null,
-          sla_response_hours: values.sla_response_hours
-            ? Number(values.sla_response_hours)
-            : null,
-          sla_resolution_hours: values.sla_resolution_hours
-            ? Number(values.sla_resolution_hours)
-            : null,
-          description: values.description || null,
-          scope: values.scope || null,
-          included_services: values.included_services || null,
-          work_location: values.work_location || null,
-        },
+        contract: pdfContractFromFormValues(
+          values,
+          isDraftWorkflow ? "draft" : "pending_approval"
+        ),
         customerName: customerLabel,
         managerName: managerLabel,
+        technicianName: selectedTechnician?.full_name ?? null,
         signatures: packetSignaturesForPdf(
           mode === "create" && signatureData
             ? {
@@ -304,7 +365,38 @@ export function ContractForm({
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               }
-            : null
+            : mode === "edit"
+              ? {
+                  id: "preview-edit",
+                  contract_id: contractId ?? "preview",
+                  status: "draft",
+                  is_current: true,
+                  storage_path: null,
+                  document_id: null,
+                  manager_signed_by: null,
+                  manager_signed_at: null,
+                  manager_signature_data: buildDemoSignatureDataUrl(profileName || "Emilie Pierson"),
+                  manager_signer_name: profileName || "Emilie Pierson",
+                  executive_signed_by: null,
+                  executive_signed_at: null,
+                  executive_signature_data: null,
+                  executive_signer_name: null,
+                  admin_signed_by: null,
+                  admin_signed_at: null,
+                  admin_signature_data: null,
+                  admin_signer_name: null,
+                  customer_signed_by: null,
+                  customer_signed_at: null,
+                  customer_signature_data: null,
+                  customer_signer_name: null,
+                  rejection_reason: null,
+                  rejected_by: null,
+                  rejected_at: null,
+                  created_by: profileId,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }
+              : null
         ),
       });
       if (cancelled) return;
@@ -326,10 +418,14 @@ export function ContractForm({
     values,
     customerLabel,
     managerLabel,
+    selectedTechnician,
     signatureData,
     profileName,
     profileId,
     mode,
+    contractId,
+    isDraftWorkflow,
+    pdfRefreshKey,
   ]);
 
   function update<K extends keyof ContractFormValues>(key: K, value: ContractFormValues[K]) {
@@ -426,6 +522,17 @@ export function ContractForm({
       ? current.filter((item) => item !== option)
       : [...current, option];
     update(field, joinServiceList(next));
+  }
+
+  function addCustomService(
+    field: "included_services" | "excluded_services",
+    option: string
+  ) {
+    const trimmed = option.trim();
+    if (!trimmed) return;
+    const current = parseServiceList(values[field]);
+    if (current.some((item) => item.toLowerCase() === trimmed.toLowerCase())) return;
+    update(field, joinServiceList([...current, trimmed]));
   }
 
   async function goNextStep() {
@@ -525,6 +632,8 @@ export function ContractForm({
         changed_by: profileId,
         source: "create_wizard",
       });
+
+      await consumeContractNumber(valuesForSave.contract_number);
 
       setSaving(false);
       router.push("/contracts?status=draft");
@@ -659,6 +768,8 @@ export function ContractForm({
       }
       targetContractId = data.id;
 
+      await consumeContractNumber(valuesForSave.contract_number);
+
       await supabase.from("contract_versions").insert({
         contract_id: targetContractId,
         version_number: 1,
@@ -747,31 +858,11 @@ export function ContractForm({
 
     try {
       const blob = await buildContractPdfBlob({
-        contract: {
-          contract_number: valuesForSave.contract_number,
-          name: valuesForSave.name,
-          status: "pending_approval",
-          contract_type: valuesForSave.contract_type,
-          start_date: valuesForSave.start_date,
-          end_date: valuesForSave.end_date || null,
-          monthly_recurring_fee: Number(valuesForSave.monthly_recurring_fee || 0),
-          included_hours_per_month: Number(valuesForSave.included_hours_per_month || 0),
-          additional_hourly_rate: Number(valuesForSave.additional_hourly_rate || 0),
-          payment_terms: valuesForSave.payment_terms || null,
-          billing_frequency: valuesForSave.billing_frequency || null,
-          sla_response_hours: valuesForSave.sla_response_hours
-            ? Number(valuesForSave.sla_response_hours)
-            : null,
-          sla_resolution_hours: valuesForSave.sla_resolution_hours
-            ? Number(valuesForSave.sla_resolution_hours)
-            : null,
-          description: valuesForSave.description || null,
-          scope: valuesForSave.scope || null,
-          included_services: valuesForSave.included_services || null,
-          work_location: valuesForSave.work_location || null,
-        },
+        contract: pdfContractFromFormValues(valuesForSave, "pending_approval"),
         customerName: customerLabel,
         managerName: managerLabel,
+        technicianName:
+          technicians.find((t) => t.id === valuesForSave.assigned_technician_id)?.full_name ?? null,
         signatures: packetSignaturesForPdf(packet),
       });
       const path = `${targetContractId}/signature-packets/${packet.id}-${Date.now()}.pdf`;
@@ -945,31 +1036,11 @@ export function ContractForm({
 
     try {
       const blob = await buildContractPdfBlob({
-        contract: {
-          contract_number: values.contract_number,
-          name: values.name,
-          status: "pending_approval",
-          contract_type: values.contract_type,
-          start_date: values.start_date,
-          end_date: values.end_date || null,
-          monthly_recurring_fee: Number(values.monthly_recurring_fee || 0),
-          included_hours_per_month: Number(values.included_hours_per_month || 0),
-          additional_hourly_rate: Number(values.additional_hourly_rate || 0),
-          payment_terms: values.payment_terms || null,
-          billing_frequency: values.billing_frequency || null,
-          sla_response_hours: values.sla_response_hours
-            ? Number(values.sla_response_hours)
-            : null,
-          sla_resolution_hours: values.sla_resolution_hours
-            ? Number(values.sla_resolution_hours)
-            : null,
-          description: values.description || null,
-          scope: values.scope || null,
-          included_services: values.included_services || null,
-          work_location: values.work_location || null,
-        },
+        contract: pdfContractFromFormValues(values, "pending_approval"),
         customerName: customerLabel,
         managerName: managerLabel,
+        technicianName:
+          technicians.find((t) => t.id === values.assigned_technician_id)?.full_name ?? null,
         signatures: packetSignaturesForPdf(packet),
       });
       const path = `${contractId}/signature-packets/${packet.id}-${Date.now()}.pdf`;
@@ -1007,7 +1078,7 @@ export function ContractForm({
       .eq("approval_status", "pending");
 
     setSaving(false);
-    router.push("/contracts/view-edit");
+    router.push(`/contracts/${contractId}/view`);
     router.refresh();
   }
 
@@ -1022,7 +1093,7 @@ export function ContractForm({
             className={`${fieldControlClass} ${fieldErrors.contract_number ? "input-error" : ""}`}
             value={values.contract_number}
             onChange={(e) => update("contract_number", e.target.value)}
-            placeholder="CTR-1001"
+            placeholder={`${contractNumberPrefix}1001`}
           />
         </FormField>
         <FormField label="Contract name *" error={fieldErrors.name} className="sm:col-span-2">
@@ -1091,19 +1162,93 @@ export function ContractForm({
             </select>
           )}
         </FormField>
-        <FormField label="Contract type *">
-          <select
-            className={selectControlClass}
-            value={values.contract_type}
-            onChange={(e) => update("contract_type", e.target.value)}
-          >
-            {CONTRACT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {CONTRACT_TYPE_LABELS[t]}
-              </option>
-            ))}
-          </select>
-        </FormField>
+        <div className="form-control w-full min-w-0 sm:col-span-2">
+          <span className="mb-1.5 block min-h-5 text-left text-xs font-medium leading-5 tracking-wide opacity-70">
+            Contract type *
+          </span>
+          <div className="w-full space-y-2">
+            <div className="w-full overflow-hidden rounded-lg border border-base-300 bg-base-100">
+              <ul className="divide-y divide-base-300">
+                {CONTRACT_TYPES.map((t) => {
+                  const selected =
+                    contractTypeMode === "preset" && values.contract_type === t;
+                  const helpOpen = openContractTypeHelp === t;
+                  return (
+                    <li key={t} className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-sm">
+                          <input
+                            type="radio"
+                            name="contract_type_choice"
+                            className="radio radio-primary radio-sm"
+                            checked={selected}
+                            onChange={() => {
+                              setContractTypeMode("preset");
+                              setCustomContractType("");
+                              update("contract_type", t);
+                            }}
+                          />
+                          <span className="truncate">{CONTRACT_TYPE_LABELS[t]}</span>
+                        </label>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs btn-circle shrink-0 text-base font-semibold opacity-70"
+                          aria-label={`What does ${CONTRACT_TYPE_LABELS[t]} mean?`}
+                          aria-expanded={helpOpen}
+                          onClick={() =>
+                            setOpenContractTypeHelp((prev) => (prev === t ? null : t))
+                          }
+                        >
+                          ?
+                        </button>
+                      </div>
+                      {helpOpen ? (
+                        <p className="mt-1.5 pl-8 text-xs leading-snug opacity-70">
+                          {CONTRACT_TYPE_DESCRIPTIONS[t]}
+                        </p>
+                      ) : null}
+                    </li>
+                  );
+                })}
+                <li className="px-3 py-2">
+                  <label className="flex cursor-pointer items-center gap-3 text-sm">
+                    <input
+                      type="radio"
+                      name="contract_type_choice"
+                      className="radio radio-primary radio-sm"
+                      checked={contractTypeMode === "custom"}
+                      onChange={() => {
+                        setContractTypeMode("custom");
+                        setOpenContractTypeHelp(null);
+                        update("contract_type", customContractType.trim());
+                      }}
+                    />
+                    <span>Other (type your own)</span>
+                  </label>
+                  {contractTypeMode === "custom" ? (
+                    <input
+                      className={`${fieldControlClass} mt-2 ${
+                        fieldErrors.contract_type ? "input-error" : ""
+                      }`}
+                      value={customContractType}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setCustomContractType(next);
+                        update("contract_type", next);
+                      }}
+                      placeholder="Type a contract type not listed above"
+                      autoFocus
+                    />
+                  ) : null}
+                </li>
+              </ul>
+            </div>
+            <p className="text-xs opacity-60">
+              Choose a standard type, or pick Other to enter a custom contract type.
+            </p>
+          </div>
+          <FieldError message={fieldErrors.contract_type} />
+        </div>
         <FormField label="Status *" error={fieldErrors.status}>
           <select
             className={`${selectControlClass} ${fieldErrors.status ? "select-error" : ""}`}
@@ -1286,21 +1431,57 @@ export function ContractForm({
       </h2>
       <div className={fieldGridClass}>
         <FormField label="Assigned technician" className="sm:col-span-2 lg:col-span-3">
-            <div className="w-full">
+            <div className="w-full space-y-2">
+              {recommendedTechnician ? (
+                <div className="rounded-box border border-sky-200 bg-sky-50/80 px-3 py-2 text-sm dark:border-sky-800 dark:bg-sky-950/40">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-200">
+                        Recommended based on specialty &amp; skill level
+                      </p>
+                      <p className="mt-0.5 font-medium">
+                        {recommendedTechnician.full_name}
+                        <span className="font-normal opacity-70">
+                          {" "}
+                          — {recommendedTechnician.primary_specialty ?? "General support"} ·{" "}
+                          {skillLevelLabel(recommendedTechnician.skill_level)}
+                        </span>
+                      </p>
+                      <p className="text-xs opacity-60">Fit score {recommendedFit}%</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-xs shrink-0"
+                      onClick={() => update("assigned_technician_id", recommendedTechnician.id)}
+                      disabled={values.assigned_technician_id === recommendedTechnician.id}
+                    >
+                      {values.assigned_technician_id === recommendedTechnician.id
+                        ? "Selected"
+                        : "Use recommended"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               <select
                 className={selectControlClass}
                 value={values.assigned_technician_id}
                 onChange={(e) => update("assigned_technician_id", e.target.value)}
               >
                 <option value="">Unassigned</option>
-                {technicians.map((tech) => (
+                {rankedTechnicians.map(({ tech, fit }) => (
                   <option key={tech.id} value={tech.id}>
-                    {tech.label}
+                    {fit > 0 ? `★ ${fit}% · ` : ""}
+                    {formatTechnicianOptionLabel(tech)}
+                    {recommendedTechnician?.id === tech.id ? " (recommended)" : ""}
                   </option>
                 ))}
               </select>
               <p className="mt-1 text-xs opacity-60">
-                Optional. Assigns the primary technician who will support this agreement.
+                Optional. Technicians are ranked by how well their specialty and skill level match
+                this contract&apos;s type, work location, and covered services
+                {selectedTechnician
+                  ? `. Currently selected: ${formatTechnicianOptionLabel(selectedTechnician)}.`
+                  : "."}
               </p>
             </div>
           </FormField>
@@ -1585,6 +1766,8 @@ export function ContractForm({
             options={CONTRACT_COVERED_SERVICE_OPTIONS}
             selected={coveredServicesSelected}
             onToggle={(option) => toggleService("included_services", option)}
+            onAddCustom={(option) => addCustomService("included_services", option)}
+            customPlaceholder="Type a covered service not listed above"
           />
         </FormField>
         <FormField label="Excluded services" className="sm:col-span-2 lg:col-span-3">
@@ -1592,6 +1775,8 @@ export function ContractForm({
             options={CONTRACT_EXCLUDED_SERVICE_OPTIONS}
             selected={excludedServicesSelected}
             onToggle={(option) => toggleService("excluded_services", option)}
+            onAddCustom={(option) => addCustomService("excluded_services", option)}
+            customPlaceholder="Type an excluded service not listed above"
           />
         </FormField>
       </div>
@@ -1606,7 +1791,7 @@ export function ContractForm({
       <p className="text-center text-sm opacity-70">
         {isDraftWorkflow
           ? "Save an incomplete draft for later, or sign and send only when the contract is complete. Drafts appear under Manage Contracts."
-          : "Preview the updated agreement PDF, then save. Changes are sent to the executive for approval, then to the customer to accept."}
+          : "Preview the updated agreement PDF below (regenerated from your edits), then save. Changes are resent to the executive for approval, then to the customer."}
       </p>
 
       <div className="rounded-box border border-base-300 bg-base-200/40 p-4 text-sm">
@@ -1624,7 +1809,9 @@ export function ContractForm({
           <div>
             <dt className="opacity-60">Technician</dt>
             <dd className="font-medium">
-              {technicians.find((t) => t.id === values.assigned_technician_id)?.label ?? "Unassigned"}
+              {selectedTechnician
+                ? formatTechnicianOptionLabel(selectedTechnician)
+                : "Unassigned"}
             </dd>
           </div>
           <div>
@@ -1636,6 +1823,46 @@ export function ContractForm({
             </dd>
           </div>
         </dl>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium">Updated contract PDF</p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            disabled={!previewUrl || saving}
+            onClick={() => {
+              if (!previewUrl) return;
+              void (async () => {
+                const blob = await buildContractPdfBlob({
+                  contract: pdfContractFromFormValues(
+                    values,
+                    isDraftWorkflow ? "draft" : "pending_approval"
+                  ),
+                  customerName: customerLabel,
+                  managerName: managerLabel,
+                  technicianName: selectedTechnician?.full_name ?? null,
+                  signatures: packetSignaturesForPdf(null),
+                });
+                downloadPdfBlob(blob, `${values.contract_number || "contract"}-agreement.pdf`);
+              })();
+            }}
+          >
+            Download PDF
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={saving}
+            onClick={() => {
+              setPreviewUrl(null);
+              setPdfRefreshKey((key) => key + 1);
+            }}
+          >
+            Regenerate PDF
+          </button>
+        </div>
       </div>
 
       {previewUrl ? (

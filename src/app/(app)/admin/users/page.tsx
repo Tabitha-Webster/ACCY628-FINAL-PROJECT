@@ -5,7 +5,6 @@ import { getCurrentProfile } from "@/lib/auth";
 import { isAdminRole, type UserRole } from "@/lib/constants";
 import { PageHeader, ErrorState } from "@/components/ui";
 import { AdminUserManager, type AdminUserRow } from "@/components/AdminUserManager";
-import { AdminCreateUserForm } from "@/components/AdminCreateUserForm";
 
 export default async function AdminUsersPage() {
   const profile = await getCurrentProfile();
@@ -34,7 +33,7 @@ export default async function AdminUsersPage() {
     <div>
       <PageHeader
         title="Manage Access"
-        description="Create and maintain portal logins, assign each person a C2C role, and activate or deactivate access."
+        description="Maintain portal logins, assign each person a C2C role, and activate or deactivate access."
         actions={
           <Link href="/admin" className="btn btn-sm btn-outline">
             Back to Admin Home
@@ -51,10 +50,6 @@ export default async function AdminUsersPage() {
           </span>
         </div>
       ) : null}
-
-      <div className="mb-6">
-        <AdminCreateUserForm />
-      </div>
 
       <AdminUserManager
         users={users.map((u) => ({ ...u, role: u.role as UserRole }))}

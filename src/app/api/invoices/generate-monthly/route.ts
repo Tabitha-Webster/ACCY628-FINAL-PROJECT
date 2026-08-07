@@ -19,12 +19,7 @@ import {
   projectBillingBlockReason,
 } from "@/lib/billing-eligibility";
 import { billedHourlyRate, billedMonthlyRecurringFee } from "@/lib/contracts";
-
-function generateInvoiceNumber(): string {
-  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const suffix = Math.floor(1000 + Math.random() * 9000);
-  return `INV-${stamp}-${suffix}`;
-}
+import { allocateNextDocumentNumber, loadNumberingSettings } from "@/lib/document-numbering";
 
 export async function POST(request: Request) {
   const profile = await getCurrentProfile();
@@ -80,6 +75,8 @@ export async function POST(request: Request) {
   const created: { invoiceNumber: string; contractName: string; total: number }[] = [];
   const skipped: string[] = [];
   const errors: string[] = [];
+  const { config: systemConfig } = await loadNumberingSettings();
+  const taxRate = Math.max(0, Number(systemConfig.tax.defaultTaxRatePct) || 0) / 100;
 
   for (const contract of contracts) {
     const monthlyAlreadyBilled = alreadyBilled.has(contract.id);
@@ -244,6 +241,7 @@ export async function POST(request: Request) {
       taxStatus: contract.tax_status,
       paymentTerms: contract.payment_terms,
       currentStatus: "draft",
+      taxRate,
     });
 
     if (totals.subtotal <= 0) {
@@ -255,10 +253,18 @@ export async function POST(request: Request) {
       continue;
     }
 
+    const allocated = await allocateNextDocumentNumber("invoice");
+    if (allocated.error || !allocated.number) {
+      errors.push(
+        `${contract.name}: ${allocated.error || "could not allocate invoice number from Configurations"}`
+      );
+      continue;
+    }
+
     const { data: invoice, error: invoiceError } = await supabase
       .from("invoices")
       .insert({
-        invoice_number: generateInvoiceNumber(),
+        invoice_number: allocated.number,
         customer_id: contract.customer_id,
         contract_id: contract.id,
         invoice_date: totals.invoiceDate,

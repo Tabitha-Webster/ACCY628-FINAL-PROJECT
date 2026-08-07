@@ -1,4 +1,3 @@
-import { jsPDF } from "jspdf";
 import type { ContractPdfInput } from "./signature-packets";
 
 function money(n: number | null | undefined) {
@@ -24,14 +23,23 @@ function fmtDateTime(value: string) {
   });
 }
 
+function labelize(value: string | null | undefined) {
+  if (!value) return "—";
+  return String(value).replace(/_/g, " ");
+}
+
 /**
  * Build a ServiceSync contract PDF from agreement fields and optional signature images.
+ * Always uses the current contract field values passed in (regenerate after edits).
+ * jspdf is loaded dynamically so missing installs fail at PDF time, not page load.
  */
 export async function buildContractPdfBlob(input: ContractPdfInput): Promise<Blob> {
+  const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 48;
   let y = margin;
+  const c = input.contract;
 
   const ensureSpace = (needed: number) => {
     if (y + needed > doc.internal.pageSize.getHeight() - margin) {
@@ -71,41 +79,66 @@ export async function buildContractPdfBlob(input: ContractPdfInput): Promise<Blo
   doc.line(margin, y, pageWidth - margin, y);
   y += 16;
 
-  field("Contract number", input.contract.contract_number);
-  field("Agreement name", input.contract.name);
+  field("Contract number", c.contract_number);
+  field("Agreement name", c.name);
   field("Customer", input.customerName);
   field("Account manager", input.managerName ?? "—");
-  field("Contract type", String(input.contract.contract_type).replace(/_/g, " "));
-  field("Work location", String(input.contract.work_location ?? "—").replace(/_/g, " "));
-  field("Term", `${fmtDate(input.contract.start_date)} – ${fmtDate(input.contract.end_date)}`);
-  field("Base monthly recurring fee", money(input.contract.monthly_recurring_fee));
-  if (input.contract.work_location === "remote" || input.contract.work_location === "on_site") {
-    const multiplier = input.contract.work_location === "on_site" ? 1.15 : 0.92;
-    const billed = Math.round(Number(input.contract.monthly_recurring_fee ?? 0) * multiplier * 100) / 100;
+  field("Assigned technician", input.technicianName ?? "—");
+  field("Contract type", labelize(String(c.contract_type)));
+  field("Work location", labelize(c.work_location));
+  field("Effective date", fmtDate(c.effective_date ?? c.start_date));
+  field("Term", `${fmtDate(c.start_date)} – ${fmtDate(c.end_date)}`);
+  field("Base monthly recurring fee", money(c.monthly_recurring_fee));
+  if (c.work_location === "remote" || c.work_location === "on_site") {
+    const multiplier = c.work_location === "on_site" ? 1.15 : 0.92;
+    const billed = Math.round(Number(c.monthly_recurring_fee ?? 0) * multiplier * 100) / 100;
     field(
       "Billed monthly fee",
-      `${money(billed)} (${input.contract.work_location === "on_site" ? "on-site +15%" : "remote −8%"})`
+      `${money(billed)} (${c.work_location === "on_site" ? "on-site +15%" : "remote −8%"})`
     );
   }
-  field("Included hours / month", String(input.contract.included_hours_per_month ?? 0));
-  field("Additional hourly rate", `${money(input.contract.additional_hourly_rate)}/hr`);
-  field("Billing frequency", String(input.contract.billing_frequency ?? "—").replace(/_/g, " "));
-  field("Payment terms", input.contract.payment_terms ?? "—");
-  if (input.contract.sla_response_hours != null) {
-    field("SLA response", `${input.contract.sla_response_hours} hours`);
+  field("One-time setup fee", money(c.one_time_setup_fee));
+  field("Included hours / month", String(c.included_hours_per_month ?? 0));
+  field("Additional hourly rate", `${money(c.additional_hourly_rate)}/hr`);
+  field("Overages allowed", c.overages_allowed ? "Yes" : "No");
+  field("Billing frequency", labelize(c.billing_frequency));
+  field("Billing method", c.billing_method ?? "—");
+  field("Payment terms", c.payment_terms ?? "—");
+  field("Billing contact", c.billing_contact ?? "—");
+  field("Renewal type", labelize(c.renewal_type));
+  if (c.renewal_terms) field("Renewal terms", c.renewal_terms);
+  if (c.cancellation_notice_days != null) {
+    field("Cancellation notice", `${c.cancellation_notice_days} days`);
   }
-  if (input.contract.sla_resolution_hours != null) {
-    field("SLA resolution", `${input.contract.sla_resolution_hours} hours`);
+  if (c.cancellation_terms) field("Cancellation terms", c.cancellation_terms);
+
+  if (c.sla_critical_response_hours != null || c.sla_response_hours != null) {
+    y += 4;
+    line("Service levels", { bold: true, size: 12 });
+    if (c.sla_critical_response_hours != null) field("Critical response", `${c.sla_critical_response_hours} hours`);
+    if (c.sla_high_response_hours != null) field("High response", `${c.sla_high_response_hours} hours`);
+    if (c.sla_medium_response_hours != null) field("Medium response", `${c.sla_medium_response_hours} hours`);
+    if (c.sla_low_response_hours != null) field("Low response", `${c.sla_low_response_hours} hours`);
+    if (c.sla_response_hours != null) field("Overall response", `${c.sla_response_hours} hours`);
+    if (c.sla_resolution_hours != null) field("Overall resolution", `${c.sla_resolution_hours} hours`);
   }
 
   y += 8;
   line("Scope & services", { bold: true, size: 12 });
-  line(input.contract.scope || input.contract.description || "As defined in the ServiceSync contract record.");
-  if (input.contract.included_services) {
+  line(c.scope || c.description || "As defined in the ServiceSync contract record.");
+  if (c.included_services) {
     y += 4;
     line("Included services", { bold: true, size: 11 });
-    line(input.contract.included_services);
+    line(c.included_services);
   }
+  if (c.excluded_services) {
+    y += 4;
+    line("Excluded services", { bold: true, size: 11 });
+    line(c.excluded_services);
+  }
+  if (c.supported_locations) field("Supported locations", c.supported_locations);
+  if (c.supported_users_devices) field("Supported users / devices", c.supported_users_devices);
+  if (c.after_hours_terms) field("After-hours terms", c.after_hours_terms);
 
   y += 12;
   line("Signatures", { bold: true, size: 12 });
@@ -185,7 +218,6 @@ export function printPdfBlob(blob: Blob) {
     win.focus();
     win.print();
   });
-  // Revoke after print dialog is likely done / window closed.
   win.addEventListener("afterprint", revoke);
   setTimeout(revoke, 60_000);
 }

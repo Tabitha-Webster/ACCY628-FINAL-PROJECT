@@ -12,7 +12,6 @@ import {
   Money,
   DateText,
 } from "@/components/ui";
-import { type MonthlyFinancials } from "@/components/ManagerCharts";
 import { CustomerHomeVisuals } from "@/components/CustomerHomeVisuals";
 import { ExecutiveDashboardVisuals } from "@/components/ExecutiveDashboardVisuals";
 import { HrHomeVisuals } from "@/components/HrHomeVisuals";
@@ -28,6 +27,8 @@ import {
 import { AR_AGING_BUCKETS, arAgingBucket, usagePercentage, usageStatus, hoursRemaining } from "@/lib/calculations";
 import {
   evaluateTicketSla,
+  evaluateTechnicianTicketSla,
+  withDemoSlaTargets,
   localDateKey,
   localDateKeyFromIso,
 } from "@/lib/sla";
@@ -39,6 +40,7 @@ import {
   EXECUTIVE_SIGNATURE_OVERDUE_DAYS,
   fetchContractReportMetrics,
   listAwaitingExecutiveSignatures,
+  listOpenContractCompletionRequests,
   summarizeContractsByStatus,
 } from "@/lib/contracts";
 import { round2, withDerivedInvoiceStatus } from "@/lib/billing";
@@ -58,7 +60,6 @@ import type {
   AdditionalWorkRequest,
   Contract,
   ContractStatus,
-  DirectCost,
   Dispute,
   Payment,
   Project,
@@ -77,11 +78,6 @@ const OPEN_TICKET_STATUSES = [
 
 function monthKey(dateStr: string) {
   return dateStr.slice(0, 7); // yyyy-MM
-}
-
-function monthLabel(dateStr: string) {
-  const d = new Date(`${dateStr}-01T00:00:00`);
-  return new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" }).format(d);
 }
 
 function lastNMonthKeys(n: number) {
@@ -418,15 +414,14 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
     openTicketsRes,
     additionalWorkRes,
     timeEntriesRes,
-    directCostsRes,
     invoicesRes,
-    revenueRes,
     activeContractsRes,
     customersRes,
     contractReportRes,
     proposedProjectsRes,
     awaitingCustomerRes,
     pendingMilestonesRes,
+    completionRequestsRes,
   ] = await Promise.all([
     supabase.from("customers").select("id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("contracts").select("id", { count: "exact", head: true }).eq("status", "active"),
@@ -442,13 +437,11 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
       .eq("approval_status", "pending"),
     supabase
       .from("time_entries")
-      .select("contract_id, customer_id, hours_worked, labor_cost, classification, work_date")
+      .select("contract_id, customer_id, hours_worked, classification, work_date")
       .gte("work_date", rangeStart),
-    supabase.from("direct_costs").select("internal_cost, cost_date").gte("cost_date", rangeStart),
     supabase
       .from("invoices")
       .select("id, customer_id, invoice_number, status, remaining_balance, due_date, amount_paid, dispute_status"),
-    supabase.from("revenue_records").select("period_month, recognition, amount").gte("period_month", rangeStart),
     supabase
       .from("contracts")
       .select("id, name, contract_number, customer_id, included_hours_per_month")
@@ -474,6 +467,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
       .eq("approval_status", "pending")
       .order("due_date", { ascending: true, nullsFirst: false })
       .limit(8),
+    listOpenContractCompletionRequests(supabase),
   ]);
 
   const customerName = new Map((customersRes.data ?? []).map((c) => [c.id, c.name as string]));
@@ -502,15 +496,17 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
     approval_status: string | null;
     projects: { id: string; name: string; customer_id: string } | { id: string; name: string; customer_id: string }[] | null;
   }>;
+  const completionRequests = completionRequestsRes.data ?? [];
   const pendingApprovalsTotal =
-    additionalWork.length + projectsNeedingCustomerAction.length + pendingMilestones.length;
+    additionalWork.length +
+    projectsNeedingCustomerAction.length +
+    pendingMilestones.length +
+    completionRequests.length;
   const timeEntries = (timeEntriesRes.data ?? []) as Pick<
     TimeEntry,
-    "contract_id" | "customer_id" | "hours_worked" | "labor_cost" | "classification" | "work_date"
+    "contract_id" | "customer_id" | "hours_worked" | "classification" | "work_date"
   >[];
-  const directCosts = (directCostsRes.data ?? []) as Pick<DirectCost, "internal_cost" | "cost_date">[];
   const invoices = (invoicesRes.data ?? []).map((invoice) => withDerivedInvoiceStatus(invoice));
-  const revenue = (revenueRes.data ?? []) as Pick<RevenueRecord, "period_month" | "recognition" | "amount">[];
   const activeContracts = (activeContractsRes.data ?? []) as Pick<
     Contract,
     "id" | "name" | "contract_number" | "customer_id" | "included_hours_per_month"
@@ -541,36 +537,6 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
   });
   const contractsOverHours = contractsWithUsage.filter((c) => c.status === "over_limit");
 
-  const currentMonthKey = monthKeys[monthKeys.length - 1];
-  const revenueThisMonth = revenue
-    .filter((r) => r.recognition === "earned" && monthKey(r.period_month) === currentMonthKey)
-    .reduce((sum, r) => sum + Number(r.amount), 0);
-  const laborCostThisMonth = timeEntries
-    .filter((t) => monthKey(t.work_date) === currentMonthKey)
-    .reduce((sum, t) => sum + Number(t.labor_cost ?? 0), 0);
-  const directCostThisMonth = directCosts
-    .filter((c) => monthKey(c.cost_date) === currentMonthKey)
-    .reduce((sum, c) => sum + Number(c.internal_cost), 0);
-  const costThisMonth = laborCostThisMonth + directCostThisMonth;
-  const profitThisMonth = revenueThisMonth - costThisMonth;
-
-  const monthlyFinancials: MonthlyFinancials[] = monthKeys.map((key) => {
-    const rev = revenue
-      .filter((r) => r.recognition === "earned" && monthKey(r.period_month) === key)
-      .reduce((sum, r) => sum + Number(r.amount), 0);
-    const labor = timeEntries
-      .filter((t) => monthKey(t.work_date) === key)
-      .reduce((sum, t) => sum + Number(t.labor_cost ?? 0), 0);
-    const direct = directCosts
-      .filter((c) => monthKey(c.cost_date) === key)
-      .reduce((sum, c) => sum + Number(c.internal_cost), 0);
-    const cost = labor + direct;
-    return { month: monthLabel(key), revenue: rev, cost, profit: rev - cost };
-  });
-
-  const ar = invoices
-    .filter((i) => !["draft", "canceled", "paid"].includes(i.status) && Number(i.remaining_balance) > 0)
-    .reduce((sum, i) => sum + Number(i.remaining_balance), 0);
   const todayStr = new Date().toISOString().slice(0, 10);
   const overdue = invoices
     .filter(
@@ -587,6 +553,12 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
   })).filter((row) => row.count > 0);
 
   const approvalChips = [
+    ...completionRequests.slice(0, 4).map((r) => ({
+      id: `cc-${r.id}`,
+      label: r.contract_name,
+      detail: `${r.contract_number ?? "Contract"} · ready to complete`,
+      href: `/contracts/${r.contract_id}`,
+    })),
     ...additionalWork.slice(0, 4).map((w) => ({
       id: `aw-${w.id}`,
       label: w.title,
@@ -640,15 +612,14 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
           hint: `${slaMissed.length} missed · ${slaAtRisk.length} at risk`,
         },
         {
-          label: "Monthly Profit",
-          value: formatCurrency(profitThisMonth),
-          href: "/profitability",
-          tone: profitThisMonth >= 0 ? "emerald" : "amber",
-          hint: `Rev ${formatCurrency(revenueThisMonth)} · AR ${formatCurrency(ar)}`,
+          label: "Pending Approvals",
+          value: String(pendingApprovalsTotal),
+          href: "/projects",
+          tone: pendingApprovalsTotal > 0 ? "amber" : "emerald",
+          hint: pendingApprovalsTotal > 0 ? "Work, projects, milestones" : "Queue clear",
         },
       ]}
       ticketStatusSlices={ticketStatusSlices}
-      monthlyFinancials={monthlyFinancials}
       attentionTickets={ticketsNeedingAttention.slice(0, 5).map((t) => ({
         id: t.id,
         ticketNumber: t.ticket_number,
@@ -667,6 +638,7 @@ async function ManagerDashboard({ profile }: { profile: Profile }) {
       }))}
       approvals={approvalChips}
       pendingApprovalsTotal={pendingApprovalsTotal}
+      showFinancialChart={false}
     />
 
   );
@@ -828,7 +800,8 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
   }
 
   function toWorkspaceTicket(t: (typeof ticketRows)[number]): WorkspaceTicket {
-    const live = evaluateTicketSla(t);
+    const display = withDemoSlaTargets(t);
+    const live = evaluateTechnicianTicketSla(display);
     const contract = t.contract_id ? contractById.get(t.contract_id) : null;
     const included = contract ? Number(contract.included_hours_per_month ?? 0) : null;
     const used = t.contract_id ? hoursByContract.get(t.contract_id) ?? 0 : null;
@@ -847,11 +820,11 @@ async function TechnicianDashboard({ profile }: { profile: Profile }) {
         : null,
       priority: t.priority,
       status: t.status,
-      submitted_at: t.submitted_at,
-      target_response_at: t.target_response_at,
-      target_resolution_at: t.target_resolution_at,
-      actual_response_at: t.actual_response_at,
-      completed_at: t.completed_at,
+      submitted_at: display.submitted_at,
+      target_response_at: display.target_response_at,
+      target_resolution_at: display.target_resolution_at,
+      actual_response_at: display.actual_response_at,
+      completed_at: display.completed_at,
       technician_notes: t.technician_notes,
       customer_resolution_summary: t.customer_resolution_summary,
       classification: t.classification,

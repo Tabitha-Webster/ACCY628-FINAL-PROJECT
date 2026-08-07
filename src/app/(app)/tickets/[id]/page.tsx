@@ -13,9 +13,9 @@ import {
   DateText,
   StatCard,
 } from "@/components/ui";
-import { formatDateTime, statusLabel } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { hoursRemaining, usagePercentage } from "@/lib/calculations";
-import { evaluateTicketSla } from "@/lib/sla";
+import { evaluateTicketSla, evaluateTechnicianTicketSla } from "@/lib/sla";
 import { completedTicketQualityIssues } from "@/lib/technicianWork";
 import { SlaConditionBadge, TicketSlaAlerts } from "@/components/SlaBadges";
 import { ServiceModeBadge, serviceModeLabel } from "@/components/ServiceModeBadge";
@@ -212,7 +212,7 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
 
   const totalTicketHours = timeEntries.reduce((sum, e) => sum + Number(e.hours_worked), 0);
   const hasTimeEntryDescriptions = timeEntries.some((e) => Boolean(e.description?.trim()));
-  const sla = evaluateTicketSla(t);
+  const sla = role === "technician" ? evaluateTechnicianTicketSla(t) : evaluateTicketSla(t);
   const isOverdue = sla.overdue;
   const qualityIssues = completedTicketQualityIssues({
     status: t.status,
@@ -243,7 +243,7 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
         }
       />
 
-      <TicketSlaAlerts ticket={t} />
+      <TicketSlaAlerts ticket={t} forTechnician={role === "technician"} />
 
       {qualityIssues.length > 0 ? (
         <div className="alert alert-error text-sm" role="alert">
@@ -258,9 +258,41 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
         </div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
-          <Section title="Ticket information">
+      <div className="space-y-4">
+        <TicketActions
+          ticketId={t.id}
+          customerId={t.customer_id}
+          contractId={t.contract_id}
+          status={t.status}
+          priority={t.priority}
+          assignedTechnicianId={t.assigned_technician_id}
+          actualResponseAt={t.actual_response_at}
+          technicianNotes={t.technician_notes}
+          completionNotes={t.completion_notes ?? null}
+          customerResolutionSummary={t.customer_resolution_summary}
+          customerConfirmed={t.customer_confirmed}
+          classification={t.classification}
+          billableApprovalStatus={t.billable_approval_status ?? null}
+          noTimeExplanation={t.no_time_explanation ?? null}
+          reopenedAt={t.reopened_at ?? null}
+          reopenReason={t.reopen_reason ?? null}
+          scheduledStartAt={(t as SupportTicket).scheduled_start_at ?? null}
+          scheduledEndAt={(t as SupportTicket).scheduled_end_at ?? null}
+          serviceMode={(t as SupportTicket).service_mode ?? null}
+          serviceLocation={(t as SupportTicket).service_location ?? null}
+          scheduleNotes={(t as SupportTicket).schedule_notes ?? null}
+          currentUserId={profile.id}
+          role={role}
+          internalCostRate={Number(profile.internal_cost_rate ?? 65)}
+          contractHourlyRate={
+            contract?.additional_hourly_rate != null ? Number(contract.additional_hourly_rate) : null
+          }
+          recordedHours={totalTicketHours}
+          hasTimeEntryDescriptions={hasTimeEntryDescriptions}
+          technicians={techniciansRes.data ?? []}
+        />
+
+        <Section title="Ticket information">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <StatusBadge status={t.status} />
               {t.priority === "critical" ? (
@@ -650,94 +682,6 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
               </div>
             ) : null}
           </Section>
-        </div>
-
-        <div className="space-y-4">
-          <TicketActions
-            ticketId={t.id}
-            customerId={t.customer_id}
-            contractId={t.contract_id}
-            status={t.status}
-            priority={t.priority}
-            assignedTechnicianId={t.assigned_technician_id}
-            actualResponseAt={t.actual_response_at}
-            technicianNotes={t.technician_notes}
-            completionNotes={t.completion_notes ?? null}
-            customerResolutionSummary={t.customer_resolution_summary}
-            customerConfirmed={t.customer_confirmed}
-            classification={t.classification}
-            billableApprovalStatus={t.billable_approval_status ?? null}
-            noTimeExplanation={t.no_time_explanation ?? null}
-            reopenedAt={t.reopened_at ?? null}
-            reopenReason={t.reopen_reason ?? null}
-            scheduledStartAt={(t as SupportTicket).scheduled_start_at ?? null}
-            scheduledEndAt={(t as SupportTicket).scheduled_end_at ?? null}
-            serviceMode={(t as SupportTicket).service_mode ?? null}
-            serviceLocation={(t as SupportTicket).service_location ?? null}
-            scheduleNotes={(t as SupportTicket).schedule_notes ?? null}
-            currentUserId={profile.id}
-            role={role}
-            internalCostRate={Number(profile.internal_cost_rate ?? 65)}
-            contractHourlyRate={
-              contract?.additional_hourly_rate != null ? Number(contract.additional_hourly_rate) : null
-            }
-            recordedHours={totalTicketHours}
-            hasTimeEntryDescriptions={hasTimeEntryDescriptions}
-            technicians={techniciansRes.data ?? []}
-          />
-
-          <Section title="Quick details">
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between gap-3">
-                <dt className="opacity-60">Status</dt>
-                <dd>
-                  <StatusBadge status={t.status} />
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="opacity-60">Priority</dt>
-                <dd>
-                  <StatusBadge status={t.priority} />
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="opacity-60">Job type</dt>
-                <dd>
-                  <ServiceModeBadge
-                    mode={(t as SupportTicket).service_mode}
-                    location={(t as SupportTicket).service_location}
-                    showLocation={false}
-                    size="xs"
-                  />
-                </dd>
-              </div>
-              {(t as SupportTicket).service_location?.trim() ? (
-                <div className="flex justify-between gap-3">
-                  <dt className="opacity-60">Location</dt>
-                  <dd className="max-w-[12rem] text-right text-xs">
-                    {(t as SupportTicket).service_location}
-                  </dd>
-                </div>
-              ) : null}
-              <div className="flex justify-between gap-3">
-                <dt className="opacity-60">SLA result</dt>
-                <dd>
-                  <SlaConditionBadge condition={sla.overall} />
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="opacity-60">Classification</dt>
-                <dd>{t.classification ? statusLabel(t.classification) : "—"}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="opacity-60">Billable approval</dt>
-                <dd>
-                  {t.billable_approval_status ? statusLabel(t.billable_approval_status) : "—"}
-                </dd>
-              </div>
-            </dl>
-          </Section>
-        </div>
       </div>
     </div>
   );

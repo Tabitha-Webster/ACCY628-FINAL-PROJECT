@@ -15,6 +15,8 @@
  * overdue boolean).
  */
 
+import { isDemoModeEnabled } from "@/lib/demo-mode";
+
 export type SlaCondition = "met" | "at_risk" | "missed" | "not_yet_due" | "not_defined";
 
 export type SlaClockInput = {
@@ -98,6 +100,116 @@ export function isResolutionOverdue(input: {
   if (!target) return false;
   if (input.completedAt || input.status === "resolved" || input.status === "closed") return false;
   return (input.now ?? new Date()).getTime() > target.getTime();
+}
+
+export type SlaTicketFields = {
+  title?: string | null;
+  submitted_at?: string | null;
+  target_response_at?: string | null;
+  target_resolution_at?: string | null;
+  actual_response_at?: string | null;
+  completed_at?: string | null;
+  status?: string | null;
+  priority?: string | null;
+};
+
+function isIntentionalMissedDemo(title: string | null | undefined) {
+  const t = title ?? "";
+  return /SLA demo:\s*Missed/i.test(t) || /Missed\s*[—-]/i.test(t) || /\bOverdue\b/i.test(t);
+}
+
+function isIntentionalAtRiskDemo(title: string | null | undefined) {
+  return /SLA demo:\s*At Risk/i.test(title ?? "");
+}
+
+function responseLeadHours(priority: string | null | undefined) {
+  switch ((priority ?? "medium").toLowerCase()) {
+    case "critical":
+      return 0.75;
+    case "high":
+      return 3;
+    case "low":
+      return 12;
+    default:
+      return 6;
+  }
+}
+
+function resolutionLeadHours(priority: string | null | undefined) {
+  switch ((priority ?? "medium").toLowerCase()) {
+    case "critical":
+      return 8;
+    case "high":
+      return 24;
+    case "low":
+      return 120;
+    default:
+      return 48;
+  }
+}
+
+/**
+ * Demo / technician presentation helper: stale seed deadlines make almost every
+ * open ticket look Missed. For display only, push past deadlines forward
+ * (and treat in-progress work as responded) unless the ticket is an
+ * intentional Missed / At Risk demo example.
+ */
+export function withDemoSlaTargets<T extends SlaTicketFields>(ticket: T, now: Date = new Date()): T {
+  if (!isDemoModeEnabled()) return ticket;
+  const status = ticket.status ?? "";
+  if (status === "resolved" || status === "closed") return ticket;
+  if (isIntentionalMissedDemo(ticket.title) || isIntentionalAtRiskDemo(ticket.title)) return ticket;
+
+  const nowMs = now.getTime();
+  let target_response_at = ticket.target_response_at ?? null;
+  let target_resolution_at = ticket.target_resolution_at ?? null;
+  let actual_response_at = ticket.actual_response_at ?? null;
+
+  const responseTarget = parseDate(target_response_at);
+  const resolutionTarget = parseDate(target_resolution_at);
+
+  if (!actual_response_at && responseTarget && responseTarget.getTime() < nowMs) {
+    if (
+      status === "in_progress" ||
+      status === "waiting_on_customer" ||
+      status === "waiting_on_approval"
+    ) {
+      const submitted = parseDate(ticket.submitted_at) ?? now;
+      actual_response_at = new Date(
+        Math.min(submitted.getTime() + 30 * 60 * 1000, nowMs)
+      ).toISOString();
+    } else {
+      target_response_at = new Date(
+        nowMs + responseLeadHours(ticket.priority) * 3600 * 1000
+      ).toISOString();
+    }
+  }
+
+  if (!ticket.completed_at && resolutionTarget && resolutionTarget.getTime() < nowMs) {
+    target_resolution_at = new Date(
+      nowMs + resolutionLeadHours(ticket.priority) * 3600 * 1000
+    ).toISOString();
+  }
+
+  if (
+    target_response_at === ticket.target_response_at &&
+    target_resolution_at === ticket.target_resolution_at &&
+    actual_response_at === ticket.actual_response_at
+  ) {
+    return ticket;
+  }
+
+  return {
+    ...ticket,
+    target_response_at,
+    target_resolution_at,
+    actual_response_at,
+  };
+}
+
+/** Technician workspace SLA: applies demo freshening so Missed/Overdue stay rare. */
+export function evaluateTechnicianTicketSla(ticket: SlaTicketFields, now: Date = new Date()) {
+  return evaluateTicketSla(withDemoSlaTargets(ticket, now), now);
 }
 
 export function evaluateTicketSla(ticket: {
@@ -352,6 +464,7 @@ export function slaCountdownView(input: {
  */
 export function technicianUrgencyRank(
   ticket: {
+    title?: string | null;
     priority?: string | null;
     submitted_at?: string | null;
     target_response_at?: string | null;
@@ -362,7 +475,7 @@ export function technicianUrgencyRank(
   },
   now: Date = new Date()
 ) {
-  const sla = evaluateTicketSla(ticket, now);
+  const sla = evaluateTechnicianTicketSla(ticket, now);
   const priority = (ticket.priority ?? "").toLowerCase();
   const isCritical = priority === "critical";
   const isHigh = priority === "high";
