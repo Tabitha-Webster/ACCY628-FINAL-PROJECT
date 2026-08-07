@@ -29,7 +29,20 @@ export default async function TicketsPage({
     .order("submitted_at", { ascending: false });
 
   if (profile.role === "technician") {
-    query = query.eq("assigned_technician_id", profile.id);
+    const { data: myContracts } = await supabase
+      .from("contracts")
+      .select("id")
+      .eq("assigned_technician_id", profile.id);
+    const myContractIds = (myContracts ?? []).map((c) => c.id);
+
+    // Assigned to this technician, or still unassigned on their contracts (e.g. older requests).
+    if (myContractIds.length > 0) {
+      query = query.or(
+        `assigned_technician_id.eq.${profile.id},and(assigned_technician_id.is.null,contract_id.in.(${myContractIds.join(",")}))`
+      );
+    } else {
+      query = query.eq("assigned_technician_id", profile.id);
+    }
   } else if (profile.role === "billing") {
     query = query.or(
       "status.in.(resolved,closed),billable_approval_status.eq.approved,classification.eq.billable"
@@ -117,7 +130,7 @@ export default async function TicketsPage({
 
   const roleDescription =
     profile.role === "technician"
-      ? "Tickets currently assigned to you."
+      ? "Tickets assigned to you, plus open requests on your contracts."
       : profile.role === "billing"
         ? "Completed or approved billable tickets (view only)."
         : "All support tickets across customers.";

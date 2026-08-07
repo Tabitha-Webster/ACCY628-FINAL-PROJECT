@@ -24,7 +24,7 @@ export default async function SupportRequestsPage() {
       .order("submitted_at", { ascending: false }),
     supabase
       .from("contracts")
-      .select("id, name, contract_number")
+      .select("id, name, contract_number, assigned_technician_id")
       .eq("customer_id", customerId)
       .eq("status", "active")
       .order("contract_number"),
@@ -44,6 +44,7 @@ export default async function SupportRequestsPage() {
   const contracts = (contractsRes.data ?? []).map((c) => ({
     id: c.id,
     label: `${c.contract_number ?? "Contract"} · ${c.name}`,
+    assignedTechnicianId: c.assigned_technician_id as string | null,
   }));
   const customerName = customerRes.data?.name ?? "Your organization";
 

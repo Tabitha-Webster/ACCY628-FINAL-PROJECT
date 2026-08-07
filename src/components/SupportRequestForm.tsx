@@ -8,7 +8,7 @@ type Props = {
   customerId: string;
   customerName: string;
   createdBy: string;
-  contracts: { id: string; label: string }[];
+  contracts: { id: string; label: string; assignedTechnicianId?: string | null }[];
 };
 
 const PRIORITIES = [
@@ -113,6 +113,9 @@ export function SupportRequestForm({ customerId, customerName, createdBy, contra
       // Fall back to DB trigger if numbering API is unavailable.
     }
 
+    const selectedContract = contracts.find((c) => c.id === contractId);
+    const assignedTechnicianId = selectedContract?.assignedTechnicianId ?? null;
+
     const { data, error: insertError } = await supabase
       .from("support_tickets")
       .insert({
@@ -122,9 +125,10 @@ export function SupportRequestForm({ customerId, customerName, createdBy, contra
         description: description.trim(),
         priority,
         service_category: serviceCategory,
-        status: "new",
+        status: assignedTechnicianId ? "assigned" : "new",
         submitted_at: submittedAt,
         created_by: createdBy,
+        ...(assignedTechnicianId ? { assigned_technician_id: assignedTechnicianId } : {}),
         ...(ticketNumber ? { ticket_number: ticketNumber } : {}),
       })
       .select("id, ticket_number")
@@ -292,7 +296,8 @@ export function SupportRequestForm({ customerId, customerName, createdBy, contra
           <span className="mt-1 text-xs text-error">{fieldErrors.description}</span>
         ) : (
           <span className="mt-1 text-xs opacity-60">
-            Status will be set to New. Ticket number is assigned automatically.
+            Status starts as New (or Assigned when your contract has a technician). Ticket number is
+            assigned automatically.
           </span>
         )}
       </label>
