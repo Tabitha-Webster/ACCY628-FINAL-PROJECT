@@ -11,7 +11,7 @@ export type EmployeeRow = {
   full_name: string;
   title: string;
   department: string;
-  role: "admin" | "manager" | "executive" | "technician" | "billing" | "hr";
+  role: "admin" | "manager" | "executive" | "technician" | "billing";
   email: string | null;
   notes: string | null;
   is_active: boolean;
@@ -23,7 +23,6 @@ const EMPLOYEE_ROLES: EmployeeRow["role"][] = [
   "executive",
   "technician",
   "billing",
-  "hr",
 ];
 
 const EMPTY_FORM = {

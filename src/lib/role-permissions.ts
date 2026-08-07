@@ -22,7 +22,6 @@ export type PagePermissionKey =
   | "profitability"
   | "billing_collections"
   | "payments"
-  | "hr_analytics"
   | "controls"
   | "assignments"
   | "tickets"
@@ -34,8 +33,6 @@ export type PagePermissionKey =
   | "accounts_receivable"
   | "accounting"
   | "ready_to_bill"
-  | "hr_positions"
-  | "hr_directory"
   | "my_contracts"
   | "my_projects"
   | "service_usage"
@@ -75,7 +72,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
     label: "Home / Dashboard",
     description: "Role home page and primary landing screen.",
     pathPrefixes: ["/dashboard"],
-    defaultRoles: ["manager", "technician", "billing", "customer", "hr", "admin", "executive"],
+    defaultRoles: ["manager", "technician", "billing", "customer", "admin", "executive"],
     group: "Core",
   },
   {
@@ -110,7 +107,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
     label: "Employees",
     description: "Internal employee directory.",
     pathPrefixes: ["/admin/employees"],
-    defaultRoles: ["admin", "manager", "hr", "executive"],
+    defaultRoles: ["admin", "manager", "executive"],
     group: "Company Directory",
   },
   {
@@ -118,7 +115,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
     label: "Customers",
     description: "Customer master list and customer records.",
     pathPrefixes: ["/customers"],
-    defaultRoles: ["admin", "manager", "technician", "billing", "hr", "executive"],
+    defaultRoles: ["admin", "manager", "technician", "billing", "executive"],
     group: "Company Directory",
   },
   {
@@ -134,7 +131,7 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
     label: "Manage Contracts",
     description: "Contract list and contract detail screens.",
     pathPrefixes: ["/contracts"],
-    defaultRoles: ["admin", "manager", "technician", "billing", "hr", "executive"],
+    defaultRoles: ["admin", "manager", "technician", "billing", "executive"],
     group: "Contracts",
   },
   {
@@ -322,36 +319,12 @@ export const PAGE_PERMISSION_CATALOG: PagePermissionDef[] = [
     group: "Analytics",
   },
   {
-    key: "hr_analytics",
-    label: "HR Analytics",
-    description: "Workforce and cost analytics.",
-    pathPrefixes: ["/hr-analytics"],
-    defaultRoles: ["admin", "manager", "billing", "hr"],
-    group: "Analytics",
-  },
-  {
     key: "controls",
     label: "Controls and Exceptions",
     description: "Business risks and control guidance.",
     pathPrefixes: ["/controls"],
     defaultRoles: ["admin", "manager"],
     group: "Analytics",
-  },
-  {
-    key: "hr_positions",
-    label: "Positions",
-    description: "HR open positions.",
-    pathPrefixes: ["/hr-positions"],
-    defaultRoles: ["hr"],
-    group: "HR",
-  },
-  {
-    key: "hr_directory",
-    label: "HR Directory",
-    description: "Departments, positions, and contractors.",
-    pathPrefixes: ["/admin/hr"],
-    defaultRoles: ["hr", "admin"],
-    group: "HR",
   },
   {
     key: "my_contracts",

@@ -54,7 +54,6 @@ export function statusLabel(status: string) {
   if (status === "more_information_required") return "More Information Required";
   if (status === "pending") return "Pending Approval";
   if (status === "expired") return "Completed";
-  if (status.toLowerCase() === "hr") return "HR";
   return status
     .split("_")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))

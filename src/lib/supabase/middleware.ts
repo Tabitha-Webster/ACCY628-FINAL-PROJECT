@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { pathAllowedByPageKeys, defaultAllowedKeysForRole } from "@/lib/role-permissions";
-import { roleHomePath, type UserRole } from "@/lib/constants";
+import { isKnownUserRole, roleHomePath, type UserRole } from "@/lib/constants";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -64,13 +64,27 @@ export async function updateSession(request: NextRequest) {
   ) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role, customer_id")
+      .select("role, customer_id, is_active")
       .eq("id", user.id)
       .maybeSingle();
 
-    const role = (profile?.role ?? null) as UserRole | null;
+    if (profile && profile.is_active === false) {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
 
-    if (role === "customer" && path !== "/pending-approval") {
+    const role = (profile?.role ?? null) as string | null;
+    if (role && !isKnownUserRole(role)) {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
+    }
+    const knownRole = role as UserRole | null;
+
+    if (knownRole === "customer" && path !== "/pending-approval") {
       let customerStatus: string | null = null;
       if (profile?.customer_id) {
         const { data: customer } = await supabase
@@ -87,21 +101,21 @@ export async function updateSession(request: NextRequest) {
       }
     }
 
-    if (role && role !== "admin") {
+    if (knownRole && knownRole !== "admin") {
       const { data: permissionRows, error } = await supabase
         .from("role_page_permissions")
         .select("page_key, can_view")
-        .eq("role", role)
+        .eq("role", knownRole)
         .eq("can_view", true);
 
       const allowed =
         error || !permissionRows || permissionRows.length === 0
-          ? defaultAllowedKeysForRole(role)
+          ? defaultAllowedKeysForRole(knownRole)
           : new Set(permissionRows.map((row) => row.page_key as string));
 
       if (!pathAllowedByPageKeys(path, allowed)) {
         const url = request.nextUrl.clone();
-        url.pathname = roleHomePath(role);
+        url.pathname = roleHomePath(knownRole);
         return NextResponse.redirect(url);
       }
     }

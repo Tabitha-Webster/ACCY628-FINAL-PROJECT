@@ -15,7 +15,7 @@ create table if not exists public.role_page_permissions (
   updated_by uuid null references auth.users(id) on delete set null,
   primary key (role, page_key),
   constraint role_page_permissions_role_check check (
-    role in ('admin', 'manager', 'technician', 'billing', 'customer', 'hr')
+    role in ('admin', 'manager', 'technician', 'billing', 'customer', 'executive')
   )
 );
 
@@ -71,5 +71,5 @@ ${values}
 on conflict (role, page_key) do nothing;
 `;
 
-writeFileSync("supabase/migrations/20260805230000_role_page_permissions.sql", sql);
+writeFileSync("scripts/role-page-permissions.sql", sql);
 console.log(`wrote ${rows.length} seed rows`);

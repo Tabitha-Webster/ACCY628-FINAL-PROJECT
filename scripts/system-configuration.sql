@@ -64,6 +64,5 @@ values
   ('manager', 'admin_configurations', false),
   ('technician', 'admin_configurations', false),
   ('billing', 'admin_configurations', false),
-  ('customer', 'admin_configurations', false),
-  ('hr', 'admin_configurations', false)
+  ('customer', 'admin_configurations', false)
 on conflict (role, page_key) do nothing;

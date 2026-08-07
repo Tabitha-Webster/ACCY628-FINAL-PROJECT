@@ -23,7 +23,7 @@ function takeCapped<T>(rows: T[] | null | undefined): { rows: T[]; truncated: bo
 export default async function ControlsPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  // Managers and admins only — not billing, technician, HR, or customer.
+  // Managers and admins only — not billing, technician, or customer.
   if (!isManagerRole(profile.role)) redirect("/dashboard");
 
   const supabase = await createClient();

@@ -99,7 +99,7 @@ export const CONTROLS_CATALOG: ControlItem[] = [
     risk: "a role could retain (or gain) screens it should not have after duties change, without a clear place to correct it",
     control:
       "admins maintain a page-level role permission matrix that determines which application screens each C2C role can open; middleware enforces those grants, and admin access itself cannot be reduced",
-    whatIf: "What if billing should no longer open profitability, or HR needs a new screen?",
+    whatIf: "What if billing should no longer open profitability, or a role needs a new screen?",
     where: [
       { href: "/admin/role-permissions", label: "Role permissions", adminOnly: true },
       { href: "/admin/access-review", label: "Security & Access Review", adminOnly: true },

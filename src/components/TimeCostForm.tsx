@@ -185,11 +185,6 @@ export function TimeCostForm({
       setTimeError("Selected ticket is missing a contract.");
       return;
     }
-    if (!description.trim()) {
-      setTimeError("Please describe the work performed.");
-      return;
-    }
-
     const hoursIssue = validateHoursWorked(hoursNum);
     if (hoursIssue) {
       setTimeError(hoursIssue.message);
@@ -288,10 +283,6 @@ export function TimeCostForm({
     const contractIssue = requireContract(cContractId);
     if (contractIssue) {
       setCostError(contractIssue.message);
-      return;
-    }
-    if (!costDescription.trim()) {
-      setCostError("Please describe this cost.");
       return;
     }
     if (Number.isNaN(costNum) || costNum < 0) {
@@ -539,7 +530,6 @@ export function TimeCostForm({
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              required
             />
           </label>
 
@@ -690,7 +680,7 @@ export function TimeCostForm({
 
           <label className="flex w-full flex-col gap-1">
             <span className="text-sm font-medium">Description</span>
-            <textarea className="textarea textarea-bordered w-full" rows={3} value={costDescription} onChange={(e) => setCostDescription(e.target.value)} required />
+            <textarea className="textarea textarea-bordered w-full" rows={3} value={costDescription} onChange={(e) => setCostDescription(e.target.value)} />
           </label>
 
           <div className="rounded-xl border border-violet-200/80 bg-white/80 p-3 text-sm shadow-sm">

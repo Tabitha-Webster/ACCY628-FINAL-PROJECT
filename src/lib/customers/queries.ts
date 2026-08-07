@@ -35,7 +35,6 @@ export function canExportCustomers(role: UserRole) {
 export function customerListStatusesForRole(role: UserRole): string[] | "all" {
   // Admin/manager see the full lifecycle including pending/rejected.
   if (role === "admin" || role === "manager") return "all";
-  if (role === "hr") return ["active", "inactive"];
   if (role === "billing") return ["active", "on_hold", "inactive"];
   // Executive + technician (+ default): approved/active customers from the shared directory.
   return ["active"];

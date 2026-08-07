@@ -14,7 +14,6 @@ import {
 } from "@/components/ui";
 import { CustomerHomeVisuals } from "@/components/CustomerHomeVisuals";
 import { ExecutiveDashboardVisuals } from "@/components/ExecutiveDashboardVisuals";
-import { HrHomeVisuals } from "@/components/HrHomeVisuals";
 import { BillingHomeVisuals } from "@/components/BillingHomeVisuals";
 import { ContractMetricsWidgets } from "@/components/ContractMetricsWidgets";
 import {
@@ -55,7 +54,6 @@ import {
 import { PeriodViewControls } from "@/components/PeriodViewControls";
 import { ExplainNumber } from "@/components/ExplainNumber";
 import { DashboardCollapse, DashboardMetricAccordion, DashboardSection } from "@/components/DashboardAccordion";
-import { loadContractHoursForMatch, rankDemoApplicants } from "@/lib/hr-applicants";
 import type {
   AdditionalWorkRequest,
   Contract,
@@ -121,7 +119,6 @@ export default async function DashboardPage({
     const params = await searchParams;
     return <BillingDashboard profile={profile} searchParams={params} />;
   }
-  if (profile.role === "hr") return <HrDashboard profile={profile} />;
   if (profile.role === "customer") return <CustomerDashboard profile={profile} />;
   redirect("/login");
 }
@@ -312,89 +309,6 @@ async function ExecutiveDashboard({ profile }: { profile: Profile }) {
       secondarySecondaryEmpty="No active contracts expire in the next 90 days."
       showHoursAsProgress={false}
       showFinancialChart={false}
-    />
-  );
-}
-
-// ---------------------------------------------------------------------------
-// HR
-// ---------------------------------------------------------------------------
-
-async function HrDashboard({ profile }: { profile: Profile }) {
-  const supabase = await createClient();
-  const [
-    { data: contractors },
-    { data: positions },
-    { data: departments },
-    contractHours,
-  ] = await Promise.all([
-    supabase.from("hr_contractors").select("id, status"),
-    supabase.from("hr_positions").select("id, title, status, department_id"),
-    supabase.from("hr_departments").select("id, name"),
-    loadContractHoursForMatch(supabase),
-  ]);
-
-  const activeCount = (contractors ?? []).filter((c) => c.status === "active").length;
-  const openPositions = (positions ?? []).filter((p) => p.status === "open");
-  const openCount = openPositions.length;
-  const deptName = new Map((departments ?? []).map((d) => [d.id, d.name]));
-  const openTitles = openPositions.map((p) => p.title);
-
-  const rankedApplicants = rankDemoApplicants({
-    contractHours,
-    openPositionTitles: openTitles,
-  });
-  const topApplicants = rankedApplicants.slice(0, 5);
-  const topMatch = rankedApplicants[0]?.matchPercent ?? 0;
-  const strongMatches = rankedApplicants.filter((a) => a.matchPercent >= 72).length;
-
-  return (
-    <HrHomeVisuals
-      fullName={profile.full_name}
-      pipeline={{
-        openRoles: openCount,
-        applicants: rankedApplicants.length,
-        strongMatches,
-        activeContractors: activeCount,
-      }}
-      metrics={[
-        {
-          label: "Active contractors",
-          value: String(activeCount),
-          tone: "sky",
-          href: "/admin/hr",
-        },
-        {
-          label: "Open positions",
-          value: String(openCount),
-          tone: openCount > 0 ? "amber" : "emerald",
-          href: "/hr-positions",
-        },
-        {
-          label: "Applicants",
-          value: String(rankedApplicants.length),
-          tone: "violet",
-          href: "/hr-applicants",
-        },
-        {
-          label: "Top match",
-          value: `${topMatch}%`,
-          tone: topMatch >= 72 ? "emerald" : "rose",
-          href: "/hr-applicants",
-        },
-      ]}
-      applicants={topApplicants.map((a) => ({
-        id: a.id,
-        fullName: a.fullName,
-        appliedFor: a.appliedFor,
-        matchPercent: a.matchPercent,
-        stars: a.stars,
-      }))}
-      openRoles={openPositions.map((p) => ({
-        id: p.id,
-        title: p.title,
-        department: deptName.get(p.department_id) ?? "—",
-      }))}
     />
   );
 }

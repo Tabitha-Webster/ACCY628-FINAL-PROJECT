@@ -12,7 +12,6 @@ const BILLING_LINKS: NavLink[] = [
   { href: "/billing-review", label: "Overview" },
   { href: "/billing-cost-approvals", label: "Approve Costs" },
   { href: "/invoices", label: "Invoices" },
-  { href: "/hr-analytics", label: "HR Cost Analytics" },
 ];
 
 const COLLECTIONS_LINKS: NavLink[] = [

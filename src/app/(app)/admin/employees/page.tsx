@@ -9,7 +9,7 @@ import { AdminEmployeesManager, type EmployeeRow } from "@/components/AdminEmplo
 export default async function AdminEmployeesPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  if (!isAdminRole(profile.role) && profile.role !== "manager" && profile.role !== "hr" && profile.role !== "executive") {
+  if (!isAdminRole(profile.role) && profile.role !== "manager" && profile.role !== "executive") {
     redirect("/dashboard");
   }
 
@@ -27,7 +27,7 @@ export default async function AdminEmployeesPage() {
         <ErrorState message={employeesRes.error.message} />
         <p className="mt-3 text-sm opacity-70">
           If this is a missing-table or permission error, apply the employees migrations and confirm
-          select access for admin, manager, HR, and executive.
+          select access for admin, manager, and executive.
         </p>
       </div>
     );

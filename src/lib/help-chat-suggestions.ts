@@ -39,13 +39,6 @@ export function helpChatSuggestionsForRole(role: UserRole): string[] {
         "Where are contracts awaiting signature?",
         "What screens can I open?",
       ];
-    case "hr":
-      return [
-        "Where do I review applicants?",
-        "Where is HR analytics?",
-        "Where is the employee directory?",
-        "What screens can I open?",
-      ];
     case "admin":
       return [
         "Where do I manage user access?",

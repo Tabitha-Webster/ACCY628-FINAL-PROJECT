@@ -1,4 +1,17 @@
-export type UserRole = "admin" | "manager" | "technician" | "billing" | "customer" | "hr" | "executive";
+export type UserRole = "admin" | "manager" | "technician" | "billing" | "customer" | "executive";
+
+export const USER_ROLES: UserRole[] = [
+  "admin",
+  "manager",
+  "executive",
+  "technician",
+  "billing",
+  "customer",
+];
+
+export function isKnownUserRole(role: string | null | undefined): role is UserRole {
+  return Boolean(role && (USER_ROLES as string[]).includes(role));
+}
 
 export type Profile = {
   id: string;
@@ -19,10 +32,9 @@ export const ASSIGNABLE_ROLES: UserRole[] = [
   "technician",
   "billing",
   "customer",
-  "hr",
 ];
 
-/** Display names for roles — "HR" stays fully capitalized. */
+/** Display names for roles. */
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Admin",
   manager: "Manager",
@@ -30,7 +42,6 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   technician: "Technician",
   billing: "Billing",
   customer: "Customer",
-  hr: "HR",
 };
 
 export function roleLabel(role: UserRole | string) {
@@ -108,7 +119,7 @@ export const ROLE_ACCESS_MATRIX: {
   },
   {
     area: "Admin Console",
-    description: "User access, audit, demo settings, HR directory",
+    description: "User access, audit, and demo settings",
     roles: ["admin"],
     financial: true,
     customerData: true,
@@ -159,12 +170,6 @@ export const DEMO_ACCOUNTS = [
     label: "Billing & Accounting",
     email: "billing@servicesync.demo",
     name: "Lindsay-Kate Williams",
-  },
-  {
-    role: "hr" as UserRole,
-    label: "HR",
-    email: "hr@servicesync.demo",
-    name: "Lily Walker",
   },
 ] as const;
 
@@ -226,15 +231,6 @@ export const COMPANY_EMPLOYEES: CompanyEmployee[] = [
     role: "billing",
   },
   {
-    name: "Lily Walker",
-    title: "HR Manager",
-    department: "Finance & Administration",
-    hasLogin: true,
-    sharesRoleLogin: false,
-    email: "hr@servicesync.demo",
-    role: "hr",
-  },
-  {
     name: "Mark Ashe",
     title: "Service Desk Technician",
     department: "Help Desk",
@@ -268,7 +264,6 @@ const MANAGER_NAV: NavItem[] = [
   { href: "/projects", label: "Projects" },
   // Company Directory dropdown renders via CompanyDirectoryNavTree in AppShell after projects
   { href: "/controls", label: "Controls and Exceptions" },
-  { href: "/hr-analytics", label: "HR Analytics" },
 ];
 
 export const ROLE_NAV: Record<UserRole, NavItem[]> = {
@@ -296,14 +291,6 @@ export const ROLE_NAV: Record<UserRole, NavItem[]> = {
     { href: "/dashboard", label: "Dashboard" },
     { href: "/customers", label: "Customers" },
     // Contracts & Agreements + Billing/Collections/Accounting trees render in AppShell
-  ],
-  hr: [
-    { href: "/dashboard", label: "HR Dashboard" },
-    { href: "/hr-applicants", label: "Applicants" },
-    { href: "/admin/employees", label: "Employees" },
-    { href: "/hr-analytics", label: "HR Analytics" },
-    { href: "/hr-positions", label: "Positions" },
-    { href: "/admin/hr", label: "HR Directory" },
   ],
   customer: [
     { href: "/dashboard", label: "Customer Home" },
@@ -350,11 +337,6 @@ export const CONTRACTS_NAV_COPY: Record<
     description:
       "Confirm recurring fees, billing frequency, payment terms, and rates before generating invoices.",
   },
-  hr: {
-    href: "/contracts",
-    title: "Contracts & Agreements",
-    description: "Review active agreements only as needed for workforce and contractor cost context.",
-  },
   customer: {
     href: "/my-contracts",
     title: "My Contracts",
@@ -365,8 +347,6 @@ export const CONTRACTS_NAV_COPY: Record<
 
 export function roleHomePath(role: UserRole) {
   if (role === "admin") return "/admin";
-  if (role === "technician") return "/dashboard";
-  if (role === "hr") return "/dashboard";
   return "/dashboard";
 }
 
@@ -398,7 +378,6 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
     "/billing-cost-approvals",
     "/operations",
     "/controls",
-    "/hr-analytics",
     "/customers",
     "/admin/employees",
   ];
@@ -442,9 +421,7 @@ export function canAccessPath(role: UserRole, pathname: string): boolean {
       "/payments",
       "/accounts-receivable",
       "/accounting",
-      "/hr-analytics",
     ],
-    hr: ["/contracts", "/hr-applicants", "/hr-positions", "/admin/hr", "/admin/employees"],
     customer: ["/projects", "/my-invoices", "/make-payment", "/tickets", "/pending-approval"],
   };
 

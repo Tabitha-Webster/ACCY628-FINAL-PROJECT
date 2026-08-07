@@ -46,7 +46,6 @@ Password for all demo users: `1234`
 | Executive | Evan Bean | executive@servicesync.demo |
 | Technician | Jackson Pecunia | tech@servicesync.demo |
 | Billing | Lindsay-Kate Williams | billing@servicesync.demo |
-| HR | Lily Walker | hr@servicesync.demo |
 | Customer (Chad Corporation) | Casey Ortiz | casey.ortiz@chadcorporation.demo |
 
 Mark Ashe (Help Desk) shares the technician login, and Carson Kimble (AR) shares billing. See Admin → Employees for the full staff list.

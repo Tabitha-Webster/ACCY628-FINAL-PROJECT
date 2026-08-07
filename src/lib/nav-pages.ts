@@ -34,7 +34,6 @@ const BILLING_TREE_PAGES: SearchablePage[] = [
   { href: "/billing-review", label: "Overview", group: "Billing" },
   { href: "/billing-cost-approvals", label: "Approve Costs", group: "Billing" },
   { href: "/invoices", label: "Invoices", group: "Billing" },
-  { href: "/hr-analytics", label: "HR Cost Analytics", group: "Billing" },
   { href: "/accounts-receivable", label: "Accounts Receivable", group: "Collections" },
   { href: "/payments", label: "Payment History", group: "Collections" },
   { href: "/accounting", label: "Accounting Review", group: "Accounting" },

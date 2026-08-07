@@ -33,7 +33,7 @@ function asksAboutOtherAccounts(question: string): boolean {
       question
     ) ||
     /(not mine|someone else's|another company's)/i.test(question) ||
-    /\b(admin|manager|technician|billing|hr)\b.+\b(see|view|lookup|look up|access)\b/i.test(question)
+    /\b(admin|manager|technician|billing|executive)\b.+\b(see|view|lookup|look up|access)\b/i.test(question)
   );
 }
 
@@ -526,31 +526,15 @@ export function answerHelpWithoutAi(question: string, context: string, role: Use
     }
   }
 
-  if (/hr\s+analytics|applicants?|employee\s+directory|hr\s+directory/i.test(q)) {
-    const applicants = findNav(nav, (item) => item.href.includes("hr-applicants"));
-    const analytics = findNav(nav, (item) => item.href.includes("hr-analytics"));
+  if (/employee\s+directory|employees?\s+list/i.test(q)) {
     const employees = findNav(
       nav,
-      (item) => item.href.includes("admin/employees") || item.href.includes("admin/hr"),
-      (item) => /employee|hr directory/i.test(item.label)
+      (item) => item.href.includes("admin/employees"),
+      (item) => /employee/i.test(item.label)
     );
-    if (/applicant/i.test(q) && applicants) {
-      return describeScreen(
-        "Review hiring candidates from HR Applicants.",
-        applicants.href,
-        `Open “${applicants.label}” in the sidebar.`
-      );
-    }
-    if (/analytics/i.test(q) && analytics) {
-      return describeScreen(
-        "HR Analytics summarizes workforce and cost insights.",
-        analytics.href,
-        `Open “${analytics.label}” in the sidebar.`
-      );
-    }
     if (employees) {
       return describeScreen(
-        "The employee directory is under Employees / HR Directory.",
+        "The employee directory lists internal team members.",
         employees.href,
         `Open “${employees.label}” in the sidebar.`
       );
